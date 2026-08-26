@@ -1,0 +1,6 @@
+{
+  "name": "Launcher 2026",
+  "description": "مشغل سيارة أندرويد احترافي فائق التخصيص لشاشات السيارات مع دعم Safe Area والخرائط والموسيقى والـ Widgets والـ GPS والرحلات باللغة العربية بالكامل.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
