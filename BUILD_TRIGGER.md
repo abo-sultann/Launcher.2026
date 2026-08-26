@@ -1,1 +1,1 @@
-Temporary build trigger for Launcher 2026 APK.
+Launcher 2026 APK build trigger - current.
