@@ -129,7 +129,7 @@ class OfflineMapEngine(
 
     fun renameMap(mapId: String, newName: String) {
         if (newName.isBlank()) return
-        val updated = _mapsList.value.map { item -> if (it.id == mapId) item.copy(name = newName) else item }
+        val updated = _mapsList.value.map { item -> if (item.id == mapId) item.copy(name = newName) else item }
         _mapsList.value = updated
         _activeMap.value = updated.find { it.isActive }
         preferencesManager.saveMaps(updated)
