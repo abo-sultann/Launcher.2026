@@ -70,7 +70,9 @@ class PreferencesManager(context: Context) {
             screenSaverEnabled = prefs.getBoolean("screensaver_enabled", false),
             screenSaverTimeoutSeconds = prefs.getInt("screensaver_timeout", 120).coerceIn(30, 1800),
             screenSaverUseWallpaper = prefs.getBoolean("screensaver_wallpaper", true),
-            screenSaverWidgetTypes = screenSaverTypes
+            screenSaverWidgetTypes = screenSaverTypes,
+            screenSaverNightMode = prefs.getBoolean("screensaver_night_mode", false),
+            screenSaverNightBrightnessPercent = prefs.getInt("screensaver_night_brightness", 14).coerceIn(5, 40)
         )
     } catch (e: Exception) {
         Log.e(TAG, "Error reading settings", e)
@@ -108,6 +110,8 @@ class PreferencesManager(context: Context) {
                 .putInt("screensaver_timeout", settings.screenSaverTimeoutSeconds.coerceIn(30, 1800))
                 .putBoolean("screensaver_wallpaper", settings.screenSaverUseWallpaper)
                 .putStringSet("screensaver_widgets", settings.screenSaverWidgetTypes.map { it.name }.toSet())
+                .putBoolean("screensaver_night_mode", settings.screenSaverNightMode)
+                .putInt("screensaver_night_brightness", settings.screenSaverNightBrightnessPercent.coerceIn(5, 40))
                 .apply()
         } catch (e: Exception) { Log.e(TAG, "Error saving settings", e) }
     }
