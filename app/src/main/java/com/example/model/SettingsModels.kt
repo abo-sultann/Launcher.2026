@@ -16,7 +16,8 @@ data class ScreenSaverWidgetLayout(
     val widthFraction: Float,
     val heightFraction: Float,
     val opacity: Float = 0.90f,
-    val zIndex: Int = 0
+    val zIndex: Int = 0,
+    val style: WidgetStyle? = null
 ) {
     companion object {
         fun defaultFor(type: WidgetType, index: Int): ScreenSaverWidgetLayout {
@@ -30,7 +31,8 @@ data class ScreenSaverWidgetLayout(
                 widthFraction = 0.42f,
                 heightFraction = 0.34f,
                 opacity = 0.90f,
-                zIndex = slot
+                zIndex = slot,
+                style = null
             )
         }
     }
@@ -66,5 +68,7 @@ data class LauncherSettings(
     val screenSaverEnabled: Boolean = false,
     val screenSaverTimeoutSeconds: Int = 120,
     val screenSaverUseWallpaper: Boolean = true,
-    val screenSaverWidgetTypes: Set<WidgetType> = setOf(WidgetType.CLOCK, WidgetType.SPEEDOMETER)
+    val screenSaverWidgetTypes: Set<WidgetType> = setOf(WidgetType.CLOCK, WidgetType.SPEEDOMETER),
+    val screenSaverNightMode: Boolean = false,
+    val screenSaverNightBrightnessPercent: Int = 14
 )
