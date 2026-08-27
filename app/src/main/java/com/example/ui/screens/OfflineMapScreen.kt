@@ -8,7 +8,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -26,6 +25,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.model.MapItem
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MainViewModel
+import com.example.util.bearingToArabicDirection
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
@@ -66,8 +66,6 @@ fun OfflineMapScreen(
                 )
             }
             else -> {
-                // Existing MBTiles files stay imported and manageable. On this Android 7.1
-                // head unit the lightweight renderer uses Mapsforge .map for reliable display.
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Surface(
                         color = CarbonDark.copy(alpha = .94f),
@@ -99,7 +97,6 @@ fun OfflineMapScreen(
             }
         }
 
-        // Map controls are overlays; the map itself remains full screen.
         Row(
             modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -146,6 +143,12 @@ fun OfflineMapScreen(
                 )
                 Column {
                     Text("${gpsTelemetry.speedKmH.toInt()} كم/س", color = CyanNeon, fontWeight = FontWeight.Black, fontSize = 22.sp)
+                    Text(
+                        if (gpsTelemetry.hasGpsFix) bearingToArabicDirection(gpsTelemetry.bearingDegrees) else "الاتجاه --",
+                        color = AmberRacing,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    )
                     Text("${String.format(Locale.US, "%.2f", tripData.distanceKm)} كم", color = TextSecondary, fontSize = 10.sp)
                 }
             }
@@ -199,8 +202,6 @@ private fun MapsforgeFullScreenMap(
             },
             update = { mapView ->
                 if (hasGpsFix) {
-                    // Do not constantly recenter while the user is manually panning.
-                    // GPS is used for the initial position and the overlay above.
                     if (mapView.model.mapViewPosition.mapPosition == null) {
                         mapView.setCenter(LatLong(gpsLat, gpsLon))
                     }
