@@ -117,13 +117,12 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
     Box(
         Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .pointerInput(screenSaverVisible) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (event.changes.any { it.pressed && !it.previousPressed }) {
+                        if (!screenSaverVisible && event.changes.any { it.pressed && !it.previousPressed }) {
                             interactionToken = System.currentTimeMillis()
-                            if (screenSaverVisible) screenSaverVisible = false
                         }
                     }
                 }
