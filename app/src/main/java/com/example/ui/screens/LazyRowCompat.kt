@@ -9,10 +9,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 @Composable
-fun LazyRow(horizontalArrangement: Arrangement.Horizontal = Arrangement.Start, content: @Composable RowScope.() -> Unit) {
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = horizontalArrangement, content = content)
+fun LazyRow(
+    horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
+    content: @Composable RowScope.() -> Unit
+) {
+    Row(
+        Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = horizontalArrangement,
+        content = content
+    )
 }
 
-fun <T> RowScope.items(items: List<T>, itemContent: @Composable RowScope.(T) -> Unit) {
-    items.forEach { itemContent(it) }
+@Composable
+fun <T> RowScope.items(
+    items: List<T>,
+    itemContent: @Composable RowScope.(T) -> Unit
+) {
+    items.forEach { item -> itemContent(item) }
 }
