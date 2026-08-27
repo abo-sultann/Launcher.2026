@@ -2,7 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,9 +14,7 @@ import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -32,6 +30,7 @@ import com.example.ui.theme.*
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.widgets.*
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun ScreenSaverOverlay(
     viewModel: MainViewModel,
@@ -46,6 +45,8 @@ fun ScreenSaverOverlay(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var editMode by remember { mutableStateOf(false) }
+
     Box(modifier.fillMaxSize().background(Color.Black)) {
         if (settings.screenSaverUseWallpaper) LauncherBackground(settings)
 
@@ -59,24 +60,56 @@ fun ScreenSaverOverlay(
             gpsTelemetry = gpsTelemetry,
             tripData = tripData,
             activeMap = activeMap,
-            editMode = false,
+            editMode = editMode,
             modifier = Modifier.fillMaxSize()
         )
 
-        Text(
-            "المس أي مكان للعودة",
-            color = TextSecondary.copy(alpha = .75f),
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)
-        )
+        if (editMode) {
+            Surface(
+                color = CarbonDark.copy(alpha = .94f),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, CyanNeon.copy(alpha = .7f)),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp).zIndex(1500f)
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("اسحب من مقبض التحريك • واسحب الزاوية لتغيير الحجم", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = { viewModel.resetScreenSaverLayout() }, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Default.RestartAlt, "إعادة الترتيب", tint = AmberRacing)
+                    }
+                    Button(
+                        onClick = { viewModel.commitScreenSaverLayout(); editMode = false },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Icon(Icons.Default.Check, null, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("حفظ")
+                    }
+                }
+            }
+        } else {
+            Text(
+                "لمسة للعودة • ضغط مطول لتعديل الودجات",
+                color = TextSecondary.copy(alpha = .78f),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp).zIndex(1200f)
+            )
 
-        Box(
-            Modifier
-                .fillMaxSize()
-                .zIndex(1000f)
-                .clickable(onClick = onDismiss)
-        )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .zIndex(1000f)
+                    .combinedClickable(
+                        onClick = onDismiss,
+                        onLongClick = { editMode = true }
+                    )
+            )
+        }
     }
 }
 
