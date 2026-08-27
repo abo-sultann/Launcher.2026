@@ -72,28 +72,11 @@ class MainActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             when (event.keyCode) {
-                KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                    mainViewModel.playNext()
-                    return true
-                }
-                KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                    mainViewModel.playPrevious()
-                    return true
-                }
-                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-                KeyEvent.KEYCODE_HEADSETHOOK -> {
-                    mainViewModel.togglePlayPause()
-                    return true
-                }
-                KeyEvent.KEYCODE_MEDIA_PLAY -> {
-                    if (!mainViewModel.playbackState.value.isPlaying) mainViewModel.togglePlayPause()
-                    return true
-                }
-                KeyEvent.KEYCODE_MEDIA_PAUSE,
-                KeyEvent.KEYCODE_MEDIA_STOP -> {
-                    if (mainViewModel.playbackState.value.isPlaying) mainViewModel.togglePlayPause()
-                    return true
-                }
+                KeyEvent.KEYCODE_MEDIA_NEXT -> { mainViewModel.playNext(); return true }
+                KeyEvent.KEYCODE_MEDIA_PREVIOUS -> { mainViewModel.playPrevious(); return true }
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> { mainViewModel.togglePlayPause(); return true }
+                KeyEvent.KEYCODE_MEDIA_PLAY -> { if (!mainViewModel.playbackState.value.isPlaying) mainViewModel.togglePlayPause(); return true }
+                KeyEvent.KEYCODE_MEDIA_PAUSE, KeyEvent.KEYCODE_MEDIA_STOP -> { if (mainViewModel.playbackState.value.isPlaying) mainViewModel.togglePlayPause(); return true }
             }
         }
         return super.dispatchKeyEvent(event)
@@ -127,18 +110,13 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
     var activeSubOverlay by remember { mutableStateOf(SubOverlayScreen.NONE) }
     var screenSaverVisible by remember { mutableStateOf(false) }
     var interactionToken by remember { mutableStateOf(0L) }
+    var mapChromeVisible by remember { mutableStateOf(true) }
+    var mapChromeToken by remember { mutableStateOf(0L) }
     val rootView = LocalView.current
 
     SideEffect { rootView.keepScreenOn = settings.keepScreenOn }
 
-    LaunchedEffect(
-        settings.screenSaverEnabled,
-        settings.screenSaverTimeoutSeconds,
-        interactionToken,
-        isDesignMode,
-        isChildLockActive,
-        currentScreen
-    ) {
+    LaunchedEffect(settings.screenSaverEnabled, settings.screenSaverTimeoutSeconds, interactionToken, isDesignMode, isChildLockActive, currentScreen) {
         screenSaverVisible = false
         if (settings.screenSaverEnabled && !isDesignMode && currentScreen != CarScreen.MAP) {
             delay(settings.screenSaverTimeoutSeconds.coerceIn(30, 1800) * 1000L)
@@ -146,15 +124,29 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
         }
     }
 
+    LaunchedEffect(currentScreen, mapChromeToken) {
+        if (currentScreen == CarScreen.MAP) {
+            mapChromeVisible = true
+            delay(4500L)
+            if (currentScreen == CarScreen.MAP) mapChromeVisible = false
+        } else {
+            mapChromeVisible = true
+        }
+    }
+
     Box(
         Modifier
             .fillMaxSize()
-            .pointerInput(screenSaverVisible) {
+            .pointerInput(screenSaverVisible, currentScreen) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (!screenSaverVisible && event.changes.any { it.pressed && !it.previousPressed }) {
-                            interactionToken = System.currentTimeMillis()
+                        if (event.changes.any { it.pressed && !it.previousPressed }) {
+                            if (!screenSaverVisible) interactionToken = System.currentTimeMillis()
+                            if (currentScreen == CarScreen.MAP) {
+                                mapChromeVisible = true
+                                mapChromeToken = System.currentTimeMillis()
+                            }
                         }
                     }
                 }
@@ -171,24 +163,23 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                 val bottomContentInset = safeArea.bottomDp + if (settings.showBottomBar) 56 else 0
                 HomeScreen(
                     viewModel,
-                    Modifier
-                        .fillMaxSize()
-                        .padding(
-                            top = topContentInset.dp,
-                            bottom = bottomContentInset.dp,
-                            start = safeArea.rightDp.dp,
-                            end = safeArea.leftDp.dp
-                        )
+                    Modifier.fillMaxSize().padding(
+                        top = topContentInset.dp,
+                        bottom = bottomContentInset.dp,
+                        start = safeArea.rightDp.dp,
+                        end = safeArea.leftDp.dp
+                    )
                 )
             }
 
+            val showMapChrome = currentScreen != CarScreen.MAP || mapChromeVisible
             OverlayLauncherBars(
                 viewModel = viewModel,
                 currentScreen = currentScreen,
                 safeAreaTop = safeArea.topDp,
                 safeAreaBottom = safeArea.bottomDp,
-                showTop = settings.showTopBar,
-                showBottom = settings.showBottomBar,
+                showTop = settings.showTopBar && showMapChrome,
+                showBottom = settings.showBottomBar && showMapChrome,
                 gpsTelemetry = gpsTelemetry,
                 playbackState = playbackState,
                 is24Hour = settings.is24HourFormat,
@@ -206,11 +197,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                     if (settings.showTopBar) {
                         Box(Modifier.padding(top = safeArea.topDp.dp)) {
                             TopCarStatusBar(
-                                gpsTelemetry,
-                                playbackState,
-                                settings.is24HourFormat,
-                                isSafeModeActive,
-                                isDesignMode,
+                                gpsTelemetry, playbackState, settings.is24HourFormat, isSafeModeActive, isDesignMode,
                                 onToggleDesignMode = { viewModel.toggleDesignMode() },
                                 onOpenSettings = { activeSubOverlay = SubOverlayScreen.NONE; viewModel.navigateTo(CarScreen.SETTINGS) },
                                 onOpenDiagnostics = { activeSubOverlay = SubOverlayScreen.DIAGNOSTICS },
@@ -226,10 +213,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                         Box(Modifier.padding(bottom = safeArea.bottomDp.dp)) {
                             BottomCarNavBar(
                                 currentScreen = currentScreen,
-                                onScreenSelected = { screen ->
-                                    activeSubOverlay = SubOverlayScreen.NONE
-                                    viewModel.navigateTo(screen)
-                                }
+                                onScreenSelected = { screen -> activeSubOverlay = SubOverlayScreen.NONE; viewModel.navigateTo(screen) }
                             )
                         }
                     }
@@ -246,11 +230,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                             CarScreen.MUSIC -> MusicPlayerScreen(viewModel)
                             CarScreen.MAP -> OfflineMapScreen(viewModel)
                             CarScreen.TRIP -> TripComputerScreen(viewModel)
-                            CarScreen.SETTINGS -> SettingsScreen(
-                                viewModel,
-                                { activeSubOverlay = SubOverlayScreen.SAFE_AREA_PREVIEW },
-                                { activeSubOverlay = SubOverlayScreen.DIAGNOSTICS }
-                            )
+                            CarScreen.SETTINGS -> SettingsScreen(viewModel, { activeSubOverlay = SubOverlayScreen.SAFE_AREA_PREVIEW }, { activeSubOverlay = SubOverlayScreen.DIAGNOSTICS })
                         }
                     }
                 }
@@ -260,10 +240,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
         if (isChildLockActive) {
             ChildLockOverlay(
                 holdSeconds = settings.childUnlockHoldSeconds,
-                onUnlock = {
-                    viewModel.deactivateChildLock()
-                    interactionToken = System.currentTimeMillis()
-                },
+                onUnlock = { viewModel.deactivateChildLock(); interactionToken = System.currentTimeMillis() },
                 modifier = Modifier.zIndex(1000f)
             )
         }
@@ -279,10 +256,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                 gpsTelemetry = gpsTelemetry,
                 tripData = tripData,
                 activeMap = activeMap,
-                onDismiss = {
-                    screenSaverVisible = false
-                    interactionToken = System.currentTimeMillis()
-                },
+                onDismiss = { screenSaverVisible = false; interactionToken = System.currentTimeMillis() },
                 modifier = Modifier.zIndex(1100f)
             )
         }
@@ -309,11 +283,7 @@ private fun BoxScope.OverlayLauncherBars(
     if (showTop) {
         Box(modifier.align(Alignment.TopCenter).padding(top = safeAreaTop.dp)) {
             TopCarStatusBar(
-                gpsTelemetry,
-                playbackState,
-                is24Hour,
-                isSafeModeActive,
-                isDesignMode,
+                gpsTelemetry, playbackState, is24Hour, isSafeModeActive, isDesignMode,
                 onToggleDesignMode = { viewModel.toggleDesignMode() },
                 onOpenSettings = onOpenSettings,
                 onOpenDiagnostics = onOpenDiagnostics,
@@ -326,10 +296,7 @@ private fun BoxScope.OverlayLauncherBars(
 
     if (showBottom) {
         Box(modifier.align(Alignment.BottomCenter).padding(bottom = safeAreaBottom.dp)) {
-            BottomCarNavBar(
-                currentScreen = currentScreen,
-                onScreenSelected = { screen -> viewModel.navigateTo(screen) }
-            )
+            BottomCarNavBar(currentScreen = currentScreen, onScreenSelected = { screen -> viewModel.navigateTo(screen) })
         }
     }
 }
