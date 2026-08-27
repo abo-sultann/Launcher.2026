@@ -1,0 +1,44 @@
+name: Stable runtime migration
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stable-runtime-migration
+  cancel-in-progress: true
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Share offroad manager with foreground tracker
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/example/ui/viewmodel/MainViewModel.kt')
+          s = p.read_text()
+          old = 'private val offroadTrackManager = OffroadTrackManager(application)'
+          new = 'private val offroadTrackManager = (application as com.example.CarLauncherApp).offroadTrackManager'
+          if old in s:
+              p.write_text(s.replace(old, new, 1))
+          PY
+
+      - name: Commit migration when needed
+        run: |
+          if git diff --quiet; then
+            echo "Stable migration already applied"
+            exit 0
+          fi
+          git config user.name "Launcher 2026 CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add app/src/main/java/com/example/ui/viewmodel/MainViewModel.kt
+          git commit -m "Share offroad manager with persistent tracking service"
+          git push
