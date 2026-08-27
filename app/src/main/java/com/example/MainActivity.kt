@@ -83,6 +83,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
     val safeArea by viewModel.safeArea.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val widgets by viewModel.widgets.collectAsState()
+    val screenSaverLayouts by viewModel.screenSaverLayouts.collectAsState()
     val installedApps by viewModel.installedApps.collectAsState()
     val isDesignMode by viewModel.isDesignMode.collectAsState()
     val isChildLockActive by viewModel.isChildLockActive.collectAsState()
@@ -230,6 +231,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                 viewModel = viewModel,
                 settings = settings,
                 widgets = widgets,
+                layouts = screenSaverLayouts,
                 apps = installedApps,
                 playbackState = playbackState,
                 gpsTelemetry = gpsTelemetry,
