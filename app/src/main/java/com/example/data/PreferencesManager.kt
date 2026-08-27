@@ -8,66 +8,61 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class PreferencesManager(context: Context) {
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences("car_launcher_preferences_2026", Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences = context.getSharedPreferences("car_launcher_preferences_2026", Context.MODE_PRIVATE)
 
-    // Safe Area
-    fun getSafeArea(): SafeAreaConfig {
-        return try {
-            SafeAreaConfig(
-                topDp = prefs.getInt("safe_top", 8),
-                bottomDp = prefs.getInt("safe_bottom", 8),
-                leftDp = prefs.getInt("safe_left", 8),
-                rightDp = prefs.getInt("safe_right", 8)
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading safe area, fallback to default", e)
-            SafeAreaConfig.DEFAULT
-        }
-    }
+    fun getSafeArea(): SafeAreaConfig = try {
+        SafeAreaConfig(
+            topDp = prefs.getInt("safe_top", 0),
+            bottomDp = prefs.getInt("safe_bottom", 0),
+            leftDp = prefs.getInt("safe_left", 0),
+            rightDp = prefs.getInt("safe_right", 0)
+        )
+    } catch (e: Exception) { SafeAreaConfig.DEFAULT }
 
     fun getSafeAreaConfig(): SafeAreaConfig = getSafeArea()
 
     fun saveSafeArea(config: SafeAreaConfig) {
-        try {
-            prefs.edit()
-                .putInt("safe_top", config.topDp)
-                .putInt("safe_bottom", config.bottomDp)
-                .putInt("safe_left", config.leftDp)
-                .putInt("safe_right", config.rightDp)
-                .apply()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error saving safe area", e)
-        }
+        prefs.edit()
+            .putInt("safe_top", config.topDp.coerceIn(0, 250))
+            .putInt("safe_bottom", config.bottomDp.coerceIn(0, 150))
+            .putInt("safe_left", config.leftDp.coerceIn(0, 150))
+            .putInt("safe_right", config.rightDp.coerceIn(0, 150))
+            .apply()
     }
-
     fun saveSafeAreaConfig(config: SafeAreaConfig) = saveSafeArea(config)
 
-    // Settings
-    fun getSettings(): LauncherSettings {
-        return try {
-            val bgName = prefs.getString("bg_type", BackgroundType.DARK_CARBON.name) ?: BackgroundType.DARK_CARBON.name
-            val bgType = try { BackgroundType.valueOf(bgName) } catch (e: Exception) { BackgroundType.DARK_CARBON }
-            LauncherSettings(
-                safeArea = getSafeArea(),
-                backgroundType = bgType,
-                customWallpaperPath = prefs.getString("custom_wallpaper_path", null),
-                iconSizeDp = prefs.getInt("icon_size", 64),
-                showAppNames = prefs.getBoolean("show_app_names", true),
-                appDrawerColumns = prefs.getInt("app_columns", 5),
-                is24HourClock = prefs.getBoolean("clock_24h", true),
-                showSeconds = prefs.getBoolean("clock_seconds", false),
-                speedUnit = prefs.getString("speed_unit", "كم/س") ?: "كم/س",
-                autoStartEnabled = prefs.getBoolean("auto_start", true),
-                resumeMusicPlayback = prefs.getBoolean("resume_music", true),
-                safeModeActive = prefs.getBoolean("safe_mode", false),
-                showTopBar = prefs.getBoolean("show_top_bar", true),
-                showBottomBar = prefs.getBoolean("show_bottom_bar", true)
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Error reading settings, fallback to defaults", e)
-            LauncherSettings()
-        }
+    fun getSettings(): LauncherSettings = try {
+        val bgName = prefs.getString("bg_type", BackgroundType.DARK_CARBON.name) ?: BackgroundType.DARK_CARBON.name
+        val bgType = try { BackgroundType.valueOf(bgName) } catch (_: Exception) { BackgroundType.DARK_CARBON }
+        LauncherSettings(
+            safeArea = getSafeArea(),
+            backgroundType = bgType,
+            customWallpaperPath = prefs.getString("custom_wallpaper_path", null),
+            iconSizeDp = prefs.getInt("icon_size", 64),
+            showAppNames = prefs.getBoolean("show_app_names", true),
+            showAppLabels = prefs.getBoolean("show_app_labels", true),
+            appDrawerColumns = prefs.getInt("app_columns", 5),
+            homeGridColumns = prefs.getInt("home_columns", 4),
+            widgetHeightDp = prefs.getInt("widget_height", 138),
+            gridHorizontalGapDp = prefs.getInt("grid_h_gap", 8),
+            gridVerticalGapDp = prefs.getInt("grid_v_gap", 8),
+            is24HourClock = prefs.getBoolean("clock_24h", true),
+            is24HourFormat = prefs.getBoolean("clock_24h", true),
+            showSeconds = prefs.getBoolean("clock_seconds", false),
+            speedUnit = prefs.getString("speed_unit", "كم/س") ?: "كم/س",
+            autoStartEnabled = prefs.getBoolean("auto_start", true),
+            autoStartOnBoot = prefs.getBoolean("auto_start", true),
+            resumeMusicPlayback = prefs.getBoolean("resume_music", true),
+            safeModeActive = prefs.getBoolean("safe_mode", false),
+            showTopBar = prefs.getBoolean("show_top_bar", true),
+            showBottomBar = prefs.getBoolean("show_bottom_bar", true),
+            highContrastMode = prefs.getBoolean("high_contrast", false),
+            keepScreenOn = prefs.getBoolean("keep_screen_on", true),
+            autoLogTrips = prefs.getBoolean("auto_log_trips", true)
+        )
+    } catch (e: Exception) {
+        Log.e(TAG, "Error reading settings", e)
+        LauncherSettings()
     }
 
     fun saveSettings(settings: LauncherSettings) {
@@ -76,203 +71,104 @@ class PreferencesManager(context: Context) {
             prefs.edit()
                 .putString("bg_type", settings.backgroundType.name)
                 .putString("custom_wallpaper_path", settings.customWallpaperPath)
-                .putInt("icon_size", settings.iconSizeDp)
+                .putInt("icon_size", settings.iconSizeDp.coerceIn(40, 110))
                 .putBoolean("show_app_names", settings.showAppNames)
-                .putInt("app_columns", settings.appDrawerColumns)
-                .putBoolean("clock_24h", settings.is24HourClock)
+                .putBoolean("show_app_labels", settings.showAppLabels)
+                .putInt("app_columns", settings.appDrawerColumns.coerceIn(2, 8))
+                .putInt("home_columns", settings.homeGridColumns.coerceIn(2, 6))
+                .putInt("widget_height", settings.widgetHeightDp.coerceIn(90, 220))
+                .putInt("grid_h_gap", settings.gridHorizontalGapDp.coerceIn(2, 24))
+                .putInt("grid_v_gap", settings.gridVerticalGapDp.coerceIn(2, 24))
+                .putBoolean("clock_24h", settings.is24HourFormat)
                 .putBoolean("clock_seconds", settings.showSeconds)
                 .putString("speed_unit", settings.speedUnit)
-                .putBoolean("auto_start", settings.autoStartEnabled)
+                .putBoolean("auto_start", settings.autoStartOnBoot)
                 .putBoolean("resume_music", settings.resumeMusicPlayback)
                 .putBoolean("safe_mode", settings.safeModeActive)
                 .putBoolean("show_top_bar", settings.showTopBar)
                 .putBoolean("show_bottom_bar", settings.showBottomBar)
+                .putBoolean("high_contrast", settings.highContrastMode)
+                .putBoolean("keep_screen_on", settings.keepScreenOn)
+                .putBoolean("auto_log_trips", settings.autoLogTrips)
                 .apply()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error saving settings", e)
-        }
+        } catch (e: Exception) { Log.e(TAG, "Error saving settings", e) }
     }
 
-    // Widgets list persistence
     fun getWidgets(): List<WidgetItem> {
-        val raw = prefs.getString("widgets_json", null)
-        if (raw.isNullOrBlank()) {
-            return WidgetItem.createDefaultList()
-        }
+        val raw = prefs.getString("widgets_json", null) ?: return WidgetItem.createDefaultList()
         return try {
             val array = JSONArray(raw)
             val list = mutableListOf<WidgetItem>()
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
                 val id = obj.getString("id")
-                val typeStr = obj.getString("type")
-                val styleStr = obj.getString("style")
-                val spanX = obj.optInt("spanX", 1)
-                val spanY = obj.optInt("spanY", 1)
-                val isVisible = obj.optBoolean("isVisible", true)
-                val order = obj.optInt("order", i)
-
-                val type = try { WidgetType.valueOf(typeStr) } catch (e: Exception) { WidgetType.CLOCK }
-                val style = try { WidgetStyle.valueOf(styleStr) } catch (e: Exception) {
-                    type.let {
-                        when (it) {
-                            WidgetType.CLOCK -> WidgetStyle.CLOCK_AUTOMOTIVE_LARGE
-                            WidgetType.SPEEDOMETER -> WidgetStyle.SPEED_GAUGE_CIRCULAR
-                            WidgetType.DATE -> WidgetStyle.DATE_DAY_DATE
-                            WidgetType.GPS -> WidgetStyle.GPS_CARD
-                            WidgetType.MUSIC -> WidgetStyle.MUSIC_COVER
-                            WidgetType.MAP -> WidgetStyle.MAP_MEDIUM
-                            WidgetType.TRIP -> WidgetStyle.TRIP_CARD
-                            WidgetType.APPS -> WidgetStyle.APPS_HORIZONTAL_DOCK
-                            WidgetType.CONTROLS -> WidgetStyle.CONTROLS_CARD
-                        }
+                val type = try { WidgetType.valueOf(obj.getString("type")) } catch (_: Exception) { WidgetType.CLOCK }
+                val style = try { WidgetStyle.valueOf(obj.getString("style")) } catch (_: Exception) {
+                    when (type) {
+                        WidgetType.CLOCK -> WidgetStyle.CLOCK_AUTOMOTIVE_LARGE
+                        WidgetType.SPEEDOMETER -> WidgetStyle.SPEED_GAUGE_CIRCULAR
+                        WidgetType.DATE -> WidgetStyle.DATE_DAY_DATE
+                        WidgetType.GPS -> WidgetStyle.GPS_CARD
+                        WidgetType.MUSIC -> WidgetStyle.MUSIC_COVER
+                        WidgetType.MAP -> WidgetStyle.MAP_MEDIUM
+                        WidgetType.TRIP -> WidgetStyle.TRIP_CARD
+                        WidgetType.APPS -> WidgetStyle.APPS_HORIZONTAL_DOCK
+                        WidgetType.CONTROLS -> WidgetStyle.CONTROLS_CARD
                     }
                 }
-                list.add(WidgetItem(id, type, style, spanX, spanY, isVisible, order))
+                list.add(WidgetItem(id, type, style, obj.optInt("spanX", 1), obj.optInt("spanY", 1), obj.optBoolean("isVisible", true), obj.optInt("order", i)))
             }
             if (list.isEmpty()) WidgetItem.createDefaultList() else list
-        } catch (e: Exception) {
-            Log.e(TAG, "Error deserializing widgets, restoring default list", e)
-            WidgetItem.createDefaultList()
-        }
+        } catch (e: Exception) { WidgetItem.createDefaultList() }
     }
 
     fun saveWidgets(widgets: List<WidgetItem>) {
         try {
             val array = JSONArray()
             widgets.forEach { item ->
-                val obj = JSONObject().apply {
-                    put("id", item.id)
-                    put("type", item.type.name)
-                    put("style", item.style.name)
-                    put("spanX", item.spanX)
-                    put("spanY", item.spanY)
-                    put("isVisible", item.isVisible)
-                    put("order", item.order)
-                }
-                array.put(obj)
+                array.put(JSONObject().apply {
+                    put("id", item.id); put("type", item.type.name); put("style", item.style.name)
+                    put("spanX", item.spanX); put("spanY", item.spanY); put("isVisible", item.isVisible); put("order", item.order)
+                })
             }
             prefs.edit().putString("widgets_json", array.toString()).apply()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error saving widgets", e)
-        }
+        } catch (e: Exception) { Log.e(TAG, "Error saving widgets", e) }
     }
+    fun resetToDefaultWidgets() = saveWidgets(WidgetItem.createDefaultList())
 
-    fun resetToDefaultWidgets() {
-        saveWidgets(WidgetItem.createDefaultList())
-    }
+    fun getFavorites(): Set<String> = prefs.getStringSet("favorite_apps", emptySet()) ?: emptySet()
+    fun saveFavorites(favorites: Set<String>) = prefs.edit().putStringSet("favorite_apps", favorites).apply()
+    fun getHiddenApps(): Set<String> = prefs.getStringSet("hidden_apps", emptySet()) ?: emptySet()
+    fun saveHiddenApps(hidden: Set<String>) = prefs.edit().putStringSet("hidden_apps", hidden).apply()
 
-    // App Favorites & Custom Order
-    fun getFavorites(): Set<String> {
-        return prefs.getStringSet("favorite_apps", emptySet()) ?: emptySet()
-    }
-
-    fun saveFavorites(favorites: Set<String>) {
-        prefs.edit().putStringSet("favorite_apps", favorites).apply()
-    }
-
-    fun getHiddenApps(): Set<String> {
-        return prefs.getStringSet("hidden_apps", emptySet()) ?: emptySet()
-    }
-
-    fun saveHiddenApps(hidden: Set<String>) {
-        prefs.edit().putStringSet("hidden_apps", hidden).apply()
-    }
-
-    // Music Resume State
-    fun getLastMusicPath(): String? {
-        return prefs.getString("last_music_path", null)
-    }
-
-    fun getLastMusicPosition(): Long {
-        return prefs.getLong("last_music_position", 0L)
-    }
-
+    fun getLastMusicPath(): String? = prefs.getString("last_music_path", null)
+    fun getLastMusicPosition(): Long = prefs.getLong("last_music_position", 0L)
     fun saveMusicResumeState(path: String?, positionMs: Long) {
-        prefs.edit()
-            .putString("last_music_path", path)
-            .putLong("last_music_position", positionMs)
-            .apply()
+        prefs.edit().putString("last_music_path", path).putLong("last_music_position", positionMs.coerceAtLeast(0L)).apply()
     }
 
-    // Trip Persistence
-    fun getTripData(): TripData {
-        return try {
-            TripData(
-                currentSpeedKmH = 0f,
-                maxSpeedKmH = prefs.getFloat("trip_max_speed", 0f),
-                averageSpeedKmH = prefs.getFloat("trip_avg_speed", 0f),
-                distanceKm = prefs.getFloat("trip_distance", 0f),
-                elapsedMovingTimeSec = prefs.getLong("trip_moving_time", 0L),
-                elapsedStopTimeSec = prefs.getLong("trip_stop_time", 0L),
-                isRunning = false,
-                isPaused = false
-            )
-        } catch (e: Exception) {
-            TripData()
-        }
-    }
+    fun getTripData(): TripData = try {
+        TripData(0f, prefs.getFloat("trip_max_speed", 0f), prefs.getFloat("trip_avg_speed", 0f), prefs.getFloat("trip_distance", 0f), prefs.getLong("trip_moving_time", 0L), prefs.getLong("trip_stop_time", 0L), false, false)
+    } catch (_: Exception) { TripData() }
+    fun saveTripData(data: TripData) { prefs.edit().putFloat("trip_max_speed", data.maxSpeedKmH).putFloat("trip_avg_speed", data.averageSpeedKmH).putFloat("trip_distance", data.distanceKm).putLong("trip_moving_time", data.elapsedMovingTimeSec).putLong("trip_stop_time", data.elapsedStopTimeSec).apply() }
 
-    fun saveTripData(data: TripData) {
-        try {
-            prefs.edit()
-                .putFloat("trip_max_speed", data.maxSpeedKmH)
-                .putFloat("trip_avg_speed", data.averageSpeedKmH)
-                .putFloat("trip_distance", data.distanceKm)
-                .putLong("trip_moving_time", data.elapsedMovingTimeSec)
-                .putLong("trip_stop_time", data.elapsedStopTimeSec)
-                .apply()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error saving trip data", e)
-        }
-    }
-
-    // Maps Management
     fun getSavedMaps(): List<MapItem> {
         val raw = prefs.getString("maps_json", null) ?: return emptyList()
         return try {
             val array = JSONArray(raw)
-            val list = mutableListOf<MapItem>()
-            for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                list.add(
-                    MapItem(
-                        id = obj.getString("id"),
-                        name = obj.getString("name"),
-                        filePath = obj.getString("filePath"),
-                        fileSizeFormatted = obj.optString("fileSizeFormatted", "--"),
-                        isActive = obj.optBoolean("isActive", false),
-                        dateAdded = obj.optString("dateAdded", "")
-                    )
-                )
+            List(array.length()) { i ->
+                val o = array.getJSONObject(i)
+                MapItem(o.getString("id"), o.getString("name"), o.getString("filePath"), o.optString("fileSizeFormatted", "--"), o.optBoolean("isActive", false), o.optString("dateAdded", ""))
             }
-            list
-        } catch (e: Exception) {
-            emptyList()
-        }
+        } catch (_: Exception) { emptyList() }
     }
-
     fun saveMaps(maps: List<MapItem>) {
         try {
             val array = JSONArray()
-            maps.forEach { item ->
-                val obj = JSONObject().apply {
-                    put("id", item.id)
-                    put("name", item.name)
-                    put("filePath", item.filePath)
-                    put("fileSizeFormatted", item.fileSizeFormatted)
-                    put("isActive", item.isActive)
-                    put("dateAdded", item.dateAdded)
-                }
-                array.put(obj)
-            }
+            maps.forEach { item -> array.put(JSONObject().apply { put("id", item.id); put("name", item.name); put("filePath", item.filePath); put("fileSizeFormatted", item.fileSizeFormatted); put("isActive", item.isActive); put("dateAdded", item.dateAdded) }) }
             prefs.edit().putString("maps_json", array.toString()).apply()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error saving maps", e)
-        }
+        } catch (e: Exception) { Log.e(TAG, "Error saving maps", e) }
     }
 
-    companion object {
-        private const val TAG = "PreferencesManager"
-    }
+    companion object { private const val TAG = "PreferencesManager" }
 }
