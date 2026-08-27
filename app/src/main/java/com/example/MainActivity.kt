@@ -101,7 +101,7 @@ class MainActivity : ComponentActivity() {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_MEDIA_NEXT -> { mainViewModel.playNext(); return true }
                 KeyEvent.KEYCODE_MEDIA_PREVIOUS -> { mainViewModel.playPrevious(); return true }
-                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSEHOOK -> { mainViewModel.togglePlayPause(); return true }
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> { mainViewModel.togglePlayPause(); return true }
                 KeyEvent.KEYCODE_MEDIA_PLAY -> { if (!mainViewModel.playbackState.value.isPlaying) mainViewModel.togglePlayPause(); return true }
                 KeyEvent.KEYCODE_MEDIA_PAUSE, KeyEvent.KEYCODE_MEDIA_STOP -> { if (mainViewModel.playbackState.value.isPlaying) mainViewModel.togglePlayPause(); return true }
             }
