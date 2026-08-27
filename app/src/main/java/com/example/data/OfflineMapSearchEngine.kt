@@ -83,37 +83,41 @@ class OfflineMapSearchEngine {
         if (!file.exists()) return emptyList()
 
         val output = LinkedHashMap<String, OfflineMapSearchResult>()
+        var mapFile: MapFile? = null
         try {
-            MapFile(file).use { mapFile ->
-                val info = mapFile.mapFileInfo
-                val bbox = mapFile.boundingBox()
-                val preferredZoom = 9
-                val zoom = preferredZoom.coerceIn(info.zoomLevelMin.toInt(), info.zoomLevelMax.toInt()).toByte()
-                val tileSize = info.tilePixelSize.coerceAtLeast(128)
-                val minX = MercatorProjection.longitudeToTileX(bbox.minLongitude, zoom)
-                val maxX = MercatorProjection.longitudeToTileX(bbox.maxLongitude, zoom)
-                val minY = MercatorProjection.latitudeToTileY(bbox.maxLatitude, zoom)
-                val maxY = MercatorProjection.latitudeToTileY(bbox.minLatitude, zoom)
+            mapFile = MapFile(file)
+            val info = mapFile.mapFileInfo
+            val bbox = mapFile.boundingBox()
+            val preferredZoom = 9
+            val zoom = preferredZoom.coerceIn(info.zoomLevelMin.toInt(), info.zoomLevelMax.toInt()).toByte()
+            val tileSize = info.tilePixelSize.coerceAtLeast(128)
+            val minX = MercatorProjection.longitudeToTileX(bbox.minLongitude, zoom)
+            val maxX = MercatorProjection.longitudeToTileX(bbox.maxLongitude, zoom)
+            val minY = MercatorProjection.latitudeToTileY(bbox.maxLatitude, zoom)
+            val maxY = MercatorProjection.latitudeToTileY(bbox.minLatitude, zoom)
 
-                outer@ for (x in minX..maxX) {
-                    for (y in minY..maxY) {
-                        if (output.size >= MAX_INDEX_ITEMS) break@outer
-                        val result = try { mapFile.readNamedItems(Tile(x, y, zoom, tileSize)) } catch (_: Exception) { null } ?: continue
+            outer@ for (x in minX..maxX) {
+                for (y in minY..maxY) {
+                    if (output.size >= MAX_INDEX_ITEMS) break@outer
+                    val result = try { mapFile.readNamedItems(Tile(x, y, zoom, tileSize)) } catch (_: Exception) { null } ?: continue
 
-                        result.pointOfInterests.forEach { poi ->
-                            if (output.size >= MAX_INDEX_ITEMS) return@forEach
+                    result.pois.forEach { poi ->
+                        if (output.size < MAX_INDEX_ITEMS) {
                             addNamed(output, poi.tags, poi.position, "معلم")
                         }
-                        result.ways.forEach { way ->
-                            if (output.size >= MAX_INDEX_ITEMS) return@forEach
-                            val position = way.labelPosition ?: way.latLongs.firstOrNull()?.firstOrNull() ?: return@forEach
-                            addNamed(output, way.tags, position, "اسم على الخريطة")
+                    }
+                    result.ways.forEach { way ->
+                        if (output.size < MAX_INDEX_ITEMS) {
+                            val position = way.labelPosition ?: way.latLongs.firstOrNull()?.firstOrNull()
+                            if (position != null) addNamed(output, way.tags, position, "اسم على الخريطة")
                         }
                     }
                 }
             }
         } catch (_: Exception) {
             return emptyList()
+        } finally {
+            try { mapFile?.close() } catch (_: Exception) { }
         }
         return output.values.toList()
     }
