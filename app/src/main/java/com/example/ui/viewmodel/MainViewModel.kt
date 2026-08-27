@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
@@ -39,6 +41,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val settings: StateFlow<LauncherSettings> = _settings.asStateFlow()
     private val _widgets = MutableStateFlow<List<WidgetItem>>(emptyList())
     val widgets: StateFlow<List<WidgetItem>> = _widgets.asStateFlow()
+    private val _screenSaverLayouts = MutableStateFlow<List<ScreenSaverWidgetLayout>>(emptyList())
+    val screenSaverLayouts: StateFlow<List<ScreenSaverWidgetLayout>> = _screenSaverLayouts.asStateFlow()
     private val _isDesignMode = MutableStateFlow(false)
     val isDesignMode: StateFlow<Boolean> = _isDesignMode.asStateFlow()
     private val _isChildLockActive = MutableStateFlow(false)
@@ -60,6 +64,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         checkSafeMode()
         loadWidgets()
+        loadScreenSaverLayouts()
         viewModelScope.launch(Dispatchers.IO) { loadApps() }
         viewModelScope.launch(Dispatchers.IO) { musicPlayerService.initialize() }
         viewModelScope.launch(Dispatchers.IO) { offlineMapEngine.initialize() }
@@ -200,6 +205,100 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (type in current) current.remove(type) else if (current.size < 4) current.add(type)
         val selected = current.ifEmpty { mutableSetOf(WidgetType.CLOCK) }.toSet()
         updateSettings(_settings.value.copy(screenSaverWidgetTypes = selected))
+        loadScreenSaverLayouts()
+    }
+
+    private fun screenSaverPrefs() = getApplication<Application>().getSharedPreferences("car_launcher_preferences_2026", Context.MODE_PRIVATE)
+
+    private fun loadScreenSaverLayouts() {
+        val saved = mutableListOf<ScreenSaverWidgetLayout>()
+        try {
+            val raw = screenSaverPrefs().getString("screensaver_layouts_json", null)
+            if (!raw.isNullOrBlank()) {
+                val array = JSONArray(raw)
+                for (i in 0 until array.length()) {
+                    val o = array.getJSONObject(i)
+                    val type = try { WidgetType.valueOf(o.getString("type")) } catch (_: Exception) { continue }
+                    saved += ScreenSaverWidgetLayout(
+                        type = type,
+                        xFraction = o.optDouble("x", 0.05).toFloat(),
+                        yFraction = o.optDouble("y", 0.12).toFloat(),
+                        widthFraction = o.optDouble("w", 0.42).toFloat(),
+                        heightFraction = o.optDouble("h", 0.34).toFloat(),
+                        opacity = o.optDouble("opacity", 0.90).toFloat().coerceIn(0.25f, 1f),
+                        zIndex = o.optInt("z", i)
+                    )
+                }
+            }
+        } catch (_: Exception) { }
+
+        val orderedTypes = WidgetType.values().filter { it in _settings.value.screenSaverWidgetTypes }.take(4)
+        val merged = orderedTypes.mapIndexed { index, type ->
+            val existing = saved.firstOrNull { it.type == type }
+            existing ?: ScreenSaverWidgetLayout.defaultFor(type, index)
+        }
+        _screenSaverLayouts.value = merged
+        saveScreenSaverLayouts()
+    }
+
+    private fun saveScreenSaverLayouts() {
+        try {
+            val array = JSONArray()
+            _screenSaverLayouts.value.forEach { item ->
+                array.put(JSONObject().apply {
+                    put("type", item.type.name)
+                    put("x", item.xFraction.toDouble())
+                    put("y", item.yFraction.toDouble())
+                    put("w", item.widthFraction.toDouble())
+                    put("h", item.heightFraction.toDouble())
+                    put("opacity", item.opacity.toDouble())
+                    put("z", item.zIndex)
+                })
+            }
+            screenSaverPrefs().edit().putString("screensaver_layouts_json", array.toString()).apply()
+        } catch (_: Exception) { }
+    }
+
+    fun previewScreenSaverMove(type: WidgetType, dxFraction: Float, dyFraction: Float) {
+        _screenSaverLayouts.value = _screenSaverLayouts.value.map { item ->
+            if (item.type != type) item else item.copy(
+                xFraction = (item.xFraction + dxFraction).coerceIn(0f, (1f - item.widthFraction).coerceAtLeast(0f)),
+                yFraction = (item.yFraction + dyFraction).coerceIn(0f, (1f - item.heightFraction).coerceAtLeast(0f))
+            )
+        }
+    }
+
+    fun previewScreenSaverResize(type: WidgetType, dwFraction: Float, dhFraction: Float) {
+        _screenSaverLayouts.value = _screenSaverLayouts.value.map { item ->
+            if (item.type != type) item else {
+                val maxW = (1f - item.xFraction).coerceAtLeast(0.16f)
+                val maxH = (1f - item.yFraction).coerceAtLeast(0.16f)
+                item.copy(
+                    widthFraction = (item.widthFraction + dwFraction).coerceIn(0.16f, maxW),
+                    heightFraction = (item.heightFraction + dhFraction).coerceIn(0.16f, maxH)
+                )
+            }
+        }
+    }
+
+    fun setScreenSaverOpacity(type: WidgetType, opacity: Float) {
+        _screenSaverLayouts.value = _screenSaverLayouts.value.map {
+            if (it.type == type) it.copy(opacity = opacity.coerceIn(0.25f, 1f)) else it
+        }
+        saveScreenSaverLayouts()
+    }
+
+    fun bringScreenSaverWidgetToFront(type: WidgetType) {
+        val next = (_screenSaverLayouts.value.maxOfOrNull { it.zIndex } ?: 0) + 1
+        _screenSaverLayouts.value = _screenSaverLayouts.value.map { if (it.type == type) it.copy(zIndex = next) else it }
+    }
+
+    fun commitScreenSaverLayout() = saveScreenSaverLayouts()
+
+    fun resetScreenSaverLayout() {
+        val ordered = WidgetType.values().filter { it in _settings.value.screenSaverWidgetTypes }.take(4)
+        _screenSaverLayouts.value = ordered.mapIndexed { index, type -> ScreenSaverWidgetLayout.defaultFor(type, index) }
+        saveScreenSaverLayouts()
     }
 
     fun importWallpaperUri(uri: Uri) {
