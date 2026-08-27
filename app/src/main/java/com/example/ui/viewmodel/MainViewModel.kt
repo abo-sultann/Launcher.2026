@@ -3,11 +3,11 @@ package com.example.ui.viewmodel
 import android.app.Application
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import android.media.MediaScannerConnection
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
@@ -41,6 +41,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val widgets: StateFlow<List<WidgetItem>> = _widgets.asStateFlow()
     private val _isDesignMode = MutableStateFlow(false)
     val isDesignMode: StateFlow<Boolean> = _isDesignMode.asStateFlow()
+    private val _isChildLockActive = MutableStateFlow(false)
+    val isChildLockActive: StateFlow<Boolean> = _isChildLockActive.asStateFlow()
     private val _installedApps = MutableStateFlow<List<AppItem>>(emptyList())
     val installedApps: StateFlow<List<AppItem>> = _installedApps.asStateFlow()
     private val _diagnosticReport = MutableStateFlow<DiagnosticReport?>(null)
@@ -86,45 +88,145 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun loadWidgets() { _widgets.value = preferencesManager.getWidgets() }
     fun toggleDesignMode() { _isDesignMode.value = !_isDesignMode.value }
+
     fun addWidget(type: WidgetType, style: WidgetStyle) {
-        val item = WidgetItem(UUID.randomUUID().toString(), type, style,
-            if (type == WidgetType.CONTROLS || type == WidgetType.APPS || style == WidgetStyle.MUSIC_LARGE_AUTOMOTIVE) 2 else 1,
-            1, true, _widgets.value.size)
+        val spanX = if (type == WidgetType.CONTROLS || type == WidgetType.APPS || style == WidgetStyle.MUSIC_LARGE_AUTOMOTIVE) 2 else 1
+        val order = _widgets.value.size
+        val item = WidgetItem.createForOrder(UUID.randomUUID().toString(), type, style, order, spanX)
         val updated = _widgets.value + item
         _widgets.value = updated
         preferencesManager.saveWidgets(updated)
     }
-    fun updateWidgetStyle(widgetId: String, newStyle: WidgetStyle) {
-        val updated = _widgets.value.map { if (it.id == widgetId) it.copy(style = newStyle) else it }
-        _widgets.value = updated; preferencesManager.saveWidgets(updated)
+
+    fun updateWidgetStyle(widgetId: String, newStyle: WidgetStyle) = updateAndSaveWidgets { item ->
+        if (item.id == widgetId) item.copy(style = newStyle) else item
     }
-    fun toggleWidgetSpan(widgetId: String) {
-        val updated = _widgets.value.map { if (it.id == widgetId) it.copy(spanX = if (it.spanX == 1) 2 else 1) else it }
-        _widgets.value = updated; preferencesManager.saveWidgets(updated)
+
+    fun toggleWidgetSpan(widgetId: String) = updateAndSaveWidgets { item ->
+        if (item.id == widgetId) {
+            val wider = item.widthFraction < 0.45f
+            item.copy(
+                spanX = if (wider) 2 else 1,
+                widthFraction = if (wider) 0.48f else 0.235f,
+                xFraction = item.xFraction.coerceIn(0f, if (wider) 0.52f else 0.765f)
+            )
+        } else item
     }
+
+    // Kept for compatibility with older UI/tests. Free placement uses geometry methods below.
     fun moveWidget(widgetId: String, forward: Boolean) {
-        val list = _widgets.value.toMutableList(); val i = list.indexOfFirst { it.id == widgetId }; if (i < 0) return
+        val list = _widgets.value.toMutableList()
+        val i = list.indexOfFirst { it.id == widgetId }
+        if (i < 0) return
         val target = if (forward) i + 1 else i - 1
         if (target !in list.indices) return
-        val item = list.removeAt(i); list.add(target, item)
-        val updated = list.mapIndexed { idx, w -> w.copy(order = idx) }
-        _widgets.value = updated; preferencesManager.saveWidgets(updated)
+        val item = list.removeAt(i)
+        list.add(target, item)
+        val updated = list.mapIndexed { idx, w -> w.copy(order = idx, zIndex = idx) }
+        _widgets.value = updated
+        preferencesManager.saveWidgets(updated)
     }
+
+    fun previewWidgetMove(widgetId: String, dxFraction: Float, dyFraction: Float) {
+        _widgets.value = _widgets.value.map { item ->
+            if (item.id != widgetId || item.isLocked) item else {
+                val width = item.widthFraction.coerceIn(0.12f, 1f)
+                val height = item.heightFraction.coerceIn(0.14f, 1f)
+                item.copy(
+                    xFraction = (item.xFraction + dxFraction).coerceIn(0f, (1f - width).coerceAtLeast(0f)),
+                    yFraction = (item.yFraction + dyFraction).coerceIn(0f, (1f - height).coerceAtLeast(0f))
+                )
+            }
+        }
+    }
+
+    fun previewWidgetResize(widgetId: String, dwFraction: Float, dhFraction: Float) {
+        _widgets.value = _widgets.value.map { item ->
+            if (item.id != widgetId || item.isLocked) item else {
+                val maxWidth = (1f - item.xFraction).coerceAtLeast(0.12f)
+                val maxHeight = (1f - item.yFraction).coerceAtLeast(0.14f)
+                item.copy(
+                    widthFraction = (item.widthFraction + dwFraction).coerceIn(0.12f, maxWidth),
+                    heightFraction = (item.heightFraction + dhFraction).coerceIn(0.14f, maxHeight)
+                )
+            }
+        }
+    }
+
+    fun commitWidgetLayout() = preferencesManager.saveWidgets(_widgets.value)
+
+    fun setWidgetOpacity(widgetId: String, opacity: Float) = updateAndSaveWidgets { item ->
+        if (item.id == widgetId) item.copy(opacity = opacity.coerceIn(0.20f, 1f)) else item
+    }
+
+    fun toggleWidgetLock(widgetId: String) = updateAndSaveWidgets { item ->
+        if (item.id == widgetId) item.copy(isLocked = !item.isLocked) else item
+    }
+
+    fun bringWidgetToFront(widgetId: String) {
+        val next = (_widgets.value.maxOfOrNull { it.zIndex } ?: 0) + 1
+        _widgets.value = _widgets.value.map { if (it.id == widgetId) it.copy(zIndex = next) else it }
+    }
+
+    private inline fun updateAndSaveWidgets(transform: (WidgetItem) -> WidgetItem) {
+        val updated = _widgets.value.map(transform)
+        _widgets.value = updated
+        preferencesManager.saveWidgets(updated)
+    }
+
     fun removeWidget(widgetId: String) {
         val updated = _widgets.value.filterNot { it.id == widgetId }.mapIndexed { i, w -> w.copy(order = i) }
-        _widgets.value = updated; preferencesManager.saveWidgets(updated)
+        _widgets.value = updated
+        preferencesManager.saveWidgets(updated)
     }
+
     fun resetWidgetsToDefault() { preferencesManager.resetToDefaultWidgets(); loadWidgets() }
+
+    fun activateChildLock() {
+        _isDesignMode.value = false
+        _isChildLockActive.value = true
+    }
+    fun deactivateChildLock() { _isChildLockActive.value = false }
 
     fun updateSafeArea(top: Int, bottom: Int, left: Int, right: Int) {
         val config = SafeAreaConfig(top.coerceIn(0, 250), bottom.coerceIn(0, 150), left.coerceIn(0, 150), right.coerceIn(0, 150))
-        _safeArea.value = config; preferencesManager.saveSafeArea(config)
+        _safeArea.value = config
+        preferencesManager.saveSafeArea(config)
     }
     fun resetSafeArea() { updateSafeArea(0, 0, 0, 0) }
     fun updateSettings(newSettings: LauncherSettings) { _settings.value = newSettings; preferencesManager.saveSettings(newSettings) }
 
+    fun toggleScreenSaverWidget(type: WidgetType) {
+        val current = _settings.value.screenSaverWidgetTypes.toMutableSet()
+        if (type in current) current.remove(type) else if (current.size < 4) current.add(type)
+        val selected = current.ifEmpty { mutableSetOf(WidgetType.CLOCK) }.toSet()
+        updateSettings(_settings.value.copy(screenSaverWidgetTypes = selected))
+    }
+
+    fun importWallpaperUri(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val resolver = getApplication<Application>().contentResolver
+                val originalName = queryDisplayName(uri) ?: "wallpaper.jpg"
+                val extension = originalName.substringAfterLast('.', "jpg").take(5)
+                val dir = File(getApplication<Application>().filesDir, "wallpapers").apply { mkdirs() }
+                val target = File(dir, "launcher_wallpaper.$extension")
+                resolver.openInputStream(uri)?.use { input -> FileOutputStream(target).use { output -> input.copyTo(output) } }
+                if (target.exists() && target.length() > 0) {
+                    val newSettings = _settings.value.copy(
+                        backgroundType = BackgroundType.CUSTOM_IMAGE,
+                        customWallpaperPath = target.absolutePath
+                    )
+                    _settings.value = newSettings
+                    preferencesManager.saveSettings(newSettings)
+                }
+            } catch (_: Exception) { }
+        }
+    }
+
     fun loadApps() {
-        val apps = appRepository.getInstalledApps(); _installedApps.value = apps
+        val apps = appRepository.getInstalledApps()
+        _installedApps.value = apps
     }
     fun toggleAppFavorite(packageName: String) {
         viewModelScope.launch(Dispatchers.IO) { appRepository.toggleFavorite(packageName); loadApps() }
@@ -159,7 +261,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val outUri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
                     if (outUri != null) {
                         resolver.openInputStream(uri)?.use { input -> resolver.openOutputStream(outUri)?.use { output -> input.copyTo(output) } }
-                        values.clear(); values.put(MediaStore.Audio.Media.IS_PENDING, 0); resolver.update(outUri, values, null, null)
+                        values.clear()
+                        values.put(MediaStore.Audio.Media.IS_PENDING, 0)
+                        resolver.update(outUri, values, null, null)
                     }
                 } else {
                     val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).resolve("Launcher 2026")
@@ -204,6 +308,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun resetSafeMode() { diagnosticManager.resetCrashCount(); _isSafeModeActive.value = false; runDiagnostics() }
 
     override fun onCleared() {
-        gpsTelemetryManager.stopGpsUpdates(); musicPlayerService.release(); tripComputer.release(); super.onCleared()
+        gpsTelemetryManager.stopGpsUpdates()
+        musicPlayerService.release()
+        tripComputer.release()
+        super.onCleared()
     }
 }
