@@ -1,12 +1,15 @@
 package com.example.data
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.example.model.GpsTelemetry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,15 +22,27 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
     val telemetry: StateFlow<GpsTelemetry> = _telemetry.asStateFlow()
 
     private var isListening = false
+    private var previousLocation: Location? = null
+
+    fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     @SuppressLint("MissingPermission")
     fun startGpsUpdates() {
+        if (!hasLocationPermission()) {
+            _telemetry.value = _telemetry.value.copy(
+                hasGpsFix = false,
+                statusArabic = "في انتظار منح إذن الموقع"
+            )
+            return
+        }
         if (isListening) return
+
         try {
             val lm = locationManager ?: return
-
-            val isGpsEnabled = try { lm.isProviderEnabled(LocationManager.GPS_PROVIDER) } catch (e: Exception) { false }
-            val isNetworkEnabled = try { lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) } catch (e: Exception) { false }
+            val isGpsEnabled = try { lm.isProviderEnabled(LocationManager.GPS_PROVIDER) } catch (_: Exception) { false }
+            val isNetworkEnabled = try { lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) } catch (_: Exception) { false }
 
             if (!isGpsEnabled && !isNetworkEnabled) {
                 _telemetry.value = _telemetry.value.copy(
@@ -38,69 +53,60 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
             }
 
             if (isGpsEnabled) {
-                lm.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER,
-                    1000L, // 1 sec interval
-                    1.0f,  // 1 meter min distance
-                    this
-                )
+                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 800L, 0.5f, this)
             }
-
             if (isNetworkEnabled) {
-                lm.requestLocationUpdates(
-                    LocationManager.NETWORK_PROVIDER,
-                    2000L,
-                    5.0f,
-                    this
-                )
-            }
-
-            // Get last known location if available
-            val lastGps = if (isGpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null
-            val lastNet = if (isNetworkEnabled) lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) else null
-            val bestLocation = lastGps ?: lastNet
-            if (bestLocation != null) {
-                onLocationChanged(bestLocation)
+                lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1500L, 2.0f, this)
             }
 
             isListening = true
-            _telemetry.value = _telemetry.value.copy(
-                statusArabic = "جارٍ البحث عن الأقمار الصناعية..."
-            )
+
+            val lastGps = if (isGpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null
+            val lastNet = if (isNetworkEnabled) lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) else null
+            val bestLocation = listOfNotNull(lastGps, lastNet).maxByOrNull { it.time }
+            if (bestLocation != null) onLocationChanged(bestLocation)
+            else _telemetry.value = _telemetry.value.copy(statusArabic = "جارٍ البحث عن الأقمار الصناعية...")
         } catch (e: SecurityException) {
-            Log.w(TAG, "GPS permission not granted yet", e)
-            _telemetry.value = _telemetry.value.copy(
-                hasGpsFix = false,
-                statusArabic = "في انتظار منح إذن الموقع"
-            )
+            isListening = false
+            Log.w(TAG, "GPS permission not granted", e)
+            _telemetry.value = _telemetry.value.copy(hasGpsFix = false, statusArabic = "في انتظار منح إذن الموقع")
         } catch (e: Exception) {
+            isListening = false
             Log.e(TAG, "Error starting GPS listener", e)
-            _telemetry.value = _telemetry.value.copy(
-                hasGpsFix = false,
-                statusArabic = "تعذر تشغيل GPS"
-            )
+            _telemetry.value = _telemetry.value.copy(hasGpsFix = false, statusArabic = "تعذر تشغيل GPS")
         }
+    }
+
+    fun restartGpsUpdates() {
+        stopGpsUpdates()
+        startGpsUpdates()
     }
 
     fun stopGpsUpdates() {
         try {
-            if (isListening) {
-                locationManager?.removeUpdates(this)
-                isListening = false
-            }
+            if (isListening) locationManager?.removeUpdates(this)
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping GPS updates", e)
+        } finally {
+            isListening = false
         }
     }
 
     override fun onLocationChanged(location: Location) {
         try {
-            // Speed in m/s converted to km/h (speed * 3.6f)
-            val speedKmH = if (location.hasSpeed()) {
-                (location.speed * 3.6f).coerceAtLeast(0f)
-            } else {
-                0f
-            }
+            val directSpeed = if (location.hasSpeed()) location.speed * 3.6f else -1f
+            val fallbackSpeed = previousLocation?.let { previous ->
+                val dtSec = (location.time - previous.time) / 1000f
+                if (dtSec in 0.4f..10f) {
+                    val meters = previous.distanceTo(location)
+                    (meters / dtSec) * 3.6f
+                } else 0f
+            } ?: 0f
+
+            var speedKmH = if (directSpeed >= 0f) directSpeed else fallbackSpeed
+            if (speedKmH < 1.2f) speedKmH = 0f
+            speedKmH = speedKmH.coerceIn(0f, 260f)
+            previousLocation = Location(location)
 
             val bearing = if (location.hasBearing()) location.bearing else 0f
             val altitude = if (location.hasAltitude()) location.altitude else 0.0
@@ -114,12 +120,8 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
                 bearingDegrees = bearing,
                 accuracyMeters = accuracy,
                 hasGpsFix = true,
-                satellitesCount = if (location.extras?.containsKey("satellites") == true) {
-                    location.extras?.getInt("satellites") ?: 8
-                } else {
-                    8
-                },
-                statusArabic = "متصل بالأقمار الصناعية"
+                satellitesCount = location.extras?.getInt("satellites", 0) ?: 0,
+                statusArabic = "GPS يعمل"
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error processing location update", e)
@@ -130,14 +132,12 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
     override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
 
     override fun onProviderEnabled(provider: String) {
-        _telemetry.value = _telemetry.value.copy(statusArabic = "تم تفعيل $provider")
+        _telemetry.value = _telemetry.value.copy(statusArabic = "تم تفعيل GPS")
+        if (!isListening) startGpsUpdates()
     }
 
     override fun onProviderDisabled(provider: String) {
-        _telemetry.value = _telemetry.value.copy(
-            hasGpsFix = false,
-            statusArabic = "تم إيقاف $provider"
-        )
+        _telemetry.value = _telemetry.value.copy(hasGpsFix = false, speedKmH = 0f, statusArabic = "GPS متوقف")
     }
 
     companion object {
