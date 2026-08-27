@@ -63,7 +63,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) { offlineMapEngine.initialize() }
         viewModelScope.launch(Dispatchers.Main) { gpsTelemetryManager.startGpsUpdates() }
         viewModelScope.launch {
-            gpsTelemetry.collect { telemetry -> if (telemetry.hasGpsFix) tripComputer.updateSpeed(telemetry.speedKmH) }
+            gpsTelemetry.collect { telemetry ->
+                val speed = if (telemetry.hasGpsFix) telemetry.speedKmH else 0f
+                tripComputer.updateSpeed(speed)
+                if (_settings.value.autoLogTrips && telemetry.hasGpsFix && speed >= 3f && !tripComputer.tripData.value.isRunning) {
+                    tripComputer.startTrip()
+                }
+            }
         }
     }
 
@@ -71,7 +77,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val p = getApplication<Application>().getSharedPreferences("car_launcher_safe_mode", Context.MODE_PRIVATE)
         _isSafeModeActive.value = p.getInt("crash_count", 0) >= 2
     }
-    fun navigateTo(screen: CarScreen) { _currentScreen.value = screen }
+
+    fun navigateTo(screen: CarScreen) {
+        if (_currentScreen.value != screen) _currentScreen.value = screen
+    }
+
+    fun restartGps() = gpsTelemetryManager.restartGpsUpdates()
 
     private fun loadWidgets() { _widgets.value = preferencesManager.getWidgets() }
     fun toggleDesignMode() { _isDesignMode.value = !_isDesignMode.value }
@@ -115,8 +126,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun loadApps() {
         val apps = appRepository.getInstalledApps(); _installedApps.value = apps
     }
-    fun toggleAppFavorite(packageName: String) { appRepository.toggleFavorite(packageName); loadApps() }
-    fun toggleAppHidden(packageName: String) { appRepository.toggleHidden(packageName); loadApps() }
+    fun toggleAppFavorite(packageName: String) {
+        viewModelScope.launch(Dispatchers.IO) { appRepository.toggleFavorite(packageName); loadApps() }
+    }
+    fun toggleAppHidden(packageName: String) {
+        viewModelScope.launch(Dispatchers.IO) { appRepository.toggleHidden(packageName); loadApps() }
+    }
     fun launchApp(packageName: String) { appRepository.launchApp(packageName) }
 
     fun togglePlayPause() = musicPlayerService.togglePlayPause()
@@ -143,14 +158,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     val outUri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
                     if (outUri != null) {
-                        resolver.openInputStream(uri)?.use { input -> resolver.openOutputStream(outUri)?.use { input.copyTo(it) } }
+                        resolver.openInputStream(uri)?.use { input -> resolver.openOutputStream(outUri)?.use { output -> input.copyTo(output) } }
                         values.clear(); values.put(MediaStore.Audio.Media.IS_PENDING, 0); resolver.update(outUri, values, null, null)
                     }
                 } else {
                     val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).resolve("Launcher 2026")
                     if (!dir.exists()) dir.mkdirs()
                     val target = File(dir, name)
-                    resolver.openInputStream(uri)?.use { input -> FileOutputStream(target).use { input.copyTo(it) } }
+                    resolver.openInputStream(uri)?.use { input -> FileOutputStream(target).use { output -> input.copyTo(output) } }
                     MediaScannerConnection.scanFile(getApplication(), arrayOf(target.absolutePath), arrayOf(resolver.getType(uri) ?: "audio/mpeg"), null)
                 }
                 musicPlayerService.initialize()
@@ -176,7 +191,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val name = queryDisplayName(uri) ?: "map_${System.currentTimeMillis()}.mbtiles"
                 val dir = File(getApplication<Application>().filesDir, "maps").apply { mkdirs() }
                 val target = File(dir, name)
-                resolver.openInputStream(uri)?.use { input -> FileOutputStream(target).use { input.copyTo(it) } }
+                resolver.openInputStream(uri)?.use { input -> FileOutputStream(target).use { output -> input.copyTo(output) } }
                 if (target.exists() && target.length() > 0) offlineMapEngine.importMapFile(target, target.nameWithoutExtension)
             } catch (_: Exception) { }
         }
