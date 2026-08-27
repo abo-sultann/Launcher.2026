@@ -70,6 +70,11 @@ class EnhancedMapStore(context: Context) {
         persistExtraPlaces()
     }
 
+    fun updateExtraPlaceKind(id: String, kind: OffroadPlaceKind) {
+        _extraPlaces.value = _extraPlaces.value.map { if (it.id == id) it.copy(kind = kind) else it }
+        persistExtraPlaces()
+    }
+
     fun deleteExtraPlace(id: String) {
         _extraPlaces.value = _extraPlaces.value.filterNot { it.id == id }
         persistExtraPlaces()
@@ -84,7 +89,8 @@ class EnhancedMapStore(context: Context) {
     }
 
     fun updateUi(transform: (EnhancedMapUiPreferences) -> EnhancedMapUiPreferences) {
-        val next = transform(_ui.value).copy(trackWidth = transform(_ui.value).trackWidth.coerceIn(3f, 12f))
+        val transformed = transform(_ui.value)
+        val next = transformed.copy(trackWidth = transformed.trackWidth.coerceIn(3f, 12f))
         _ui.value = next
         prefs.edit()
             .putBoolean("track_visible", next.trackVisible)
