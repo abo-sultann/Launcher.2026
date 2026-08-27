@@ -13,6 +13,7 @@ data class LauncherSettings(
     val safeArea: SafeAreaConfig = SafeAreaConfig.DEFAULT,
     val backgroundType: BackgroundType = BackgroundType.DARK_CARBON,
     val customWallpaperPath: String? = null,
+    val wallpaperDimPercent: Int = 10,
     val iconSizeDp: Int = 64,
     val showAppNames: Boolean = true,
     val showAppLabels: Boolean = true,
@@ -33,5 +34,10 @@ data class LauncherSettings(
     val showBottomBar: Boolean = true,
     val highContrastMode: Boolean = false,
     val keepScreenOn: Boolean = true,
-    val autoLogTrips: Boolean = true
+    val autoLogTrips: Boolean = true,
+    val childUnlockHoldSeconds: Int = 3,
+    val screenSaverEnabled: Boolean = false,
+    val screenSaverTimeoutSeconds: Int = 120,
+    val screenSaverUseWallpaper: Boolean = true,
+    val screenSaverWidgetTypes: Set<WidgetType> = setOf(WidgetType.CLOCK, WidgetType.SPEEDOMETER)
 )
