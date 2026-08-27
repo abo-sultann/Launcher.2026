@@ -32,33 +32,73 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val settings by viewModel.settings.collectAsState()
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(AppDrawerFilter.ALL) }
-    val filtered = remember(apps, query, filter) { apps.filter { a ->
-        val f = when (filter) { AppDrawerFilter.ALL -> !a.isHidden; AppDrawerFilter.FAVORITES -> a.isFavorite && !a.isHidden; AppDrawerFilter.HIDDEN -> a.isHidden }
-        f && (query.isBlank() || a.label.contains(query, true) || a.packageName.contains(query, true))
-    } }
+    val filtered = remember(apps, query, filter) {
+        apps.filter { a ->
+            val f = when (filter) {
+                AppDrawerFilter.ALL -> !a.isHidden
+                AppDrawerFilter.FAVORITES -> a.isFavorite && !a.isHidden
+                AppDrawerFilter.HIDDEN -> a.isHidden
+            }
+            f && (query.isBlank() || a.label.contains(query, true) || a.packageName.contains(query, true))
+        }
+    }
+
     Column(modifier.fillMaxSize().padding(10.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.weight(1f).height(50.dp), singleLine = true, placeholder = { Text("بحث عن تطبيق") })
             AppDrawerFilter.values().forEach { f -> FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text(f.title) }) }
         }
         Spacer(Modifier.height(7.dp))
-        LazyVerticalGrid(columns = GridCells.Fixed(settings.appDrawerColumns.coerceIn(2, 8)), modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 8.dp)) {
-            items(filtered, key = { it.packageName }) { app -> AppDrawerCard(app, { viewModel.launchApp(app.packageName) }, { viewModel.toggleAppFavorite(app.packageName) }, { viewModel.toggleAppHidden(app.packageName) }, settings.showAppLabels) }
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(settings.appDrawerColumns.coerceIn(2, 8)),
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 8.dp)
+        ) {
+            items(filtered, key = { it.packageName }) { app ->
+                AppDrawerCard(
+                    app,
+                    { viewModel.launchApp(app.packageName) },
+                    { viewModel.toggleAppFavorite(app.packageName) },
+                    { viewModel.toggleAppHidden(app.packageName) },
+                    settings.showAppLabels
+                )
+            }
         }
     }
 }
 
-@Composable private fun AppDrawerCard(app: AppItem, launch: () -> Unit, favorite: () -> Unit, hide: () -> Unit, showLabel: Boolean) {
-    Card(Modifier.fillMaxWidth().height(115.dp).border(1.dp, if (app.isFavorite) AmberRacing else CarbonCardBorder, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp)).clickable { launch() }.testTag("app_card_${app.packageName}"), colors = CardDefaults.cardColors(containerColor = CarbonCard)) {
+@Composable
+private fun AppDrawerCard(app: AppItem, launch: () -> Unit, favorite: () -> Unit, hide: () -> Unit, showLabel: Boolean) {
+    val bitmap = remember(app.packageName, app.icon) {
+        try { app.icon?.toBitmap(64, 64)?.asImageBitmap() } catch (_: Exception) { null }
+    }
+
+    Card(
+        Modifier.fillMaxWidth().height(115.dp)
+            .border(1.dp, if (app.isFavorite) AmberRacing else CarbonCardBorder, RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { launch() }
+            .testTag("app_card_${app.packageName}"),
+        colors = CardDefaults.cardColors(containerColor = CarbonCard)
+    ) {
         Box(Modifier.fillMaxSize().padding(5.dp)) {
             Row(Modifier.align(Alignment.TopEnd)) {
-                IconButton(onClick = favorite, modifier = Modifier.size(25.dp)) { Icon(if (app.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, null, tint = if (app.isFavorite) AmberRacing else TextMuted, modifier = Modifier.size(16.dp)) }
-                IconButton(onClick = hide, modifier = Modifier.size(25.dp)) { Icon(Icons.Default.VisibilityOff, null, tint = TextMuted, modifier = Modifier.size(16.dp)) }
+                IconButton(onClick = favorite, modifier = Modifier.size(25.dp)) {
+                    Icon(if (app.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, null, tint = if (app.isFavorite) AmberRacing else TextMuted, modifier = Modifier.size(16.dp))
+                }
+                IconButton(onClick = hide, modifier = Modifier.size(25.dp)) {
+                    Icon(Icons.Default.VisibilityOff, null, tint = TextMuted, modifier = Modifier.size(16.dp))
+                }
             }
             Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                val bitmap = try { app.icon?.toBitmap(72, 72)?.asImageBitmap() } catch (_: Exception) { null }
-                if (bitmap != null) Image(bitmap, app.label, Modifier.size(44.dp)) else Icon(Icons.Default.Android, app.label, tint = CyanNeon, modifier = Modifier.size(40.dp))
-                if (showLabel) { Spacer(Modifier.height(4.dp)); Text(app.label, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1) }
+                if (bitmap != null) Image(bitmap, app.label, Modifier.size(44.dp))
+                else Icon(Icons.Default.Android, app.label, tint = CyanNeon, modifier = Modifier.size(40.dp))
+                if (showLabel) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(app.label, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
             }
         }
     }
