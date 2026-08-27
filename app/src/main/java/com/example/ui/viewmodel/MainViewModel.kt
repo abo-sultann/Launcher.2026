@@ -32,6 +32,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val tripComputer = TripComputer(preferencesManager)
     private val offlineMapEngine = OfflineMapEngine(application, preferencesManager)
     private val diagnosticManager = DiagnosticManager(application, preferencesManager)
+    private val offroadTrackManager = OffroadTrackManager(application)
 
     private val _currentScreen = MutableStateFlow(CarScreen.HOME)
     val currentScreen: StateFlow<CarScreen> = _currentScreen.asStateFlow()
@@ -60,6 +61,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val mapsList: StateFlow<List<MapItem>> = offlineMapEngine.mapsList
     val activeMap: StateFlow<MapItem?> = offlineMapEngine.activeMap
     val mapError: StateFlow<String?> = offlineMapEngine.mapError
+    val offroadTrackPoints: StateFlow<List<OffroadTrackPoint>> = offroadTrackManager.trackPoints
+    val savedOffroadPlaces: StateFlow<List<SavedOffroadPlace>> = offroadTrackManager.savedPlaces
+    val offroadNavigationTarget: StateFlow<OffroadNavigationTarget?> = offroadTrackManager.navigationTarget
 
     init {
         checkSafeMode()
@@ -76,6 +80,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (_settings.value.autoLogTrips && telemetry.hasGpsFix && speed >= 3f && !tripComputer.tripData.value.isRunning) {
                     tripComputer.startTrip()
                 }
+                if (telemetry.hasGpsFix) offroadTrackManager.record(telemetry)
             }
         }
     }
@@ -219,6 +224,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 for (i in 0 until array.length()) {
                     val o = array.getJSONObject(i)
                     val type = try { WidgetType.valueOf(o.getString("type")) } catch (_: Exception) { continue }
+                    val style = try {
+                        o.optString("style", "").takeIf { it.isNotBlank() }?.let { WidgetStyle.valueOf(it) }?.takeIf { it.type == type }
+                    } catch (_: Exception) { null }
                     saved += ScreenSaverWidgetLayout(
                         type = type,
                         xFraction = o.optDouble("x", 0.05).toFloat(),
@@ -226,7 +234,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         widthFraction = o.optDouble("w", 0.42).toFloat(),
                         heightFraction = o.optDouble("h", 0.34).toFloat(),
                         opacity = o.optDouble("opacity", 0.90).toFloat().coerceIn(0.25f, 1f),
-                        zIndex = o.optInt("z", i)
+                        zIndex = o.optInt("z", i),
+                        style = style
                     )
                 }
             }
@@ -253,6 +262,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     put("h", item.heightFraction.toDouble())
                     put("opacity", item.opacity.toDouble())
                     put("z", item.zIndex)
+                    put("style", item.style?.name ?: "")
                 })
             }
             screenSaverPrefs().edit().putString("screensaver_layouts_json", array.toString()).apply()
@@ -284,6 +294,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setScreenSaverOpacity(type: WidgetType, opacity: Float) {
         _screenSaverLayouts.value = _screenSaverLayouts.value.map {
             if (it.type == type) it.copy(opacity = opacity.coerceIn(0.25f, 1f)) else it
+        }
+        saveScreenSaverLayouts()
+    }
+
+    fun cycleScreenSaverStyle(type: WidgetType) {
+        val styles = WidgetStyle.values().filter { it.type == type }
+        if (styles.isEmpty()) return
+        _screenSaverLayouts.value = _screenSaverLayouts.value.map { item ->
+            if (item.type != type) item else {
+                val currentIndex = styles.indexOf(item.style)
+                item.copy(style = styles[(if (currentIndex >= 0) currentIndex + 1 else 0) % styles.size])
+            }
         }
         saveScreenSaverLayouts()
     }
@@ -403,6 +425,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun renameMap(mapId: String, newName: String) = offlineMapEngine.renameMap(mapId, newName)
     fun deleteMap(mapId: String) = offlineMapEngine.deleteMap(mapId)
 
+    fun saveCurrentOffroadPlace() = offroadTrackManager.saveCurrentPlace(gpsTelemetry.value)
+    fun deleteSavedOffroadPlace(id: String) = offroadTrackManager.deletePlace(id)
+    fun navigateToSavedOffroadPlace(id: String) {
+        savedOffroadPlaces.value.firstOrNull { it.id == id }?.let(offroadTrackManager::navigateTo)
+    }
+    fun navigateToTrackStart() = offroadTrackManager.navigateToTrackStart()
+    fun stopOffroadNavigation() = offroadTrackManager.stopNavigation()
+    fun clearOffroadTrack() = offroadTrackManager.clearTrack()
+    fun offroadDistanceToTargetMeters(): Float? = offroadTrackManager.distanceToTargetMeters(gpsTelemetry.value)
+    fun offroadBearingToTarget(): Float? = offroadTrackManager.bearingToTarget(gpsTelemetry.value)
+
     fun runDiagnostics() { _diagnosticReport.value = diagnosticManager.runFullDiagnostics() }
     fun resetSafeMode() { diagnosticManager.resetCrashCount(); _isSafeModeActive.value = false; runDiagnostics() }
 
@@ -410,6 +443,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         gpsTelemetryManager.stopGpsUpdates()
         musicPlayerService.release()
         tripComputer.release()
+        offroadTrackManager.release()
         super.onCleared()
     }
 }
