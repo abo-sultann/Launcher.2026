@@ -32,16 +32,23 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Restore fixed signing key
+        run: |
+          base64 --decode ci/launcher-stable.jks.b64 > app/launcher-stable.jks
+          keytool -list -keystore app/launcher-stable.jks -storepass android -alias androiddebugkey >/dev/null
+
       - name: Grant execute permission
         run: chmod +x ./gradlew
 
-      - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
+      - name: Build signed Stable APK
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/app/launcher-stable.jks
+        run: ./gradlew :app:assembleRelease --stacktrace --no-daemon
 
-      - name: Upload APK
+      - name: Upload Stable APK
         uses: actions/upload-artifact@v4
         with:
-          name: Launcher-2026-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: Launcher-2026-Stable
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 3
