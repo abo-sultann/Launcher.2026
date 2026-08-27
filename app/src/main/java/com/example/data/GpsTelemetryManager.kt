@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.model.GpsTelemetry
+import com.example.service.OffroadTrackingService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,6 +38,9 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
             )
             return
         }
+
+        // Keep the rolling offroad track alive even if the launcher Activity is no longer visible.
+        OffroadTrackingService.start(context.applicationContext)
         if (isListening) return
 
         try {
@@ -52,12 +56,8 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
                 return
             }
 
-            if (isGpsEnabled) {
-                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 800L, 0.5f, this)
-            }
-            if (isNetworkEnabled) {
-                lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1500L, 2.0f, this)
-            }
+            if (isGpsEnabled) lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 1.0f, this)
+            if (isNetworkEnabled) lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 2500L, 5.0f, this)
 
             isListening = true
 
@@ -97,10 +97,7 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
             val directSpeed = if (location.hasSpeed()) location.speed * 3.6f else -1f
             val fallbackSpeed = previousLocation?.let { previous ->
                 val dtSec = (location.time - previous.time) / 1000f
-                if (dtSec in 0.4f..10f) {
-                    val meters = previous.distanceTo(location)
-                    (meters / dtSec) * 3.6f
-                } else 0f
+                if (dtSec in 0.4f..10f) (previous.distanceTo(location) / dtSec) * 3.6f else 0f
             } ?: 0f
 
             var speedKmH = if (directSpeed >= 0f) directSpeed else fallbackSpeed
@@ -108,17 +105,13 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
             speedKmH = speedKmH.coerceIn(0f, 260f)
             previousLocation = Location(location)
 
-            val bearing = if (location.hasBearing()) location.bearing else 0f
-            val altitude = if (location.hasAltitude()) location.altitude else 0.0
-            val accuracy = if (location.hasAccuracy()) location.accuracy else 0f
-
             _telemetry.value = GpsTelemetry(
                 latitude = location.latitude,
                 longitude = location.longitude,
-                altitudeMeters = altitude,
+                altitudeMeters = if (location.hasAltitude()) location.altitude else 0.0,
                 speedKmH = speedKmH,
-                bearingDegrees = bearing,
-                accuracyMeters = accuracy,
+                bearingDegrees = if (location.hasBearing()) location.bearing else 0f,
+                accuracyMeters = if (location.hasAccuracy()) location.accuracy else 0f,
                 hasGpsFix = true,
                 satellitesCount = location.extras?.getInt("satellites", 0) ?: 0,
                 statusArabic = "GPS يعمل"
