@@ -3,14 +3,16 @@ package com.example
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import com.example.data.OffroadTrackManager
 
 class CarLauncherApp : Application() {
+
+    val offroadTrackManager: OffroadTrackManager by lazy { OffroadTrackManager(this) }
 
     override fun onCreate() {
         super.onCreate()
         instance = this
 
-        // Safe Startup & Crash Isolation
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             Log.e(TAG, "Uncaught exception in thread ${thread.name}", throwable)
             recordCrash(throwable)
