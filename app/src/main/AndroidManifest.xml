@@ -22,6 +22,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".UpdateInstallActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.Launcher2026" />
+
         <service
             android:name=".service.OffroadTrackingService"
             android:enabled="true"
