@@ -1,22 +1,34 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.model.*
-import com.example.ui.theme.CarbonCardBorder
-import com.example.ui.theme.TextSecondary
+import com.example.ui.theme.*
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.widgets.*
 
@@ -25,6 +37,7 @@ fun ScreenSaverOverlay(
     viewModel: MainViewModel,
     settings: LauncherSettings,
     widgets: List<WidgetItem>,
+    layouts: List<ScreenSaverWidgetLayout>,
     apps: List<AppItem>,
     playbackState: MusicPlaybackState,
     gpsTelemetry: GpsTelemetry,
@@ -36,52 +49,213 @@ fun ScreenSaverOverlay(
     Box(modifier.fillMaxSize().background(Color.Black)) {
         if (settings.screenSaverUseWallpaper) LauncherBackground(settings)
 
-        val selected = settings.screenSaverWidgetTypes.take(4).toList().ifEmpty { listOf(WidgetType.CLOCK) }
-        val rows = selected.chunked(2)
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 54.dp, vertical = 42.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            rows.forEach { rowTypes ->
-                Row(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    rowTypes.forEach { type ->
-                        val source = widgets.firstOrNull { it.type == type }
-                        val style = source?.style ?: defaultScreenSaverStyle(type)
-                        Surface(
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            color = Color.Black.copy(alpha = .58f),
-                            shape = RoundedCornerShape(18.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder)
-                        ) {
-                            RenderScreenSaverWidget(type, style, viewModel, settings, apps, playbackState, gpsTelemetry, tripData, activeMap)
-                        }
-                    }
-                    if (rowTypes.size == 1) Spacer(Modifier.weight(1f))
-                }
-            }
-        }
-
-        Text(
-            "المس الشاشة للعودة",
-            color = TextSecondary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp)
+        ScreenSaverCanvas(
+            viewModel = viewModel,
+            settings = settings,
+            widgets = widgets,
+            layouts = layouts,
+            apps = apps,
+            playbackState = playbackState,
+            gpsTelemetry = gpsTelemetry,
+            tripData = tripData,
+            activeMap = activeMap,
+            editMode = false,
+            modifier = Modifier.fillMaxSize()
         )
 
-        // Transparent interaction layer: screensaver widgets are display-only.
+        Text(
+            "المس أي مكان للعودة",
+            color = TextSecondary.copy(alpha = .75f),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)
+        )
+
         Box(
             Modifier
                 .fillMaxSize()
                 .zIndex(1000f)
                 .clickable(onClick = onDismiss)
         )
+    }
+}
+
+@Composable
+fun ScreenSaverEditorScreen(
+    viewModel: MainViewModel,
+    onDone: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val settings by viewModel.settings.collectAsState()
+    val widgets by viewModel.widgets.collectAsState()
+    val layouts by viewModel.screenSaverLayouts.collectAsState()
+    val apps by viewModel.installedApps.collectAsState()
+    val playback by viewModel.playbackState.collectAsState()
+    val gps by viewModel.gpsTelemetry.collectAsState()
+    val trip by viewModel.tripData.collectAsState()
+    val activeMap by viewModel.activeMap.collectAsState()
+
+    Box(modifier.fillMaxSize().background(Color.Black)) {
+        if (settings.screenSaverUseWallpaper) LauncherBackground(settings)
+
+        ScreenSaverCanvas(
+            viewModel = viewModel,
+            settings = settings,
+            widgets = widgets,
+            layouts = layouts,
+            apps = apps,
+            playbackState = playback,
+            gpsTelemetry = gps,
+            tripData = trip,
+            activeMap = activeMap,
+            editMode = true,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        Surface(
+            color = CarbonDark.copy(alpha = .94f),
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, CyanNeon.copy(alpha = .7f)),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp).zIndex(1500f)
+        ) {
+            Row(
+                Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("اسحب الودجت من المقبض • واسحب الزاوية لتغيير الحجم", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                IconButton(onClick = { viewModel.resetScreenSaverLayout() }, modifier = Modifier.size(34.dp)) {
+                    Icon(Icons.Default.RestartAlt, "إعادة الترتيب", tint = AmberRacing)
+                }
+                Button(
+                    onClick = { viewModel.commitScreenSaverLayout(); onDone() },
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Icon(Icons.Default.Check, null, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("تم")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScreenSaverCanvas(
+    viewModel: MainViewModel,
+    settings: LauncherSettings,
+    widgets: List<WidgetItem>,
+    layouts: List<ScreenSaverWidgetLayout>,
+    apps: List<AppItem>,
+    playbackState: MusicPlaybackState,
+    gpsTelemetry: GpsTelemetry,
+    tripData: TripData,
+    activeMap: MapItem?,
+    editMode: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val selectedTypes = WidgetType.values().filter { it in settings.screenSaverWidgetTypes }.take(4)
+    val density = LocalDensity.current
+
+    BoxWithConstraints(modifier) {
+        val canvasWidth = maxWidth
+        val canvasHeight = maxHeight
+        val widthPx = with(density) { canvasWidth.toPx().coerceAtLeast(1f) }
+        val heightPx = with(density) { canvasHeight.toPx().coerceAtLeast(1f) }
+
+        selectedTypes.forEachIndexed { index, type ->
+            val layout = layouts.firstOrNull { it.type == type } ?: ScreenSaverWidgetLayout.defaultFor(type, index)
+            val source = widgets.firstOrNull { it.type == type }
+            val style = source?.style ?: defaultScreenSaverStyle(type)
+
+            Surface(
+                color = Color.Black.copy(alpha = if (editMode) .64f else .55f),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(if (editMode) 2.dp else 1.dp, if (editMode) AmberRacing else CarbonCardBorder),
+                modifier = Modifier
+                    .offset(x = canvasWidth * layout.xFraction, y = canvasHeight * layout.yFraction)
+                    .size(
+                        width = canvasWidth * layout.widthFraction.coerceIn(.16f, 1f),
+                        height = canvasHeight * layout.heightFraction.coerceIn(.16f, 1f)
+                    )
+                    .alpha(layout.opacity)
+                    .zIndex(layout.zIndex.toFloat())
+            ) {
+                Box(Modifier.fillMaxSize()) {
+                    RenderScreenSaverWidget(type, style, viewModel, settings, apps, playbackState, gpsTelemetry, tripData, activeMap)
+
+                    if (editMode) {
+                        Surface(
+                            color = CarbonDark.copy(alpha = .95f),
+                            shape = RoundedCornerShape(7.dp),
+                            border = BorderStroke(1.dp, AmberRacing),
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(5.dp)
+                                .pointerInput(type) {
+                                    detectDragGestures(
+                                        onDragStart = { viewModel.bringScreenSaverWidgetToFront(type) },
+                                        onDragEnd = { viewModel.commitScreenSaverLayout() },
+                                        onDragCancel = { viewModel.commitScreenSaverLayout() }
+                                    ) { _, drag ->
+                                        viewModel.previewScreenSaverMove(type, drag.x / widthPx, drag.y / heightPx)
+                                    }
+                                }
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(Icons.Default.DragIndicator, null, tint = AmberRacing, modifier = Modifier.size(16.dp))
+                                Text("تحريك", color = AmberRacing, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Surface(
+                            color = CyanNeon,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(5.dp)
+                                .size(40.dp)
+                                .pointerInput(type) {
+                                    detectDragGestures(
+                                        onDragStart = { viewModel.bringScreenSaverWidgetToFront(type) },
+                                        onDragEnd = { viewModel.commitScreenSaverLayout() },
+                                        onDragCancel = { viewModel.commitScreenSaverLayout() }
+                                    ) { _, drag ->
+                                        viewModel.previewScreenSaverResize(type, drag.x / widthPx, drag.y / heightPx)
+                                    }
+                                }
+                        ) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.OpenInFull, "تغيير الحجم", tint = CarbonDark, modifier = Modifier.size(21.dp))
+                            }
+                        }
+
+                        Surface(
+                            color = CarbonDark.copy(alpha = .95f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.align(Alignment.BottomStart).padding(5.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = { viewModel.setScreenSaverOpacity(type, layout.opacity - .10f) },
+                                    modifier = Modifier.size(30.dp)
+                                ) { Icon(Icons.Default.Remove, "شفافية أقل", tint = TextPrimary, modifier = Modifier.size(16.dp)) }
+                                Text("${(layout.opacity * 100).toInt()}%", color = CyanNeon, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                IconButton(
+                                    onClick = { viewModel.setScreenSaverOpacity(type, layout.opacity + .10f) },
+                                    modifier = Modifier.size(30.dp)
+                                ) { Icon(Icons.Default.Add, "شفافية أكثر", tint = TextPrimary, modifier = Modifier.size(16.dp)) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
