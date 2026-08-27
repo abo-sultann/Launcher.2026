@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.app.Activity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -7,12 +8,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DragIndicator
-import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,9 +43,30 @@ fun ScreenSaverOverlay(
     modifier: Modifier = Modifier
 ) {
     var editMode by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    DisposableEffect(settings.screenSaverNightMode, settings.screenSaverNightBrightnessPercent) {
+        val activity = context as? Activity
+        val oldBrightness = activity?.window?.attributes?.screenBrightness ?: -1f
+        if (activity != null && settings.screenSaverNightMode) {
+            val attrs = activity.window.attributes
+            attrs.screenBrightness = (settings.screenSaverNightBrightnessPercent.coerceIn(5, 40) / 100f)
+            activity.window.attributes = attrs
+        }
+        onDispose {
+            if (activity != null) {
+                val attrs = activity.window.attributes
+                attrs.screenBrightness = oldBrightness
+                activity.window.attributes = attrs
+            }
+        }
+    }
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
         if (settings.screenSaverUseWallpaper) LauncherBackground(settings)
+        if (settings.screenSaverNightMode) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .34f)).zIndex(2f))
+        }
 
         ScreenSaverCanvas(
             viewModel = viewModel,
@@ -61,7 +79,7 @@ fun ScreenSaverOverlay(
             tripData = tripData,
             activeMap = activeMap,
             editMode = editMode,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize().zIndex(3f)
         )
 
         if (editMode) {
@@ -76,7 +94,7 @@ fun ScreenSaverOverlay(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("اسحب من مقبض التحريك • واسحب الزاوية لتغيير الحجم", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("تحريك • تغيير حجم • شفافية • شكل مستقل لكل ودجت", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     IconButton(onClick = { viewModel.resetScreenSaverLayout() }, modifier = Modifier.size(34.dp)) {
                         Icon(Icons.Default.RestartAlt, "إعادة الترتيب", tint = AmberRacing)
                     }
@@ -92,14 +110,6 @@ fun ScreenSaverOverlay(
                 }
             }
         } else {
-            Text(
-                "لمسة للعودة • ضغط مطول لتعديل الودجات",
-                color = TextSecondary.copy(alpha = .78f),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp).zIndex(1200f)
-            )
-
             Box(
                 Modifier
                     .fillMaxSize()
@@ -109,6 +119,26 @@ fun ScreenSaverOverlay(
                         onLongClick = { editMode = true }
                     )
             )
+
+            FilledTonalButton(
+                onClick = {
+                    viewModel.updateSettings(settings.copy(screenSaverNightMode = !settings.screenSaverNightMode))
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 8.dp)
+                    .height(34.dp)
+                    .zIndex(1200f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = CarbonDark.copy(alpha = .90f),
+                    contentColor = if (settings.screenSaverNightMode) AmberRacing else TextPrimary
+                )
+            ) {
+                Icon(Icons.Default.DarkMode, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(5.dp))
+                Text(if (settings.screenSaverNightMode) "الوضع الليلي مفعل" else "وضع القيادة الليلي", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -156,7 +186,7 @@ fun ScreenSaverEditorScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("اسحب الودجت من المقبض • واسحب الزاوية لتغيير الحجم", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("تحكم كامل في ودجات شاشة التوقف", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 IconButton(onClick = { viewModel.resetScreenSaverLayout() }, modifier = Modifier.size(34.dp)) {
                     Icon(Icons.Default.RestartAlt, "إعادة الترتيب", tint = AmberRacing)
                 }
@@ -200,7 +230,7 @@ private fun ScreenSaverCanvas(
         selectedTypes.forEachIndexed { index, type ->
             val layout = layouts.firstOrNull { it.type == type } ?: ScreenSaverWidgetLayout.defaultFor(type, index)
             val source = widgets.firstOrNull { it.type == type }
-            val style = source?.style ?: defaultScreenSaverStyle(type)
+            val style = layout.style?.takeIf { it.type == type } ?: source?.style ?: defaultScreenSaverStyle(type)
 
             Surface(
                 color = Color.Black.copy(alpha = if (editMode) .64f else .55f),
@@ -244,6 +274,17 @@ private fun ScreenSaverCanvas(
                                 Icon(Icons.Default.DragIndicator, null, tint = AmberRacing, modifier = Modifier.size(16.dp))
                                 Text("تحريك", color = AmberRacing, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
+                        }
+
+                        FilledTonalButton(
+                            onClick = { viewModel.cycleScreenSaverStyle(type) },
+                            modifier = Modifier.align(Alignment.TopEnd).padding(5.dp).height(32.dp),
+                            contentPadding = PaddingValues(horizontal = 7.dp, vertical = 2.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = CarbonDark.copy(alpha = .95f))
+                        ) {
+                            Icon(Icons.Default.Palette, null, tint = CyanNeon, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(style.arabicName, color = TextPrimary, fontSize = 8.sp, maxLines = 1)
                         }
 
                         Surface(
