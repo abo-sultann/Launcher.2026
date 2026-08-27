@@ -101,7 +101,7 @@ class MainActivity : ComponentActivity() {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_MEDIA_NEXT -> { mainViewModel.playNext(); return true }
                 KeyEvent.KEYCODE_MEDIA_PREVIOUS -> { mainViewModel.playPrevious(); return true }
-                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> { mainViewModel.togglePlayPause(); return true }
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSEHOOK -> { mainViewModel.togglePlayPause(); return true }
                 KeyEvent.KEYCODE_MEDIA_PLAY -> { if (!mainViewModel.playbackState.value.isPlaying) mainViewModel.togglePlayPause(); return true }
                 KeyEvent.KEYCODE_MEDIA_PAUSE, KeyEvent.KEYCODE_MEDIA_STOP -> { if (mainViewModel.playbackState.value.isPlaying) mainViewModel.togglePlayPause(); return true }
             }
@@ -180,7 +180,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
         val fullCanvas = activeSubOverlay == SubOverlayScreen.NONE && (currentScreen == CarScreen.HOME || currentScreen == CarScreen.MAP)
         if (fullCanvas) {
             if (currentScreen == CarScreen.MAP) {
-                OfflineMapScreen(viewModel, Modifier.fillMaxSize())
+                EnhancedOfflineMapScreen(viewModel, Modifier.fillMaxSize())
             } else {
                 val topContentInset = safeArea.topDp + if (settings.showTopBar) 48 else 0
                 val bottomContentInset = safeArea.bottomDp + if (settings.showBottomBar) 56 else 0
@@ -248,7 +248,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                             CarScreen.HOME -> HomeScreen(viewModel)
                             CarScreen.APPS -> AppDrawerScreen(viewModel)
                             CarScreen.MUSIC -> MusicPlayerScreen(viewModel)
-                            CarScreen.MAP -> OfflineMapScreen(viewModel)
+                            CarScreen.MAP -> EnhancedOfflineMapScreen(viewModel)
                             CarScreen.TRIP -> TripComputerScreen(viewModel)
                             CarScreen.SETTINGS -> SettingsScreen(viewModel, { activeSubOverlay = SubOverlayScreen.SAFE_AREA_PREVIEW }, { activeSubOverlay = SubOverlayScreen.DIAGNOSTICS })
                         }
