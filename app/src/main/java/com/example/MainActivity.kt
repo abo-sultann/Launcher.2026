@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.*
@@ -83,6 +84,51 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
     val gpsTelemetry by viewModel.gpsTelemetry.collectAsState()
     val playbackState by viewModel.playbackState.collectAsState()
     var activeSubOverlay by remember { mutableStateOf(SubOverlayScreen.NONE) }
+
+    // Map owns the complete canvas. Bars float above it instead of consuming map space.
+    if (currentScreen == CarScreen.MAP && activeSubOverlay == SubOverlayScreen.NONE) {
+        Box(Modifier.fillMaxSize().background(CarbonDark)) {
+            OfflineMapScreen(viewModel, Modifier.fillMaxSize())
+
+            if (settings.showTopBar) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = safeArea.topDp.dp)
+                ) {
+                    TopCarStatusBar(
+                        gpsTelemetry,
+                        playbackState,
+                        settings.is24HourFormat,
+                        isSafeModeActive,
+                        isDesignMode,
+                        onToggleDesignMode = { viewModel.toggleDesignMode() },
+                        onOpenSettings = { activeSubOverlay = SubOverlayScreen.NONE; viewModel.navigateTo(CarScreen.SETTINGS) },
+                        onOpenDiagnostics = { activeSubOverlay = SubOverlayScreen.DIAGNOSTICS },
+                        onToggleMute = { viewModel.toggleMute() },
+                        onVolumeAdjust = { viewModel.adjustVolume(it) }
+                    )
+                }
+            }
+
+            if (settings.showBottomBar) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = safeArea.bottomDp.dp)
+                ) {
+                    BottomCarNavBar(
+                        currentScreen,
+                        onScreenSelected = { screen ->
+                            activeSubOverlay = SubOverlayScreen.NONE
+                            viewModel.navigateTo(screen)
+                        }
+                    )
+                }
+            }
+        }
+        return
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize().background(CarbonDark),
