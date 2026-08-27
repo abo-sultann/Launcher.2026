@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.item
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -19,7 +20,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmap
 import com.example.model.AppItem
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MainViewModel
@@ -32,6 +32,7 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val settings by viewModel.settings.collectAsState()
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(AppDrawerFilter.ALL) }
+
     val filtered = remember(apps, query, filter) {
         apps.filter { a ->
             val f = when (filter) {
@@ -42,13 +43,29 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             f && (query.isBlank() || a.label.contains(query, true) || a.packageName.contains(query, true))
         }
     }
+    val showAndroidSettings = filter == AppDrawerFilter.ALL &&
+        (query.isBlank() || "إعدادات أندرويد".contains(query, true) || "settings".contains(query, true))
 
     Column(modifier.fillMaxSize().padding(10.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.weight(1f).height(50.dp), singleLine = true, placeholder = { Text("بحث عن تطبيق") })
-            AppDrawerFilter.values().forEach { f -> FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text(f.title) }) }
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.weight(1f).height(50.dp),
+                singleLine = true,
+                placeholder = { Text("بحث عن تطبيق") }
+            )
+            AppDrawerFilter.values().forEach { f ->
+                FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text(f.title) })
+            }
         }
+
         Spacer(Modifier.height(7.dp))
+
         LazyVerticalGrid(
             columns = GridCells.Fixed(settings.appDrawerColumns.coerceIn(2, 8)),
             modifier = Modifier.fillMaxSize(),
@@ -56,13 +73,22 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(bottom = 8.dp)
         ) {
+            if (showAndroidSettings) {
+                item(key = "__android_system_settings__") {
+                    AndroidSettingsCard(
+                        launch = viewModel::launchAndroidSettings,
+                        showLabel = settings.showAppLabels
+                    )
+                }
+            }
+
             items(filtered, key = { it.packageName }) { app ->
                 AppDrawerCard(
-                    app,
-                    { viewModel.launchApp(app.packageName) },
-                    { viewModel.toggleAppFavorite(app.packageName) },
-                    { viewModel.toggleAppHidden(app.packageName) },
-                    settings.showAppLabels
+                    app = app,
+                    launch = { viewModel.launchApp(app.packageName) },
+                    favorite = { viewModel.toggleAppFavorite(app.packageName) },
+                    hide = { viewModel.toggleAppHidden(app.packageName) },
+                    showLabel = settings.showAppLabels
                 )
             }
         }
@@ -70,31 +96,78 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun AppDrawerCard(app: AppItem, launch: () -> Unit, favorite: () -> Unit, hide: () -> Unit, showLabel: Boolean) {
-    val bitmap = remember(app.packageName, app.icon) {
-        try { app.icon?.toBitmap(64, 64)?.asImageBitmap() } catch (_: Exception) { null }
+private fun AndroidSettingsCard(launch: () -> Unit, showLabel: Boolean) {
+    Card(
+        Modifier
+            .fillMaxWidth()
+            .height(115.dp)
+            .border(1.dp, CyanNeon.copy(alpha = .65f), RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = launch)
+            .testTag("app_card_android_settings"),
+        colors = CardDefaults.cardColors(containerColor = CarbonCard)
+    ) {
+        Column(
+            Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(Icons.Default.Settings, "إعدادات أندرويد", tint = CyanNeon, modifier = Modifier.size(44.dp))
+            if (showLabel) {
+                Spacer(Modifier.height(4.dp))
+                Text("إعدادات أندرويد", color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+        }
     }
+}
+
+@Composable
+private fun AppDrawerCard(
+    app: AppItem,
+    launch: () -> Unit,
+    favorite: () -> Unit,
+    hide: () -> Unit,
+    showLabel: Boolean
+) {
+    // Bitmap was decoded/scaled on Dispatchers.IO. This wrapper is cheap and avoids
+    // the Drawable.toBitmap work that was freezing the 1 GB Android 7.1 head unit.
+    val imageBitmap = remember(app.packageName, app.iconBitmap) { app.iconBitmap?.asImageBitmap() }
 
     Card(
-        Modifier.fillMaxWidth().height(115.dp)
+        Modifier
+            .fillMaxWidth()
+            .height(115.dp)
             .border(1.dp, if (app.isFavorite) AmberRacing else CarbonCardBorder, RoundedCornerShape(10.dp))
             .clip(RoundedCornerShape(10.dp))
-            .clickable { launch() }
+            .clickable(onClick = launch)
             .testTag("app_card_${app.packageName}"),
         colors = CardDefaults.cardColors(containerColor = CarbonCard)
     ) {
         Box(Modifier.fillMaxSize().padding(5.dp)) {
             Row(Modifier.align(Alignment.TopEnd)) {
                 IconButton(onClick = favorite, modifier = Modifier.size(25.dp)) {
-                    Icon(if (app.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, null, tint = if (app.isFavorite) AmberRacing else TextMuted, modifier = Modifier.size(16.dp))
+                    Icon(
+                        if (app.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                        null,
+                        tint = if (app.isFavorite) AmberRacing else TextMuted,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
                 IconButton(onClick = hide, modifier = Modifier.size(25.dp)) {
                     Icon(Icons.Default.VisibilityOff, null, tint = TextMuted, modifier = Modifier.size(16.dp))
                 }
             }
-            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                if (bitmap != null) Image(bitmap, app.label, Modifier.size(44.dp))
-                else Icon(Icons.Default.Android, app.label, tint = CyanNeon, modifier = Modifier.size(40.dp))
+
+            Column(
+                Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (imageBitmap != null) {
+                    Image(bitmap = imageBitmap, contentDescription = app.label, modifier = Modifier.size(44.dp))
+                } else {
+                    Icon(Icons.Default.Android, app.label, tint = CyanNeon, modifier = Modifier.size(40.dp))
+                }
                 if (showLabel) {
                     Spacer(Modifier.height(4.dp))
                     Text(app.label, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
