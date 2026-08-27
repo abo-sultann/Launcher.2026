@@ -4,9 +4,14 @@ import android.content.ContentUris
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
+import android.media.MediaMetadata
 import android.media.MediaPlayer
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import com.example.model.MusicPlaybackState
@@ -30,13 +35,38 @@ class MusicPlayerService(
 
     private var progressJob: Job? = null
 
+    private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        when (change) {
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                if (_playbackState.value.isPlaying) pause()
+            }
+        }
+    }
+
+    private val mediaSession: MediaSession = MediaSession(context, "Launcher2026Music").apply {
+        setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
+        setCallback(object : MediaSession.Callback() {
+            override fun onPlay() = resume()
+            override fun onPause() = pause()
+            override fun onSkipToNext() = playNext()
+            override fun onSkipToPrevious() = playPrevious()
+            override fun onSeekTo(pos: Long) = seekTo(pos)
+            override fun onStop() = pause()
+        }, Handler(Looper.getMainLooper()))
+        isActive = true
+    }
+
+    init {
+        updateMediaSessionState()
+    }
+
     fun initialize() {
         serviceScope.launch(Dispatchers.IO) {
             val tracks = scanLocalAudioFiles()
             withContext(Dispatchers.Main) {
                 _playbackState.value = _playbackState.value.copy(playlist = tracks)
 
-                // Restore last played track and position if enabled
                 val settings = preferencesManager.getSettings()
                 if (settings.resumeMusicPlayback) {
                     val lastPath = preferencesManager.getLastMusicPath()
@@ -57,6 +87,7 @@ class MusicPlayerService(
                         )
                     }
                 }
+                updateMediaSessionState()
             }
         }
     }
@@ -119,48 +150,55 @@ class MusicPlayerService(
             Log.e(TAG, "Error scanning MediaStore for audio", e)
         }
 
-        // If MediaStore is empty (e.g. fresh emulator/device), provide high quality offline demo tracks so the user can test the UI instantly
-        if (tracks.isEmpty()) {
-            tracks.addAll(getBuiltInFallbackTracks())
-        }
-
+        if (tracks.isEmpty()) tracks.addAll(getBuiltInFallbackTracks())
         return tracks
     }
 
-    private fun getBuiltInFallbackTracks(): List<MusicTrack> {
-        return listOf(
-            MusicTrack(
-                id = 1L,
-                title = "محطة الرحلة — هدوء الطريق السريع",
-                artist = "راديو السيارة 2026",
-                album = "موسيقى القيادة الهادئة",
-                durationMs = 240000L,
-                dataPath = "demo://track1"
-            ),
-            MusicTrack(
-                id = 2L,
-                title = "ألحان الصحراء والليل",
-                artist = "نغمات خليجية",
-                album = "طريق السفر",
-                durationMs = 310000L,
-                dataPath = "demo://track2"
-            ),
-            MusicTrack(
-                id = 3L,
-                title = "إيقاع رياضي فاخر — Turbo Drive",
-                artist = "Automotive Sound",
-                album = "Sports Cockpit",
-                durationMs = 195000L,
-                dataPath = "demo://track3"
-            )
+    private fun getBuiltInFallbackTracks(): List<MusicTrack> = listOf(
+        MusicTrack(
+            id = 1L,
+            title = "محطة الرحلة — هدوء الطريق السريع",
+            artist = "راديو السيارة 2026",
+            album = "موسيقى القيادة الهادئة",
+            durationMs = 240000L,
+            dataPath = "demo://track1"
+        ),
+        MusicTrack(
+            id = 2L,
+            title = "ألحان الصحراء والليل",
+            artist = "نغمات خليجية",
+            album = "طريق السفر",
+            durationMs = 310000L,
+            dataPath = "demo://track2"
+        ),
+        MusicTrack(
+            id = 3L,
+            title = "إيقاع رياضي فاخر — Turbo Drive",
+            artist = "Automotive Sound",
+            album = "Sports Cockpit",
+            durationMs = 195000L,
+            dataPath = "demo://track3"
         )
+    )
+
+    @Suppress("DEPRECATION")
+    private fun requestAudioFocus() {
+        try {
+            audioManager?.requestAudioFocus(
+                audioFocusListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to request audio focus", e)
+        }
     }
 
     fun playTrack(track: MusicTrack, startPositionMs: Long = 0L) {
         try {
+            requestAudioFocus()
             stopCurrentPlayer()
             if (track.dataPath.startsWith("demo://")) {
-                // Simulated offline demo playback with real progress ticks
                 _playbackState.value = _playbackState.value.copy(
                     currentTrack = track,
                     isPlaying = true,
@@ -170,14 +208,14 @@ class MusicPlayerService(
                 )
                 startProgressTracker()
                 saveResumeState(track.dataPath, startPositionMs)
+                updateMediaSessionState()
                 return
             }
 
             val file = File(track.dataPath)
             if (!file.exists()) {
-                _playbackState.value = _playbackState.value.copy(
-                    errorMessage = "الملف غير موجود في الذاكرة"
-                )
+                _playbackState.value = _playbackState.value.copy(errorMessage = "الملف غير موجود في الذاكرة")
+                updateMediaSessionState()
                 return
             }
 
@@ -195,18 +233,15 @@ class MusicPlayerService(
                 }
                 setDataSource(context, Uri.fromFile(file))
                 prepare()
-                if (startPositionMs > 0 && startPositionMs < duration) {
-                    seekTo(startPositionMs.toInt())
-                }
+                if (startPositionMs > 0 && startPositionMs < duration) seekTo(startPositionMs.toInt())
                 start()
-                setOnCompletionListener {
-                    playNext()
-                }
+                setOnCompletionListener { playNext() }
                 setOnErrorListener { _, _, _ ->
                     _playbackState.value = _playbackState.value.copy(
                         isPlaying = false,
                         errorMessage = "تعذر تشغيل الملف الصوتي"
                     )
+                    updateMediaSessionState()
                     true
                 }
             }
@@ -220,12 +255,14 @@ class MusicPlayerService(
             )
             startProgressTracker()
             saveResumeState(track.dataPath, startPositionMs)
+            updateMediaSessionState()
         } catch (e: Exception) {
             Log.e(TAG, "Error playing track", e)
             _playbackState.value = _playbackState.value.copy(
                 isPlaying = false,
                 errorMessage = "تعذر تشغيل المقطع الصوتي"
             )
+            updateMediaSessionState()
         }
     }
 
@@ -233,24 +270,22 @@ class MusicPlayerService(
         val current = _playbackState.value
         if (current.currentTrack == null) {
             val first = current.playlist.firstOrNull()
-            if (first != null) {
-                playTrack(first, current.currentPositionMs)
-            }
+            if (first != null) playTrack(first, current.currentPositionMs)
             return
         }
-
-        if (current.isPlaying) {
-            pause()
-        } else {
-            resume()
-        }
+        if (current.isPlaying) pause() else resume()
     }
 
     fun resume() {
-        val track = _playbackState.value.currentTrack ?: return
+        val track = _playbackState.value.currentTrack ?: run {
+            _playbackState.value.playlist.firstOrNull()?.let { playTrack(it) }
+            return
+        }
+        requestAudioFocus()
         if (track.dataPath.startsWith("demo://")) {
             _playbackState.value = _playbackState.value.copy(isPlaying = true)
             startProgressTracker()
+            updateMediaSessionState()
             return
         }
 
@@ -261,6 +296,7 @@ class MusicPlayerService(
                 mediaPlayer?.start()
                 _playbackState.value = _playbackState.value.copy(isPlaying = true)
                 startProgressTracker()
+                updateMediaSessionState()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error resuming playback", e)
@@ -272,15 +308,14 @@ class MusicPlayerService(
         try {
             mediaPlayer?.pause()
             val pos = mediaPlayer?.currentPosition?.toLong() ?: _playbackState.value.currentPositionMs
-            _playbackState.value = _playbackState.value.copy(
-                isPlaying = false,
-                currentPositionMs = pos
-            )
+            _playbackState.value = _playbackState.value.copy(isPlaying = false, currentPositionMs = pos)
             progressJob?.cancel()
             saveResumeState(_playbackState.value.currentTrack?.dataPath, pos)
+            updateMediaSessionState()
         } catch (e: Exception) {
             Log.e(TAG, "Error pausing playback", e)
             _playbackState.value = _playbackState.value.copy(isPlaying = false)
+            updateMediaSessionState()
         }
     }
 
@@ -302,11 +337,10 @@ class MusicPlayerService(
 
     fun seekTo(positionMs: Long) {
         try {
-            if (mediaPlayer != null) {
-                mediaPlayer?.seekTo(positionMs.toInt())
-            }
+            if (mediaPlayer != null) mediaPlayer?.seekTo(positionMs.toInt())
             _playbackState.value = _playbackState.value.copy(currentPositionMs = positionMs)
             saveResumeState(_playbackState.value.currentTrack?.dataPath, positionMs)
+            updateMediaSessionState()
         } catch (e: Exception) {
             Log.e(TAG, "Error seeking", e)
         }
@@ -362,21 +396,53 @@ class MusicPlayerService(
                         if (simulated >= _playbackState.value.durationMs) {
                             playNext()
                             0L
-                        } else {
-                            simulated
-                        }
+                        } else simulated
                     }
                     _playbackState.value = _playbackState.value.copy(currentPositionMs = pos)
                     saveResumeState(currentTrack.dataPath, pos)
+                    updateMediaSessionState()
                 }
             }
         }
     }
 
-    private fun saveResumeState(path: String?, pos: Long) {
-        if (path != null) {
-            preferencesManager.saveMusicResumeState(path, pos)
+    private fun updateMediaSessionState() {
+        try {
+            val current = _playbackState.value
+            val state = if (current.isPlaying) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
+            val actions = PlaybackState.ACTION_PLAY or
+                PlaybackState.ACTION_PAUSE or
+                PlaybackState.ACTION_PLAY_PAUSE or
+                PlaybackState.ACTION_SKIP_TO_NEXT or
+                PlaybackState.ACTION_SKIP_TO_PREVIOUS or
+                PlaybackState.ACTION_SEEK_TO or
+                PlaybackState.ACTION_STOP
+
+            mediaSession.setPlaybackState(
+                PlaybackState.Builder()
+                    .setActions(actions)
+                    .setState(state, current.currentPositionMs, if (current.isPlaying) 1f else 0f)
+                    .build()
+            )
+
+            current.currentTrack?.let { track ->
+                mediaSession.setMetadata(
+                    MediaMetadata.Builder()
+                        .putString(MediaMetadata.METADATA_KEY_TITLE, track.title)
+                        .putString(MediaMetadata.METADATA_KEY_ARTIST, track.artist)
+                        .putString(MediaMetadata.METADATA_KEY_ALBUM, track.album)
+                        .putLong(MediaMetadata.METADATA_KEY_DURATION, current.durationMs.takeIf { it > 0 } ?: track.durationMs)
+                        .build()
+                )
+            }
+            mediaSession.isActive = true
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to update media session", e)
         }
+    }
+
+    private fun saveResumeState(path: String?, pos: Long) {
+        if (path != null) preferencesManager.saveMusicResumeState(path, pos)
     }
 
     private fun stopCurrentPlayer() {
@@ -391,8 +457,14 @@ class MusicPlayerService(
         }
     }
 
+    @Suppress("DEPRECATION")
     fun release() {
         stopCurrentPlayer()
+        try { audioManager?.abandonAudioFocus(audioFocusListener) } catch (_: Exception) { }
+        try {
+            mediaSession.isActive = false
+            mediaSession.release()
+        } catch (_: Exception) { }
         serviceScope.cancel()
     }
 
