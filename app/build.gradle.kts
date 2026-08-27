@@ -80,6 +80,7 @@ dependencies {
 
   // Lightweight offline vector map renderer, suitable for Android 7.1 head units.
   implementation("org.mapsforge:mapsforge-map-android:0.25.0")
+  implementation("org.mapsforge:mapsforge-themes:0.25.0")
 
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
