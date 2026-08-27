@@ -9,6 +9,33 @@ enum class BackgroundType(val arabicName: String) {
     CUSTOM_IMAGE("صورة مخصصة من الجهاز")
 }
 
+data class ScreenSaverWidgetLayout(
+    val type: WidgetType,
+    val xFraction: Float,
+    val yFraction: Float,
+    val widthFraction: Float,
+    val heightFraction: Float,
+    val opacity: Float = 0.90f,
+    val zIndex: Int = 0
+) {
+    companion object {
+        fun defaultFor(type: WidgetType, index: Int): ScreenSaverWidgetLayout {
+            val slot = index.coerceIn(0, 3)
+            val x = if (slot % 2 == 0) 0.05f else 0.53f
+            val y = if (slot < 2) 0.12f else 0.55f
+            return ScreenSaverWidgetLayout(
+                type = type,
+                xFraction = x,
+                yFraction = y,
+                widthFraction = 0.42f,
+                heightFraction = 0.34f,
+                opacity = 0.90f,
+                zIndex = slot
+            )
+        }
+    }
+}
+
 data class LauncherSettings(
     val safeArea: SafeAreaConfig = SafeAreaConfig.DEFAULT,
     val backgroundType: BackgroundType = BackgroundType.DARK_CARBON,
