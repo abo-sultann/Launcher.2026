@@ -51,7 +51,10 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
 @Composable private fun AppDrawerCard(app: AppItem, launch: () -> Unit, favorite: () -> Unit, hide: () -> Unit, showLabel: Boolean) {
     Card(Modifier.fillMaxWidth().height(115.dp).border(1.dp, if (app.isFavorite) AmberRacing else CarbonCardBorder, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp)).clickable { launch() }.testTag("app_card_${app.packageName}"), colors = CardDefaults.cardColors(containerColor = CarbonCard)) {
         Box(Modifier.fillMaxSize().padding(5.dp)) {
-            Row(Modifier.align(Alignment.TopEnd)) { IconButton(onClick = favorite, Modifier.size(25.dp)) { Icon(if (app.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, null, tint = if (app.isFavorite) AmberRacing else TextMuted, Modifier.size(16.dp)) }; IconButton(onClick = hide, Modifier.size(25.dp)) { Icon(Icons.Default.VisibilityOff, null, tint = TextMuted, Modifier.size(16.dp)) } }
+            Row(Modifier.align(Alignment.TopEnd)) {
+                IconButton(onClick = favorite, modifier = Modifier.size(25.dp)) { Icon(if (app.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, null, tint = if (app.isFavorite) AmberRacing else TextMuted, modifier = Modifier.size(16.dp)) }
+                IconButton(onClick = hide, modifier = Modifier.size(25.dp)) { Icon(Icons.Default.VisibilityOff, null, tint = TextMuted, modifier = Modifier.size(16.dp)) }
+            }
             Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 val bitmap = try { app.icon?.toBitmap(72, 72)?.asImageBitmap() } catch (_: Exception) { null }
                 if (bitmap != null) Image(bitmap, app.label, Modifier.size(44.dp)) else Icon(Icons.Default.Android, app.label, tint = CyanNeon, modifier = Modifier.size(40.dp))
