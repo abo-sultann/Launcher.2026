@@ -113,7 +113,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else item
     }
 
-    // Kept for compatibility with older UI/tests. Free placement uses geometry methods below.
     fun moveWidget(widgetId: String, forward: Boolean) {
         val list = _widgets.value.toMutableList()
         val i = list.indexOfFirst { it.id == widgetId }
@@ -235,6 +234,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) { appRepository.toggleHidden(packageName); loadApps() }
     }
     fun launchApp(packageName: String) { appRepository.launchApp(packageName) }
+    fun launchAndroidSettings() { appRepository.launchAndroidSettings() }
 
     fun togglePlayPause() = musicPlayerService.togglePlayPause()
     fun playNext() = musicPlayerService.playNext()
