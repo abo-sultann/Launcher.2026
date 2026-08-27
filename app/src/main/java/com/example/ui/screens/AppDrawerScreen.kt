@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.item
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -129,8 +128,6 @@ private fun AppDrawerCard(
     hide: () -> Unit,
     showLabel: Boolean
 ) {
-    // Bitmap was decoded/scaled on Dispatchers.IO. This wrapper is cheap and avoids
-    // the Drawable.toBitmap work that was freezing the 1 GB Android 7.1 head unit.
     val imageBitmap = remember(app.packageName, app.iconBitmap) { app.iconBitmap?.asImageBitmap() }
 
     Card(
