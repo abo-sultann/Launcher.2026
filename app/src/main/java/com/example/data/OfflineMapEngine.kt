@@ -28,23 +28,24 @@ class OfflineMapEngine(
 
     fun initialize() {
         try {
-            val saved = preferencesManager.getSavedMaps().toMutableList()
-            if (saved.isEmpty()) {
-                // Built-in starter offline vector grid map item
-                val defaultMap = MapItem(
-                    id = "built_in_default_map",
-                    name = "خريطة الملاحة الافتراضية (Vector HUD)",
-                    filePath = "internal://vector_map",
-                    fileSizeFormatted = "12 ميجابايت",
-                    isActive = true,
-                    dateAdded = SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(Date())
-                )
-                saved.add(defaultMap)
-                preferencesManager.saveMaps(saved)
-            }
+            val saved = preferencesManager.getSavedMaps()
+                .filterNot { it.id == "built_in_default_map" || it.filePath.startsWith("internal://") }
+                .toMutableList()
 
-            _mapsList.value = saved
-            _activeMap.value = saved.find { it.isActive } ?: saved.firstOrNull()
+            val normalized = if (saved.count { it.isActive } > 1) {
+                var activeFound = false
+                saved.map { item ->
+                    if (item.isActive && !activeFound) {
+                        activeFound = true
+                        item
+                    } else item.copy(isActive = false)
+                }
+            } else saved
+
+            _mapsList.value = normalized
+            _activeMap.value = normalized.find { it.isActive }
+            preferencesManager.saveMaps(normalized)
+            _mapError.value = null
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing MapEngine", e)
             _mapError.value = "تعذر تحميل قائمة الخرائط"
@@ -58,17 +59,18 @@ class OfflineMapEngine(
                 return false
             }
 
-            val isMBTiles = file.name.endsWith(".mbtiles", ignoreCase = true)
-            if (isMBTiles) {
-                // Verify SQLite header safely
-                try {
-                    val db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
-                    db.close()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Not a valid SQLite MBTiles file", e)
-                    _mapError.value = "ملف MBTiles تالف أو غير صالح"
-                    return false
-                }
+            if (!file.name.endsWith(".mbtiles", ignoreCase = true)) {
+                _mapError.value = "اختر ملف خريطة بصيغة MBTiles"
+                return false
+            }
+
+            try {
+                val db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+                db.close()
+            } catch (e: Exception) {
+                Log.w(TAG, "Not a valid SQLite MBTiles file", e)
+                _mapError.value = "ملف MBTiles تالف أو غير صالح"
+                return false
             }
 
             val sizeMb = file.length() / (1024 * 1024)
@@ -84,9 +86,7 @@ class OfflineMapEngine(
                 dateAdded = SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(Date())
             )
 
-            val updated = _mapsList.value.map { it.copy(isActive = false) }.toMutableList()
-            updated.add(newMap)
-
+            val updated = _mapsList.value.map { it.copy(isActive = false) } + newMap
             _mapsList.value = updated
             _activeMap.value = newMap
             _mapError.value = null
@@ -100,9 +100,7 @@ class OfflineMapEngine(
     }
 
     fun setActiveMap(mapId: String) {
-        val updated = _mapsList.value.map { item ->
-            item.copy(isActive = item.id == mapId)
-        }
+        val updated = _mapsList.value.map { item -> item.copy(isActive = item.id == mapId) }
         _mapsList.value = updated
         _activeMap.value = updated.find { it.isActive }
         preferencesManager.saveMaps(updated)
@@ -110,9 +108,7 @@ class OfflineMapEngine(
 
     fun renameMap(mapId: String, newName: String) {
         if (newName.isBlank()) return
-        val updated = _mapsList.value.map { item ->
-            if (item.id == mapId) item.copy(name = newName) else item
-        }
+        val updated = _mapsList.value.map { item -> if (item.id == mapId) item.copy(name = newName) else item }
         _mapsList.value = updated
         _activeMap.value = updated.find { it.isActive }
         preferencesManager.saveMaps(updated)
@@ -122,27 +118,18 @@ class OfflineMapEngine(
         val current = _mapsList.value
         val toDelete = current.find { it.id == mapId } ?: return
 
-        // Delete underlying file if stored in app files
         if (toDelete.filePath.startsWith(context.filesDir.absolutePath)) {
-            try {
-                File(toDelete.filePath).delete()
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not delete physical map file", e)
-            }
+            try { File(toDelete.filePath).delete() } catch (e: Exception) { Log.w(TAG, "Could not delete physical map file", e) }
         }
 
-        val updated = current.filter { it.id != mapId }
-        val newActive = if (toDelete.isActive) {
-            updated.firstOrNull()?.let { first ->
-                updated.map { if (it.id == first.id) it.copy(isActive = true) else it }
-            } ?: emptyList()
-        } else {
-            updated
-        }
+        val remaining = current.filter { it.id != mapId }
+        val normalized = if (toDelete.isActive && remaining.isNotEmpty()) {
+            remaining.mapIndexed { index, item -> item.copy(isActive = index == 0) }
+        } else remaining
 
-        _mapsList.value = newActive
-        _activeMap.value = newActive.find { it.isActive }
-        preferencesManager.saveMaps(newActive)
+        _mapsList.value = normalized
+        _activeMap.value = normalized.find { it.isActive }
+        preferencesManager.saveMaps(normalized)
     }
 
     companion object {
