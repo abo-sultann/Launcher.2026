@@ -79,11 +79,9 @@ fun OfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val backupImport = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(viewModel::importOffroadBackupUri) }
     val backupExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(viewModel::exportOffroadBackupUri) }
 
-    LaunchedEffect(mapInteractionToken, showManager, showPlaces, showSearch, showTools, showSavePlaceDialog) {
-        if (!showManager && !showPlaces && !showSearch && !showTools && !showSavePlaceDialog) {
-            delay(4500L)
-            mapUiVisible = false
-        }
+    // Map-specific controls must stay visible. Only Launcher chrome is auto-hidden by MainActivity.
+    LaunchedEffect(Unit) {
+        mapUiVisible = true
     }
 
     LaunchedEffect(activeMap?.id) {
@@ -318,7 +316,7 @@ private fun MapTelemetryCard(gps: GpsTelemetry, trip: TripData, target: OffroadN
                 Icon(if (gps.hasGpsFix) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed, null, tint = if (gps.hasGpsFix) EmeraldSafe else TextMuted)
                 Text("${gps.speedKmH.toInt()} كم/س", color = CyanNeon, fontWeight = FontWeight.Black, fontSize = 22.sp)
             }
-            Text(if (gps.hasGpsFix) bearingToArabicDirection(gps.bearingDegrees) else "الاتجاه --", color = AmberRacing, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            Text(if (gps.hasGpsFix) bearingToArabicDirection(gps.bearingDegrees) else "الاتجاه --", color = AmberRacing, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             Text("رحلة ${String.format(Locale.US, "%.2f", trip.distanceKm)} كم • أثر ${String.format(Locale.US, "%.1f", viewModel.offroadTrackDistanceKm())} كم", color = TextSecondary, fontSize = 9.sp)
             target?.let {
                 HorizontalDivider(color = CarbonCardBorder, modifier = Modifier.padding(vertical = 5.dp))
