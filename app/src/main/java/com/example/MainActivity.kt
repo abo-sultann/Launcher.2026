@@ -192,10 +192,13 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                 bottomBar = {
                     if (settings.showBottomBar) {
                         Box(Modifier.padding(bottom = safeArea.bottomDp.dp)) {
-                            BottomCarNavBar(currentScreen) { screen ->
-                                activeSubOverlay = SubOverlayScreen.NONE
-                                viewModel.navigateTo(screen)
-                            }
+                            BottomCarNavBar(
+                                currentScreen = currentScreen,
+                                onScreenSelected = { screen ->
+                                    activeSubOverlay = SubOverlayScreen.NONE
+                                    viewModel.navigateTo(screen)
+                                }
+                            )
                         }
                     }
                 }
@@ -290,7 +293,10 @@ private fun BoxScope.OverlayLauncherBars(
 
     if (showBottom) {
         Box(modifier.align(Alignment.BottomCenter).padding(bottom = safeAreaBottom.dp)) {
-            BottomCarNavBar(currentScreen) { screen -> viewModel.navigateTo(screen) }
+            BottomCarNavBar(
+                currentScreen = currentScreen,
+                onScreenSelected = { screen -> viewModel.navigateTo(screen) }
+            )
         }
     }
 }
