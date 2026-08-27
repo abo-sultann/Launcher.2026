@@ -28,11 +28,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Old automotive head units often have a native overlay; avoid edge-to-edge/inset stacking.
         window.decorView.systemUiVisibility = 0
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
         setContent { Launcher2026Theme { CarLauncherMainApp(mainViewModel) } }
         window.decorView.postDelayed({ requestPermissionsIfNeeded() }, 700L)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        ) {
+            mainViewModel.restartGps()
+        }
     }
 
     private fun requestPermissionsIfNeeded() {
@@ -45,10 +53,22 @@ class MainActivity : ComponentActivity() {
         }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) required += Manifest.permission.ACCESS_FINE_LOCATION
         if (required.isNotEmpty()) ActivityCompat.requestPermissions(this, required.toTypedArray(), permissionRequestCode)
+        else mainViewModel.restartGps()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == permissionRequestCode) {
+            val locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (locationGranted) mainViewModel.restartGps()
+        }
     }
 
     @Deprecated("Deprecated in Java")
-    override fun onBackPressed() { if (mainViewModel.currentScreen.value != CarScreen.HOME) mainViewModel.navigateTo(CarScreen.HOME) }
+    override fun onBackPressed() {
+        if (mainViewModel.currentScreen.value != CarScreen.HOME) mainViewModel.navigateTo(CarScreen.HOME)
+    }
 }
 
 private enum class SubOverlayScreen { NONE, SAFE_AREA_PREVIEW, DIAGNOSTICS }
