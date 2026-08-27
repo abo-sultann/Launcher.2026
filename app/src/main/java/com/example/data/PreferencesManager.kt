@@ -34,10 +34,17 @@ class PreferencesManager(context: Context) {
     fun getSettings(): LauncherSettings = try {
         val bgName = prefs.getString("bg_type", BackgroundType.DARK_CARBON.name) ?: BackgroundType.DARK_CARBON.name
         val bgType = try { BackgroundType.valueOf(bgName) } catch (_: Exception) { BackgroundType.DARK_CARBON }
+        val screenSaverTypes = (prefs.getStringSet("screensaver_widgets", null)
+            ?: setOf(WidgetType.CLOCK.name, WidgetType.SPEEDOMETER.name))
+            .mapNotNull { name -> try { WidgetType.valueOf(name) } catch (_: Exception) { null } }
+            .toSet()
+            .ifEmpty { setOf(WidgetType.CLOCK) }
+
         LauncherSettings(
             safeArea = getSafeArea(),
             backgroundType = bgType,
             customWallpaperPath = prefs.getString("custom_wallpaper_path", null),
+            wallpaperDimPercent = prefs.getInt("wallpaper_dim", 10).coerceIn(0, 80),
             iconSizeDp = prefs.getInt("icon_size", 64),
             showAppNames = prefs.getBoolean("show_app_names", true),
             showAppLabels = prefs.getBoolean("show_app_labels", true),
@@ -58,7 +65,12 @@ class PreferencesManager(context: Context) {
             showBottomBar = prefs.getBoolean("show_bottom_bar", true),
             highContrastMode = prefs.getBoolean("high_contrast", false),
             keepScreenOn = prefs.getBoolean("keep_screen_on", true),
-            autoLogTrips = prefs.getBoolean("auto_log_trips", true)
+            autoLogTrips = prefs.getBoolean("auto_log_trips", true),
+            childUnlockHoldSeconds = prefs.getInt("child_unlock_hold", 3).coerceIn(2, 6),
+            screenSaverEnabled = prefs.getBoolean("screensaver_enabled", false),
+            screenSaverTimeoutSeconds = prefs.getInt("screensaver_timeout", 120).coerceIn(30, 1800),
+            screenSaverUseWallpaper = prefs.getBoolean("screensaver_wallpaper", true),
+            screenSaverWidgetTypes = screenSaverTypes
         )
     } catch (e: Exception) {
         Log.e(TAG, "Error reading settings", e)
@@ -71,6 +83,7 @@ class PreferencesManager(context: Context) {
             prefs.edit()
                 .putString("bg_type", settings.backgroundType.name)
                 .putString("custom_wallpaper_path", settings.customWallpaperPath)
+                .putInt("wallpaper_dim", settings.wallpaperDimPercent.coerceIn(0, 80))
                 .putInt("icon_size", settings.iconSizeDp.coerceIn(40, 110))
                 .putBoolean("show_app_names", settings.showAppNames)
                 .putBoolean("show_app_labels", settings.showAppLabels)
@@ -90,6 +103,11 @@ class PreferencesManager(context: Context) {
                 .putBoolean("high_contrast", settings.highContrastMode)
                 .putBoolean("keep_screen_on", settings.keepScreenOn)
                 .putBoolean("auto_log_trips", settings.autoLogTrips)
+                .putInt("child_unlock_hold", settings.childUnlockHoldSeconds.coerceIn(2, 6))
+                .putBoolean("screensaver_enabled", settings.screenSaverEnabled)
+                .putInt("screensaver_timeout", settings.screenSaverTimeoutSeconds.coerceIn(30, 1800))
+                .putBoolean("screensaver_wallpaper", settings.screenSaverUseWallpaper)
+                .putStringSet("screensaver_widgets", settings.screenSaverWidgetTypes.map { it.name }.toSet())
                 .apply()
         } catch (e: Exception) { Log.e(TAG, "Error saving settings", e) }
     }
@@ -116,10 +134,30 @@ class PreferencesManager(context: Context) {
                         WidgetType.CONTROLS -> WidgetStyle.CONTROLS_CARD
                     }
                 }
-                list.add(WidgetItem(id, type, style, obj.optInt("spanX", 1), obj.optInt("spanY", 1), obj.optBoolean("isVisible", true), obj.optInt("order", i)))
+
+                val base = WidgetItem(
+                    id = id,
+                    type = type,
+                    style = style,
+                    spanX = obj.optInt("spanX", 1),
+                    spanY = obj.optInt("spanY", 1),
+                    isVisible = obj.optBoolean("isVisible", true),
+                    order = obj.optInt("order", i),
+                    xFraction = obj.optDouble("xFraction", -1.0).toFloat(),
+                    yFraction = obj.optDouble("yFraction", -1.0).toFloat(),
+                    widthFraction = obj.optDouble("widthFraction", 0.0).toFloat(),
+                    heightFraction = obj.optDouble("heightFraction", 0.0).toFloat(),
+                    opacity = obj.optDouble("opacity", 0.92).toFloat().coerceIn(0.20f, 1f),
+                    isLocked = obj.optBoolean("isLocked", false),
+                    zIndex = obj.optInt("zIndex", obj.optInt("order", i))
+                )
+                list.add(WidgetItem.withDefaultGeometry(base))
             }
             if (list.isEmpty()) WidgetItem.createDefaultList() else list
-        } catch (e: Exception) { WidgetItem.createDefaultList() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading widgets", e)
+            WidgetItem.createDefaultList()
+        }
     }
 
     fun saveWidgets(widgets: List<WidgetItem>) {
@@ -127,8 +165,20 @@ class PreferencesManager(context: Context) {
             val array = JSONArray()
             widgets.forEach { item ->
                 array.put(JSONObject().apply {
-                    put("id", item.id); put("type", item.type.name); put("style", item.style.name)
-                    put("spanX", item.spanX); put("spanY", item.spanY); put("isVisible", item.isVisible); put("order", item.order)
+                    put("id", item.id)
+                    put("type", item.type.name)
+                    put("style", item.style.name)
+                    put("spanX", item.spanX)
+                    put("spanY", item.spanY)
+                    put("isVisible", item.isVisible)
+                    put("order", item.order)
+                    put("xFraction", item.xFraction.toDouble())
+                    put("yFraction", item.yFraction.toDouble())
+                    put("widthFraction", item.widthFraction.toDouble())
+                    put("heightFraction", item.heightFraction.toDouble())
+                    put("opacity", item.opacity.toDouble())
+                    put("isLocked", item.isLocked)
+                    put("zIndex", item.zIndex)
                 })
             }
             prefs.edit().putString("widgets_json", array.toString()).apply()
