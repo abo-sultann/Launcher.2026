@@ -34,7 +34,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val tripComputer = TripComputer(preferencesManager)
     private val offlineMapEngine = OfflineMapEngine(application, preferencesManager)
     private val diagnosticManager = DiagnosticManager(application, preferencesManager)
-    private val offroadTrackManager = OffroadTrackManager(application)
+    private val offroadTrackManager = (application as com.example.CarLauncherApp).offroadTrackManager
     private val offlineMapSearchEngine = OfflineMapSearchEngine()
 
     private val _currentScreen = MutableStateFlow(CarScreen.HOME)
