@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.example.model.GpsTelemetry
 import com.example.model.WidgetStyle
 import com.example.ui.theme.*
+import com.example.util.bearingToArabicDirection
 import java.util.Locale
 
 @Composable
@@ -33,6 +34,7 @@ fun GpsWidget(
     val latStr = String.format(Locale.US, "%.4f", gpsTelemetry.latitude)
     val lngStr = String.format(Locale.US, "%.4f", gpsTelemetry.longitude)
     val altStr = "${gpsTelemetry.altitudeMeters.toInt()} م"
+    val directionArabic = bearingToArabicDirection(gpsTelemetry.bearingDegrees)
 
     Box(
         modifier = modifier
@@ -105,7 +107,7 @@ fun GpsWidget(
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = "الاتجاه", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                                Text(text = "${gpsTelemetry.bearingDegrees.toInt()}°", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = AmberRacing)
+                                Text(text = directionArabic, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = AmberRacing)
                             }
                         }
 
@@ -131,6 +133,11 @@ fun GpsWidget(
                             fontWeight = FontWeight.Black
                         ),
                         color = CyanNeon
+                    )
+                    Text(
+                        text = directionArabic,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = AmberRacing
                     )
                     Text(
                         text = "خط العرض: $latStr • خط الطول: $lngStr",
