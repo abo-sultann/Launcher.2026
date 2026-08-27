@@ -13,19 +13,19 @@ android {
     applicationId = "com.aistudio.carlauncher.lzrk26"
     minSdk = 25
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
-
+    versionCode = 10000
+    versionName = "1.0.0"
+    buildConfigField("String", "UPDATE_MANIFEST_URL", "\"https://drive.google.com/uc?export=download&id=15Ki1PBf0_erdbITrYh8k80Kt4rWC5yLi\"")
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
   signingConfigs {
-    create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+    create("stable") {
+      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/app/launcher-stable.jks"
       storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      storePassword = "android"
+      keyAlias = "androiddebugkey"
+      keyPassword = "android"
     }
   }
 
@@ -34,10 +34,10 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      signingConfig = signingConfigs.getByName("stable")
     }
     debug {
-      // Intentionally no custom signingConfig.
+      signingConfig = signingConfigs.getByName("stable")
     }
   }
 
@@ -78,7 +78,6 @@ dependencies {
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
 
-  // Lightweight offline vector map renderer, suitable for Android 7.1 head units.
   implementation("org.mapsforge:mapsforge-map-android:0.25.0")
   implementation("org.mapsforge:mapsforge-themes:0.25.0")
 
