@@ -3,7 +3,9 @@ package com.example.data
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.provider.Settings
 import android.util.Log
+import androidx.core.graphics.drawable.toBitmap
 import com.example.model.AppItem
 
 class AppRepository(
@@ -22,21 +24,24 @@ class AppRepository(
             val favorites = preferencesManager.getFavorites()
             val hidden = preferencesManager.getHiddenApps()
             val ownPackage = context.packageName
+            val seenPackages = HashSet<String>()
 
             for (resolveInfo in resolveInfos) {
                 val pkg = resolveInfo.activityInfo.packageName
-                // Skip launcher itself in the drawer to keep screen clean
-                if (pkg == ownPackage) continue
+                if (pkg == ownPackage || !seenPackages.add(pkg)) continue
 
                 val activity = resolveInfo.activityInfo.name
                 val label = try {
                     resolveInfo.loadLabel(packageManager).toString()
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     pkg
                 }
-                val icon = try {
-                    resolveInfo.loadIcon(packageManager)
-                } catch (e: Exception) {
+
+                // Decode/scale icons here. MainViewModel calls this method on Dispatchers.IO,
+                // so opening the Apps page never performs Drawable -> Bitmap conversion.
+                val iconBitmap = try {
+                    resolveInfo.loadIcon(packageManager)?.toBitmap(width = 48, height = 48)
+                } catch (_: Exception) {
                     null
                 }
 
@@ -47,7 +52,7 @@ class AppRepository(
                         label = label,
                         isFavorite = favorites.contains(pkg),
                         isHidden = hidden.contains(pkg),
-                        icon = icon
+                        iconBitmap = iconBitmap
                     )
                 )
             }
@@ -55,7 +60,6 @@ class AppRepository(
             Log.e(TAG, "Error querying installed applications", e)
         }
 
-        // Clean uninstalled favorites/hidden to avoid memory/data corruption
         cleanRemovedPackages(result.map { it.packageName }.toSet())
 
         return result.sortedWith(
@@ -127,6 +131,19 @@ class AppRepository(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to launch app $packageName", e)
+            false
+        }
+    }
+
+    fun launchAndroidSettings(): Boolean {
+        return try {
+            val intent = Intent(Settings.ACTION_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch Android settings", e)
             false
         }
     }
