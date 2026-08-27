@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.View
+import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -34,7 +36,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.decorView.systemUiVisibility = 0
+        applyLauncherFullscreen()
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
         setContent { Launcher2026Theme { CarLauncherMainApp(mainViewModel) } }
         window.decorView.postDelayed({ requestPermissionsIfNeeded() }, 700L)
@@ -42,9 +44,34 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        applyLauncherFullscreen()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         ) mainViewModel.restartGps()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applyLauncherFullscreen()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun applyLauncherFullscreen() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                window.setDecorFitsSystemWindows(false)
+                window.insetsController?.hide(WindowInsets.Type.statusBars())
+            } else {
+                window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                window.decorView.systemUiVisibility =
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            }
+        } catch (_: Exception) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        }
     }
 
     private fun requestPermissionsIfNeeded() {
@@ -129,28 +156,24 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
             mapChromeVisible = true
             delay(4500L)
             if (currentScreen == CarScreen.MAP) mapChromeVisible = false
-        } else {
-            mapChromeVisible = true
-        }
+        } else mapChromeVisible = true
     }
 
     Box(
-        Modifier
-            .fillMaxSize()
-            .pointerInput(screenSaverVisible, currentScreen) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (event.changes.any { it.pressed && !it.previousPressed }) {
-                            if (!screenSaverVisible) interactionToken = System.currentTimeMillis()
-                            if (currentScreen == CarScreen.MAP) {
-                                mapChromeVisible = true
-                                mapChromeToken = System.currentTimeMillis()
-                            }
+        Modifier.fillMaxSize().pointerInput(screenSaverVisible, currentScreen) {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    if (event.changes.any { it.pressed && !it.previousPressed }) {
+                        if (!screenSaverVisible) interactionToken = System.currentTimeMillis()
+                        if (currentScreen == CarScreen.MAP) {
+                            mapChromeVisible = true
+                            mapChromeToken = System.currentTimeMillis()
                         }
                     }
                 }
             }
+        }
     ) {
         LauncherBackground(settings, Modifier.fillMaxSize())
 
@@ -211,10 +234,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                 bottomBar = {
                     if (settings.showBottomBar) {
                         Box(Modifier.padding(bottom = safeArea.bottomDp.dp)) {
-                            BottomCarNavBar(
-                                currentScreen = currentScreen,
-                                onScreenSelected = { screen -> activeSubOverlay = SubOverlayScreen.NONE; viewModel.navigateTo(screen) }
-                            )
+                            BottomCarNavBar(currentScreen = currentScreen, onScreenSelected = { screen -> activeSubOverlay = SubOverlayScreen.NONE; viewModel.navigateTo(screen) })
                         }
                     }
                 }
@@ -293,7 +313,6 @@ private fun BoxScope.OverlayLauncherBars(
             )
         }
     }
-
     if (showBottom) {
         Box(modifier.align(Alignment.BottomCenter).padding(bottom = safeAreaBottom.dp)) {
             BottomCarNavBar(currentScreen = currentScreen, onScreenSelected = { screen -> viewModel.navigateTo(screen) })

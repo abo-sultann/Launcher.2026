@@ -23,6 +23,8 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+import kotlin.math.ceil
+import kotlin.math.min
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesManager = PreferencesManager(application)
@@ -33,6 +35,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val offlineMapEngine = OfflineMapEngine(application, preferencesManager)
     private val diagnosticManager = DiagnosticManager(application, preferencesManager)
     private val offroadTrackManager = OffroadTrackManager(application)
+    private val offlineMapSearchEngine = OfflineMapSearchEngine()
 
     private val _currentScreen = MutableStateFlow(CarScreen.HOME)
     val currentScreen: StateFlow<CarScreen> = _currentScreen.asStateFlow()
@@ -55,6 +58,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSafeModeActive = MutableStateFlow(false)
     val isSafeModeActive: StateFlow<Boolean> = _isSafeModeActive.asStateFlow()
 
+    private val _offlineSearchResults = MutableStateFlow<List<OfflineMapSearchResult>>(emptyList())
+    val offlineSearchResults: StateFlow<List<OfflineMapSearchResult>> = _offlineSearchResults.asStateFlow()
+    private val _offroadTransferMessage = MutableStateFlow<String?>(null)
+    val offroadTransferMessage: StateFlow<String?> = _offroadTransferMessage.asStateFlow()
+
+    private val layoutPrefs = application.getSharedPreferences("launcher_layout_presets_2026", Context.MODE_PRIVATE)
+    private val _savedHomeLayouts = MutableStateFlow(loadNamedLayoutNames(HOME_LAYOUTS_KEY))
+    val savedHomeLayouts: StateFlow<List<String>> = _savedHomeLayouts.asStateFlow()
+    private val _savedScreenSaverLayouts = MutableStateFlow(loadNamedLayoutNames(SAVER_LAYOUTS_KEY))
+    val savedScreenSaverLayouts: StateFlow<List<String>> = _savedScreenSaverLayouts.asStateFlow()
+
     val playbackState: StateFlow<MusicPlaybackState> = musicPlayerService.playbackState
     val gpsTelemetry: StateFlow<GpsTelemetry> = gpsTelemetryManager.telemetry
     val tripData: StateFlow<TripData> = tripComputer.tripData
@@ -64,6 +78,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val offroadTrackPoints: StateFlow<List<OffroadTrackPoint>> = offroadTrackManager.trackPoints
     val savedOffroadPlaces: StateFlow<List<SavedOffroadPlace>> = offroadTrackManager.savedPlaces
     val offroadNavigationTarget: StateFlow<OffroadNavigationTarget?> = offroadTrackManager.navigationTarget
+    val offroadMapState: StateFlow<OffroadMapState> = offroadTrackManager.mapState
 
     init {
         checkSafeMode()
@@ -90,10 +105,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isSafeModeActive.value = p.getInt("crash_count", 0) >= 2
     }
 
-    fun navigateTo(screen: CarScreen) {
-        if (_currentScreen.value != screen) _currentScreen.value = screen
-    }
-
+    fun navigateTo(screen: CarScreen) { if (_currentScreen.value != screen) _currentScreen.value = screen }
     fun restartGps() = gpsTelemetryManager.restartGpsUpdates()
 
     private fun loadWidgets() { _widgets.value = preferencesManager.getWidgets() }
@@ -141,10 +153,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (item.id != widgetId || item.isLocked) item else {
                 val width = item.widthFraction.coerceIn(0.12f, 1f)
                 val height = item.heightFraction.coerceIn(0.14f, 1f)
-                item.copy(
-                    xFraction = (item.xFraction + dxFraction).coerceIn(0f, (1f - width).coerceAtLeast(0f)),
-                    yFraction = (item.yFraction + dyFraction).coerceIn(0f, (1f - height).coerceAtLeast(0f))
-                )
+                val rawX = (item.xFraction + dxFraction).coerceIn(0f, (1f - width).coerceAtLeast(0f))
+                val rawY = (item.yFraction + dyFraction).coerceIn(0f, (1f - height).coerceAtLeast(0f))
+                item.copy(xFraction = snapCoordinate(rawX, width), yFraction = snapCoordinate(rawY, height))
             }
         }
     }
@@ -163,14 +174,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun commitWidgetLayout() = preferencesManager.saveWidgets(_widgets.value)
-
-    fun setWidgetOpacity(widgetId: String, opacity: Float) = updateAndSaveWidgets { item ->
-        if (item.id == widgetId) item.copy(opacity = opacity.coerceIn(0.20f, 1f)) else item
-    }
-
-    fun toggleWidgetLock(widgetId: String) = updateAndSaveWidgets { item ->
-        if (item.id == widgetId) item.copy(isLocked = !item.isLocked) else item
-    }
+    fun setWidgetOpacity(widgetId: String, opacity: Float) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(opacity = opacity.coerceIn(0.20f, 1f)) else it }
+    fun toggleWidgetLock(widgetId: String) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(isLocked = !it.isLocked) else it }
 
     fun bringWidgetToFront(widgetId: String) {
         val next = (_widgets.value.maxOfOrNull { it.zIndex } ?: 0) + 1
@@ -191,10 +196,113 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetWidgetsToDefault() { preferencesManager.resetToDefaultWidgets(); loadWidgets() }
 
-    fun activateChildLock() {
-        _isDesignMode.value = false
-        _isChildLockActive.value = true
+    fun applyWidgetLayoutPreset(preset: WidgetLayoutPreset) {
+        val visible = _widgets.value.filter { it.isVisible }.sortedBy { it.order }
+        if (visible.isEmpty()) return
+        val arranged = arrangeHomeWidgets(visible, preset)
+        val byId = arranged.associateBy { it.id }
+        _widgets.value = _widgets.value.map { byId[it.id] ?: it }
+        commitWidgetLayout()
     }
+
+    fun alignHomeWidgetsHorizontalCenter() = transformVisibleHome { list -> list.map { it.copy(xFraction = ((1f - it.widthFraction) / 2f).coerceAtLeast(0f)) } }
+    fun alignHomeWidgetsVerticalCenter() = transformVisibleHome { list -> list.map { it.copy(yFraction = ((1f - it.heightFraction) / 2f).coerceAtLeast(0f)) } }
+    fun distributeHomeWidgetsEvenly() = transformVisibleHome { list -> arrangeHomeWidgets(list, WidgetLayoutPreset.EVEN_ROW) }
+    fun equalizeHomeWidgetSizes() = transformVisibleHome { list ->
+        val w = list.map { it.widthFraction }.average().toFloat().coerceIn(.16f, .48f)
+        val h = list.map { it.heightFraction }.average().toFloat().coerceIn(.16f, .45f)
+        list.map { it.copy(widthFraction = w, heightFraction = h, xFraction = it.xFraction.coerceAtMost(1f - w), yFraction = it.yFraction.coerceAtMost(1f - h)) }
+    }
+
+    private fun transformVisibleHome(transform: (List<WidgetItem>) -> List<WidgetItem>) {
+        val visible = _widgets.value.filter { it.isVisible }.sortedBy { it.order }
+        val changed = transform(visible).associateBy { it.id }
+        _widgets.value = _widgets.value.map { changed[it.id] ?: it }
+        commitWidgetLayout()
+    }
+
+    private fun arrangeHomeWidgets(items: List<WidgetItem>, requested: WidgetLayoutPreset): List<WidgetItem> {
+        val n = items.size
+        val preset = if (requested == WidgetLayoutPreset.AUTO) when {
+            n <= 3 -> WidgetLayoutPreset.CENTER_ROW
+            n == 4 -> WidgetLayoutPreset.GRID_2X2
+            else -> WidgetLayoutPreset.GRID_3X2
+        } else requested
+        val gap = .025f
+        return when (preset) {
+            WidgetLayoutPreset.CENTER_ROW, WidgetLayoutPreset.EVEN_ROW, WidgetLayoutPreset.TOP_ROW, WidgetLayoutPreset.BOTTOM_ROW, WidgetLayoutPreset.LEFT_CENTER_RIGHT -> {
+                val margin = .035f
+                val width = min(.30f, ((1f - margin * 2 - gap * (n - 1)) / n).coerceAtLeast(.12f))
+                val height = .30f
+                val total = width * n + gap * (n - 1)
+                val startX = if (preset == WidgetLayoutPreset.EVEN_ROW || preset == WidgetLayoutPreset.TOP_ROW || preset == WidgetLayoutPreset.BOTTOM_ROW) margin else ((1f - total) / 2f).coerceAtLeast(margin)
+                val y = when (preset) {
+                    WidgetLayoutPreset.TOP_ROW -> .04f
+                    WidgetLayoutPreset.BOTTOM_ROW -> .66f
+                    else -> .34f
+                }
+                items.mapIndexed { i, item -> item.copy(xFraction = startX + i * (width + gap), yFraction = y, widthFraction = width, heightFraction = height, zIndex = i) }
+            }
+            WidgetLayoutPreset.CENTER_COLUMN -> {
+                val width = .38f
+                val height = min(.25f, ((.90f - gap * (n - 1)) / n).coerceAtLeast(.14f))
+                val total = height * n + gap * (n - 1)
+                val startY = ((1f - total) / 2f).coerceAtLeast(.03f)
+                items.mapIndexed { i, item -> item.copy(xFraction = (1f - width) / 2f, yFraction = startY + i * (height + gap), widthFraction = width, heightFraction = height, zIndex = i) }
+            }
+            WidgetLayoutPreset.GRID_2X2 -> arrangeHomeGrid(items, 2)
+            WidgetLayoutPreset.GRID_3X2 -> arrangeHomeGrid(items, 3)
+            WidgetLayoutPreset.AUTO -> items
+        }
+    }
+
+    private fun arrangeHomeGrid(items: List<WidgetItem>, columns: Int): List<WidgetItem> {
+        val cols = columns.coerceAtLeast(1)
+        val rows = ceil(items.size / cols.toDouble()).toInt().coerceAtLeast(1)
+        val gapX = .025f
+        val gapY = .035f
+        val marginX = .04f
+        val marginY = .06f
+        val width = ((1f - marginX * 2 - gapX * (cols - 1)) / cols).coerceIn(.12f, .44f)
+        val height = ((1f - marginY * 2 - gapY * (rows - 1)) / rows).coerceIn(.16f, .40f)
+        val usedWidth = width * cols + gapX * (cols - 1)
+        val usedHeight = height * rows + gapY * (rows - 1)
+        val startX = (1f - usedWidth) / 2f
+        val startY = (1f - usedHeight) / 2f
+        return items.mapIndexed { i, item ->
+            val col = i % cols
+            val row = i / cols
+            item.copy(xFraction = startX + col * (width + gapX), yFraction = startY + row * (height + gapY), widthFraction = width, heightFraction = height, zIndex = i)
+        }
+    }
+
+    fun saveNamedHomeLayout(name: String) {
+        val clean = name.trim()
+        if (clean.isBlank()) return
+        val root = readNamedLayouts(HOME_LAYOUTS_KEY)
+        root.put(clean, serializeHomeLayout(_widgets.value))
+        layoutPrefs.edit().putString(HOME_LAYOUTS_KEY, root.toString()).apply()
+        _savedHomeLayouts.value = loadNamedLayoutNames(HOME_LAYOUTS_KEY)
+    }
+
+    fun restoreNamedHomeLayout(name: String) {
+        try {
+            val arr = readNamedLayouts(HOME_LAYOUTS_KEY).optJSONArray(name) ?: return
+            val saved = mutableMapOf<String, JSONObject>()
+            for (i in 0 until arr.length()) saved[arr.getJSONObject(i).getString("id")] = arr.getJSONObject(i)
+            _widgets.value = _widgets.value.map { item -> saved[item.id]?.let { applySavedHome(item, it) } ?: item }
+            commitWidgetLayout()
+        } catch (_: Exception) { }
+    }
+
+    fun deleteNamedHomeLayout(name: String) {
+        val root = readNamedLayouts(HOME_LAYOUTS_KEY)
+        root.remove(name)
+        layoutPrefs.edit().putString(HOME_LAYOUTS_KEY, root.toString()).apply()
+        _savedHomeLayouts.value = loadNamedLayoutNames(HOME_LAYOUTS_KEY)
+    }
+
+    fun activateChildLock() { _isDesignMode.value = false; _isChildLockActive.value = true }
     fun deactivateChildLock() { _isChildLockActive.value = false }
 
     fun updateSafeArea(top: Int, bottom: Int, left: Int, right: Int) {
@@ -224,9 +332,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 for (i in 0 until array.length()) {
                     val o = array.getJSONObject(i)
                     val type = try { WidgetType.valueOf(o.getString("type")) } catch (_: Exception) { continue }
-                    val style = try {
-                        o.optString("style", "").takeIf { it.isNotBlank() }?.let { WidgetStyle.valueOf(it) }?.takeIf { it.type == type }
-                    } catch (_: Exception) { null }
+                    val style = try { o.optString("style", "").takeIf { it.isNotBlank() }?.let { WidgetStyle.valueOf(it) }?.takeIf { it.type == type } } catch (_: Exception) { null }
                     saved += ScreenSaverWidgetLayout(
                         type = type,
                         xFraction = o.optDouble("x", 0.05).toFloat(),
@@ -240,41 +346,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         } catch (_: Exception) { }
-
         val orderedTypes = WidgetType.values().filter { it in _settings.value.screenSaverWidgetTypes }.take(4)
-        val merged = orderedTypes.mapIndexed { index, type ->
-            val existing = saved.firstOrNull { it.type == type }
-            existing ?: ScreenSaverWidgetLayout.defaultFor(type, index)
-        }
-        _screenSaverLayouts.value = merged
+        _screenSaverLayouts.value = orderedTypes.mapIndexed { index, type -> saved.firstOrNull { it.type == type } ?: ScreenSaverWidgetLayout.defaultFor(type, index) }
         saveScreenSaverLayouts()
     }
 
     private fun saveScreenSaverLayouts() {
         try {
             val array = JSONArray()
-            _screenSaverLayouts.value.forEach { item ->
-                array.put(JSONObject().apply {
-                    put("type", item.type.name)
-                    put("x", item.xFraction.toDouble())
-                    put("y", item.yFraction.toDouble())
-                    put("w", item.widthFraction.toDouble())
-                    put("h", item.heightFraction.toDouble())
-                    put("opacity", item.opacity.toDouble())
-                    put("z", item.zIndex)
-                    put("style", item.style?.name ?: "")
-                })
-            }
+            _screenSaverLayouts.value.forEach { item -> array.put(JSONObject().apply {
+                put("type", item.type.name); put("x", item.xFraction.toDouble()); put("y", item.yFraction.toDouble()); put("w", item.widthFraction.toDouble()); put("h", item.heightFraction.toDouble()); put("opacity", item.opacity.toDouble()); put("z", item.zIndex); put("style", item.style?.name ?: "")
+            }) }
             screenSaverPrefs().edit().putString("screensaver_layouts_json", array.toString()).apply()
         } catch (_: Exception) { }
     }
 
     fun previewScreenSaverMove(type: WidgetType, dxFraction: Float, dyFraction: Float) {
         _screenSaverLayouts.value = _screenSaverLayouts.value.map { item ->
-            if (item.type != type) item else item.copy(
-                xFraction = (item.xFraction + dxFraction).coerceIn(0f, (1f - item.widthFraction).coerceAtLeast(0f)),
-                yFraction = (item.yFraction + dyFraction).coerceIn(0f, (1f - item.heightFraction).coerceAtLeast(0f))
-            )
+            if (item.type != type) item else {
+                val rawX = (item.xFraction + dxFraction).coerceIn(0f, (1f - item.widthFraction).coerceAtLeast(0f))
+                val rawY = (item.yFraction + dyFraction).coerceIn(0f, (1f - item.heightFraction).coerceAtLeast(0f))
+                item.copy(xFraction = snapCoordinate(rawX, item.widthFraction), yFraction = snapCoordinate(rawY, item.heightFraction))
+            }
         }
     }
 
@@ -283,18 +376,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (item.type != type) item else {
                 val maxW = (1f - item.xFraction).coerceAtLeast(0.16f)
                 val maxH = (1f - item.yFraction).coerceAtLeast(0.16f)
-                item.copy(
-                    widthFraction = (item.widthFraction + dwFraction).coerceIn(0.16f, maxW),
-                    heightFraction = (item.heightFraction + dhFraction).coerceIn(0.16f, maxH)
-                )
+                item.copy(widthFraction = (item.widthFraction + dwFraction).coerceIn(0.16f, maxW), heightFraction = (item.heightFraction + dhFraction).coerceIn(0.16f, maxH))
             }
         }
     }
 
     fun setScreenSaverOpacity(type: WidgetType, opacity: Float) {
-        _screenSaverLayouts.value = _screenSaverLayouts.value.map {
-            if (it.type == type) it.copy(opacity = opacity.coerceIn(0.25f, 1f)) else it
-        }
+        _screenSaverLayouts.value = _screenSaverLayouts.value.map { if (it.type == type) it.copy(opacity = opacity.coerceIn(0.25f, 1f)) else it }
         saveScreenSaverLayouts()
     }
 
@@ -316,11 +404,144 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun commitScreenSaverLayout() = saveScreenSaverLayouts()
-
     fun resetScreenSaverLayout() {
         val ordered = WidgetType.values().filter { it in _settings.value.screenSaverWidgetTypes }.take(4)
         _screenSaverLayouts.value = ordered.mapIndexed { index, type -> ScreenSaverWidgetLayout.defaultFor(type, index) }
         saveScreenSaverLayouts()
+    }
+
+    fun applyScreenSaverLayoutPreset(preset: WidgetLayoutPreset) {
+        val source = _screenSaverLayouts.value
+        if (source.isEmpty()) return
+        _screenSaverLayouts.value = arrangeScreenSaver(source, preset)
+        saveScreenSaverLayouts()
+    }
+
+    fun alignScreenSaverHorizontalCenter() {
+        _screenSaverLayouts.value = _screenSaverLayouts.value.map { it.copy(xFraction = ((1f - it.widthFraction) / 2f).coerceAtLeast(0f)) }
+        saveScreenSaverLayouts()
+    }
+    fun alignScreenSaverVerticalCenter() {
+        _screenSaverLayouts.value = _screenSaverLayouts.value.map { it.copy(yFraction = ((1f - it.heightFraction) / 2f).coerceAtLeast(0f)) }
+        saveScreenSaverLayouts()
+    }
+    fun distributeScreenSaverEvenly() { _screenSaverLayouts.value = arrangeScreenSaver(_screenSaverLayouts.value, WidgetLayoutPreset.EVEN_ROW); saveScreenSaverLayouts() }
+    fun equalizeScreenSaverSizes() {
+        val list = _screenSaverLayouts.value
+        if (list.isEmpty()) return
+        val w = list.map { it.widthFraction }.average().toFloat().coerceIn(.16f, .48f)
+        val h = list.map { it.heightFraction }.average().toFloat().coerceIn(.16f, .45f)
+        _screenSaverLayouts.value = list.map { it.copy(widthFraction = w, heightFraction = h, xFraction = it.xFraction.coerceAtMost(1f - w), yFraction = it.yFraction.coerceAtMost(1f - h)) }
+        saveScreenSaverLayouts()
+    }
+
+    private fun arrangeScreenSaver(items: List<ScreenSaverWidgetLayout>, requested: WidgetLayoutPreset): List<ScreenSaverWidgetLayout> {
+        val n = items.size
+        val preset = if (requested == WidgetLayoutPreset.AUTO) when {
+            n <= 3 -> WidgetLayoutPreset.CENTER_ROW
+            else -> WidgetLayoutPreset.GRID_2X2
+        } else requested
+        val gap = .025f
+        return when (preset) {
+            WidgetLayoutPreset.CENTER_ROW, WidgetLayoutPreset.EVEN_ROW, WidgetLayoutPreset.TOP_ROW, WidgetLayoutPreset.BOTTOM_ROW, WidgetLayoutPreset.LEFT_CENTER_RIGHT -> {
+                val width = min(.30f, ((.93f - gap * (n - 1)) / n).coerceAtLeast(.16f))
+                val height = .32f
+                val total = width * n + gap * (n - 1)
+                val startX = ((1f - total) / 2f).coerceAtLeast(.025f)
+                val y = when (preset) { WidgetLayoutPreset.TOP_ROW -> .07f; WidgetLayoutPreset.BOTTOM_ROW -> .60f; else -> .33f }
+                items.mapIndexed { i, item -> item.copy(xFraction = startX + i * (width + gap), yFraction = y, widthFraction = width, heightFraction = height, zIndex = i) }
+            }
+            WidgetLayoutPreset.CENTER_COLUMN -> {
+                val width = .40f
+                val height = min(.24f, ((.90f - gap * (n - 1)) / n).coerceAtLeast(.16f))
+                val total = height * n + gap * (n - 1)
+                val startY = (1f - total) / 2f
+                items.mapIndexed { i, item -> item.copy(xFraction = .30f, yFraction = startY + i * (height + gap), widthFraction = width, heightFraction = height, zIndex = i) }
+            }
+            WidgetLayoutPreset.GRID_2X2 -> arrangeSaverGrid(items, 2)
+            WidgetLayoutPreset.GRID_3X2 -> arrangeSaverGrid(items, 3)
+            WidgetLayoutPreset.AUTO -> items
+        }
+    }
+
+    private fun arrangeSaverGrid(items: List<ScreenSaverWidgetLayout>, columns: Int): List<ScreenSaverWidgetLayout> {
+        val cols = columns.coerceAtLeast(1)
+        val rows = ceil(items.size / cols.toDouble()).toInt().coerceAtLeast(1)
+        val gapX = .03f
+        val gapY = .04f
+        val width = ((.92f - gapX * (cols - 1)) / cols).coerceIn(.16f, .44f)
+        val height = ((.86f - gapY * (rows - 1)) / rows).coerceIn(.16f, .40f)
+        val usedW = width * cols + gapX * (cols - 1)
+        val usedH = height * rows + gapY * (rows - 1)
+        val startX = (1f - usedW) / 2f
+        val startY = (1f - usedH) / 2f
+        return items.mapIndexed { i, item -> item.copy(xFraction = startX + (i % cols) * (width + gapX), yFraction = startY + (i / cols) * (height + gapY), widthFraction = width, heightFraction = height, zIndex = i) }
+    }
+
+    fun saveNamedScreenSaverLayout(name: String) {
+        val clean = name.trim()
+        if (clean.isBlank()) return
+        val root = readNamedLayouts(SAVER_LAYOUTS_KEY)
+        root.put(clean, serializeSaverLayout(_screenSaverLayouts.value))
+        layoutPrefs.edit().putString(SAVER_LAYOUTS_KEY, root.toString()).apply()
+        _savedScreenSaverLayouts.value = loadNamedLayoutNames(SAVER_LAYOUTS_KEY)
+    }
+
+    fun restoreNamedScreenSaverLayout(name: String) {
+        try {
+            val arr = readNamedLayouts(SAVER_LAYOUTS_KEY).optJSONArray(name) ?: return
+            val saved = mutableMapOf<WidgetType, JSONObject>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val type = try { WidgetType.valueOf(o.getString("type")) } catch (_: Exception) { continue }
+                saved[type] = o
+            }
+            _screenSaverLayouts.value = _screenSaverLayouts.value.map { item -> saved[item.type]?.let { applySavedSaver(item, it) } ?: item }
+            saveScreenSaverLayouts()
+        } catch (_: Exception) { }
+    }
+
+    fun deleteNamedScreenSaverLayout(name: String) {
+        val root = readNamedLayouts(SAVER_LAYOUTS_KEY)
+        root.remove(name)
+        layoutPrefs.edit().putString(SAVER_LAYOUTS_KEY, root.toString()).apply()
+        _savedScreenSaverLayouts.value = loadNamedLayoutNames(SAVER_LAYOUTS_KEY)
+    }
+
+    private fun snapCoordinate(value: Float, size: Float): Float {
+        val max = (1f - size).coerceAtLeast(0f)
+        val center = max / 2f
+        val candidates = floatArrayOf(0f, center, max)
+        return candidates.minByOrNull { kotlin.math.abs(it - value) }?.takeIf { kotlin.math.abs(it - value) <= SNAP_TOLERANCE } ?: value
+    }
+
+    private fun serializeHomeLayout(items: List<WidgetItem>): JSONArray = JSONArray().apply {
+        items.forEach { item -> put(JSONObject().apply {
+            put("id", item.id); put("style", item.style.name); put("x", item.xFraction); put("y", item.yFraction); put("w", item.widthFraction); put("h", item.heightFraction); put("opacity", item.opacity); put("locked", item.isLocked); put("z", item.zIndex)
+        }) }
+    }
+
+    private fun applySavedHome(item: WidgetItem, o: JSONObject): WidgetItem {
+        val style = try { WidgetStyle.valueOf(o.optString("style", item.style.name)).takeIf { it.type == item.type } ?: item.style } catch (_: Exception) { item.style }
+        return item.copy(style = style, xFraction = o.optDouble("x", item.xFraction.toDouble()).toFloat(), yFraction = o.optDouble("y", item.yFraction.toDouble()).toFloat(), widthFraction = o.optDouble("w", item.widthFraction.toDouble()).toFloat(), heightFraction = o.optDouble("h", item.heightFraction.toDouble()).toFloat(), opacity = o.optDouble("opacity", item.opacity.toDouble()).toFloat(), isLocked = o.optBoolean("locked", item.isLocked), zIndex = o.optInt("z", item.zIndex))
+    }
+
+    private fun serializeSaverLayout(items: List<ScreenSaverWidgetLayout>): JSONArray = JSONArray().apply {
+        items.forEach { item -> put(JSONObject().apply { put("type", item.type.name); put("style", item.style?.name ?: ""); put("x", item.xFraction); put("y", item.yFraction); put("w", item.widthFraction); put("h", item.heightFraction); put("opacity", item.opacity); put("z", item.zIndex) }) }
+    }
+
+    private fun applySavedSaver(item: ScreenSaverWidgetLayout, o: JSONObject): ScreenSaverWidgetLayout {
+        val style = try { o.optString("style", "").takeIf { it.isNotBlank() }?.let { WidgetStyle.valueOf(it) }?.takeIf { it.type == item.type } ?: item.style } catch (_: Exception) { item.style }
+        return item.copy(xFraction = o.optDouble("x", item.xFraction.toDouble()).toFloat(), yFraction = o.optDouble("y", item.yFraction.toDouble()).toFloat(), widthFraction = o.optDouble("w", item.widthFraction.toDouble()).toFloat(), heightFraction = o.optDouble("h", item.heightFraction.toDouble()).toFloat(), opacity = o.optDouble("opacity", item.opacity.toDouble()).toFloat(), zIndex = o.optInt("z", item.zIndex), style = style)
+    }
+
+    private fun readNamedLayouts(key: String): JSONObject = try { JSONObject(layoutPrefs.getString(key, "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
+    private fun loadNamedLayoutNames(key: String): List<String> {
+        val root = readNamedLayouts(key)
+        val names = mutableListOf<String>()
+        val keys = root.keys()
+        while (keys.hasNext()) names += keys.next()
+        return names.sorted()
     }
 
     fun importWallpaperUri(uri: Uri) {
@@ -333,10 +554,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val target = File(dir, "launcher_wallpaper.$extension")
                 resolver.openInputStream(uri)?.use { input -> FileOutputStream(target).use { output -> input.copyTo(output) } }
                 if (target.exists() && target.length() > 0) {
-                    val newSettings = _settings.value.copy(
-                        backgroundType = BackgroundType.CUSTOM_IMAGE,
-                        customWallpaperPath = target.absolutePath
-                    )
+                    val newSettings = _settings.value.copy(backgroundType = BackgroundType.CUSTOM_IMAGE, customWallpaperPath = target.absolutePath)
                     _settings.value = newSettings
                     preferencesManager.saveSettings(newSettings)
                 }
@@ -344,16 +562,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun loadApps() {
-        val apps = appRepository.getInstalledApps()
-        _installedApps.value = apps
-    }
-    fun toggleAppFavorite(packageName: String) {
-        viewModelScope.launch(Dispatchers.IO) { appRepository.toggleFavorite(packageName); loadApps() }
-    }
-    fun toggleAppHidden(packageName: String) {
-        viewModelScope.launch(Dispatchers.IO) { appRepository.toggleHidden(packageName); loadApps() }
-    }
+    fun loadApps() { _installedApps.value = appRepository.getInstalledApps() }
+    fun toggleAppFavorite(packageName: String) { viewModelScope.launch(Dispatchers.IO) { appRepository.toggleFavorite(packageName); loadApps() } }
+    fun toggleAppHidden(packageName: String) { viewModelScope.launch(Dispatchers.IO) { appRepository.toggleHidden(packageName); loadApps() } }
     fun launchApp(packageName: String) { appRepository.launchApp(packageName) }
     fun launchAndroidSettings() { appRepository.launchAndroidSettings() }
 
@@ -374,17 +585,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val name = queryDisplayName(uri) ?: "music_${System.currentTimeMillis()}.mp3"
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     val values = ContentValues().apply {
-                        put(MediaStore.Audio.Media.DISPLAY_NAME, name)
-                        put(MediaStore.Audio.Media.MIME_TYPE, resolver.getType(uri) ?: "audio/mpeg")
-                        put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/Launcher 2026")
-                        put(MediaStore.Audio.Media.IS_PENDING, 1)
+                        put(MediaStore.Audio.Media.DISPLAY_NAME, name); put(MediaStore.Audio.Media.MIME_TYPE, resolver.getType(uri) ?: "audio/mpeg"); put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/Launcher 2026"); put(MediaStore.Audio.Media.IS_PENDING, 1)
                     }
                     val outUri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
                     if (outUri != null) {
                         resolver.openInputStream(uri)?.use { input -> resolver.openOutputStream(outUri)?.use { output -> input.copyTo(output) } }
-                        values.clear()
-                        values.put(MediaStore.Audio.Media.IS_PENDING, 0)
-                        resolver.update(outUri, values, null, null)
+                        values.clear(); values.put(MediaStore.Audio.Media.IS_PENDING, 0); resolver.update(outUri, values, null, null)
                     }
                 } else {
                     val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).resolve("Launcher 2026")
@@ -399,9 +605,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun queryDisplayName(uri: Uri): String? = try {
-        getApplication<Application>().contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use {
-            if (it.moveToFirst()) it.getString(0) else null
-        }
+        getApplication<Application>().contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null }
     } catch (_: Exception) { null }
 
     fun startTrip() = tripComputer.startTrip()
@@ -417,24 +621,64 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val dir = File(getApplication<Application>().filesDir, "maps").apply { mkdirs() }
                 val target = File(dir, name)
                 resolver.openInputStream(uri)?.use { input -> FileOutputStream(target).use { output -> input.copyTo(output) } }
-                if (target.exists() && target.length() > 0) offlineMapEngine.importMapFile(target, target.nameWithoutExtension)
+                if (target.exists() && target.length() > 0) { offlineMapEngine.importMapFile(target, target.nameWithoutExtension); offlineMapSearchEngine.clear() }
             } catch (_: Exception) { }
         }
     }
-    fun setActiveMap(mapId: String) = offlineMapEngine.setActiveMap(mapId)
+    fun setActiveMap(mapId: String) { offlineMapEngine.setActiveMap(mapId); offlineMapSearchEngine.clear() }
     fun renameMap(mapId: String, newName: String) = offlineMapEngine.renameMap(mapId, newName)
-    fun deleteMap(mapId: String) = offlineMapEngine.deleteMap(mapId)
+    fun deleteMap(mapId: String) { offlineMapEngine.deleteMap(mapId); offlineMapSearchEngine.clear() }
 
-    fun saveCurrentOffroadPlace() = offroadTrackManager.saveCurrentPlace(gpsTelemetry.value)
+    fun saveCurrentOffroadPlace(name: String? = null) = offroadTrackManager.saveCurrentPlace(gpsTelemetry.value, name)
+    fun renameSavedOffroadPlace(id: String, name: String) = offroadTrackManager.renamePlace(id, name)
     fun deleteSavedOffroadPlace(id: String) = offroadTrackManager.deletePlace(id)
-    fun navigateToSavedOffroadPlace(id: String) {
-        savedOffroadPlaces.value.firstOrNull { it.id == id }?.let(offroadTrackManager::navigateTo)
-    }
+    fun navigateToSavedOffroadPlace(id: String) { savedOffroadPlaces.value.firstOrNull { it.id == id }?.let(offroadTrackManager::navigateTo) }
     fun navigateToTrackStart() = offroadTrackManager.navigateToTrackStart()
     fun stopOffroadNavigation() = offroadTrackManager.stopNavigation()
     fun clearOffroadTrack() = offroadTrackManager.clearTrack()
     fun offroadDistanceToTargetMeters(): Float? = offroadTrackManager.distanceToTargetMeters(gpsTelemetry.value)
     fun offroadBearingToTarget(): Float? = offroadTrackManager.bearingToTarget(gpsTelemetry.value)
+    fun offroadDistanceToTrackStartMeters(): Float? = offroadTrackManager.distanceToTrackStartMeters(gpsTelemetry.value)
+    fun offroadBearingToTrackStart(): Float? = offroadTrackManager.bearingToTrackStart(gpsTelemetry.value)
+    fun offroadTrackDistanceKm(): Double = offroadTrackManager.trackDistanceKm()
+    fun updateOffroadMapState(state: OffroadMapState) = offroadTrackManager.saveMapState(state)
+
+    fun searchOfflineMap(query: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _offlineSearchResults.value = offlineMapSearchEngine.search(query, activeMap.value, savedOffroadPlaces.value)
+        }
+    }
+    fun clearOfflineMapSearch() { _offlineSearchResults.value = emptyList() }
+    fun navigateToSearchResult(result: OfflineMapSearchResult) {
+        offroadTrackManager.navigateToCoordinates(result.id, result.name, result.latitude, result.longitude)
+        updateOffroadMapState(offroadMapState.value.copy(latitude = result.latitude, longitude = result.longitude, followGps = false, zoomLevel = 15))
+    }
+
+    fun importGpxUri(uri: Uri) = readOffroadText(uri, "GPX") { raw -> offroadTrackManager.importGpx(raw) }
+    fun importOffroadBackupUri(uri: Uri) = readOffroadText(uri, "النسخة الاحتياطية") { raw -> offroadTrackManager.importBackupJson(raw) }
+
+    private fun readOffroadText(uri: Uri, label: String, importer: (String) -> Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val raw = getApplication<Application>().contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
+                val count = importer(raw)
+                _offroadTransferMessage.value = if (count > 0) "تم استيراد $label: $count عنصر" else "لم يتم العثور على بيانات صالحة في $label"
+            } catch (_: Exception) { _offroadTransferMessage.value = "تعذر استيراد $label" }
+        }
+    }
+
+    fun exportGpxUri(uri: Uri) = writeOffroadText(uri, offroadTrackManager.exportGpx(), "تم تصدير GPX")
+    fun exportOffroadBackupUri(uri: Uri) = writeOffroadText(uri, offroadTrackManager.exportBackupJson(), "تم إنشاء النسخة الاحتياطية")
+
+    private fun writeOffroadText(uri: Uri, content: String, success: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                getApplication<Application>().contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { it.write(content) }
+                _offroadTransferMessage.value = success
+            } catch (_: Exception) { _offroadTransferMessage.value = "تعذر حفظ الملف" }
+        }
+    }
+    fun clearOffroadTransferMessage() { _offroadTransferMessage.value = null }
 
     fun runDiagnostics() { _diagnosticReport.value = diagnosticManager.runFullDiagnostics() }
     fun resetSafeMode() { diagnosticManager.resetCrashCount(); _isSafeModeActive.value = false; runDiagnostics() }
@@ -445,5 +689,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         tripComputer.release()
         offroadTrackManager.release()
         super.onCleared()
+    }
+
+    companion object {
+        private const val SNAP_TOLERANCE = 0.014f
+        private const val HOME_LAYOUTS_KEY = "saved_home_layouts_json"
+        private const val SAVER_LAYOUTS_KEY = "saved_saver_layouts_json"
     }
 }

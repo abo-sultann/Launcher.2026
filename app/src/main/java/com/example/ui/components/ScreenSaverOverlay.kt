@@ -43,6 +43,7 @@ fun ScreenSaverOverlay(
     modifier: Modifier = Modifier
 ) {
     var editMode by remember { mutableStateOf(false) }
+    var showLayoutDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     DisposableEffect(settings.screenSaverNightMode, settings.screenSaverNightBrightnessPercent) {
@@ -50,7 +51,7 @@ fun ScreenSaverOverlay(
         val oldBrightness = activity?.window?.attributes?.screenBrightness ?: -1f
         if (activity != null && settings.screenSaverNightMode) {
             val attrs = activity.window.attributes
-            attrs.screenBrightness = (settings.screenSaverNightBrightnessPercent.coerceIn(5, 40) / 100f)
+            attrs.screenBrightness = settings.screenSaverNightBrightnessPercent.coerceIn(5, 40) / 100f
             activity.window.attributes = attrs
         }
         onDispose {
@@ -64,9 +65,7 @@ fun ScreenSaverOverlay(
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
         if (settings.screenSaverUseWallpaper) LauncherBackground(settings)
-        if (settings.screenSaverNightMode) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .34f)).zIndex(2f))
-        }
+        if (settings.screenSaverNightMode) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .34f)).zIndex(2f))
 
         ScreenSaverCanvas(
             viewModel = viewModel,
@@ -90,17 +89,27 @@ fun ScreenSaverOverlay(
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp).zIndex(1500f)
             ) {
                 Row(
-                    Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text("تحريك • تغيير حجم • شفافية • شكل مستقل لكل ودجت", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("تحكم حر", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    FilledTonalButton(
+                        onClick = { showLayoutDialog = true },
+                        modifier = Modifier.height(34.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 3.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = AmberRacing, contentColor = CarbonDark)
+                    ) {
+                        Icon(Icons.Default.ViewQuilt, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(3.dp))
+                        Text("ترتيب", fontSize = 10.sp)
+                    }
                     IconButton(onClick = { viewModel.resetScreenSaverLayout() }, modifier = Modifier.size(34.dp)) {
                         Icon(Icons.Default.RestartAlt, "إعادة الترتيب", tint = AmberRacing)
                     }
                     Button(
                         onClick = { viewModel.commitScreenSaverLayout(); editMode = false },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 9.dp, vertical = 4.dp),
                         modifier = Modifier.height(34.dp)
                     ) {
                         Icon(Icons.Default.Check, null, modifier = Modifier.size(17.dp))
@@ -111,24 +120,15 @@ fun ScreenSaverOverlay(
             }
         } else {
             Box(
-                Modifier
-                    .fillMaxSize()
-                    .zIndex(1000f)
-                    .combinedClickable(
-                        onClick = onDismiss,
-                        onLongClick = { editMode = true }
-                    )
+                Modifier.fillMaxSize().zIndex(1000f).combinedClickable(
+                    onClick = onDismiss,
+                    onLongClick = { editMode = true }
+                )
             )
 
             FilledTonalButton(
-                onClick = {
-                    viewModel.updateSettings(settings.copy(screenSaverNightMode = !settings.screenSaverNightMode))
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 8.dp)
-                    .height(34.dp)
-                    .zIndex(1200f),
+                onClick = { viewModel.updateSettings(settings.copy(screenSaverNightMode = !settings.screenSaverNightMode)) },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp).height(34.dp).zIndex(1200f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = CarbonDark.copy(alpha = .90f),
@@ -139,6 +139,10 @@ fun ScreenSaverOverlay(
                 Spacer(Modifier.width(5.dp))
                 Text(if (settings.screenSaverNightMode) "الوضع الليلي مفعل" else "وضع القيادة الليلي", fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
+        }
+
+        if (showLayoutDialog) {
+            WidgetLayoutDialog(viewModel, WidgetLayoutTarget.SCREEN_SAVER) { showLayoutDialog = false }
         }
     }
 }
@@ -157,22 +161,13 @@ fun ScreenSaverEditorScreen(
     val gps by viewModel.gpsTelemetry.collectAsState()
     val trip by viewModel.tripData.collectAsState()
     val activeMap by viewModel.activeMap.collectAsState()
+    var showLayoutDialog by remember { mutableStateOf(false) }
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
         if (settings.screenSaverUseWallpaper) LauncherBackground(settings)
 
         ScreenSaverCanvas(
-            viewModel = viewModel,
-            settings = settings,
-            widgets = widgets,
-            layouts = layouts,
-            apps = apps,
-            playbackState = playback,
-            gpsTelemetry = gps,
-            tripData = trip,
-            activeMap = activeMap,
-            editMode = true,
-            modifier = Modifier.fillMaxSize()
+            viewModel, settings, widgets, layouts, apps, playback, gps, trip, activeMap, true, Modifier.fillMaxSize()
         )
 
         Surface(
@@ -182,17 +177,20 @@ fun ScreenSaverEditorScreen(
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp).zIndex(1500f)
         ) {
             Row(
-                Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text("تحكم كامل في ودجات شاشة التوقف", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                IconButton(onClick = { viewModel.resetScreenSaverLayout() }, modifier = Modifier.size(34.dp)) {
-                    Icon(Icons.Default.RestartAlt, "إعادة الترتيب", tint = AmberRacing)
+                Text("تحكم كامل", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                FilledTonalButton(onClick = { showLayoutDialog = true }, modifier = Modifier.height(34.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 3.dp)) {
+                    Icon(Icons.Default.ViewQuilt, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("ترتيب", fontSize = 10.sp)
                 }
+                IconButton(onClick = { viewModel.resetScreenSaverLayout() }, modifier = Modifier.size(34.dp)) { Icon(Icons.Default.RestartAlt, "إعادة الترتيب", tint = AmberRacing) }
                 Button(
                     onClick = { viewModel.commitScreenSaverLayout(); onDone() },
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 9.dp, vertical = 4.dp),
                     modifier = Modifier.height(34.dp)
                 ) {
                     Icon(Icons.Default.Check, null, modifier = Modifier.size(17.dp))
@@ -201,6 +199,8 @@ fun ScreenSaverEditorScreen(
                 }
             }
         }
+
+        if (showLayoutDialog) WidgetLayoutDialog(viewModel, WidgetLayoutTarget.SCREEN_SAVER) { showLayoutDialog = false }
     }
 }
 
@@ -238,10 +238,7 @@ private fun ScreenSaverCanvas(
                 border = BorderStroke(if (editMode) 2.dp else 1.dp, if (editMode) AmberRacing else CarbonCardBorder),
                 modifier = Modifier
                     .offset(x = canvasWidth * layout.xFraction, y = canvasHeight * layout.yFraction)
-                    .size(
-                        width = canvasWidth * layout.widthFraction.coerceIn(.16f, 1f),
-                        height = canvasHeight * layout.heightFraction.coerceIn(.16f, 1f)
-                    )
+                    .size(width = canvasWidth * layout.widthFraction.coerceIn(.16f, 1f), height = canvasHeight * layout.heightFraction.coerceIn(.16f, 1f))
                     .alpha(layout.opacity)
                     .zIndex(layout.zIndex.toFloat())
             ) {
@@ -253,24 +250,15 @@ private fun ScreenSaverCanvas(
                             color = CarbonDark.copy(alpha = .95f),
                             shape = RoundedCornerShape(7.dp),
                             border = BorderStroke(1.dp, AmberRacing),
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(5.dp)
-                                .pointerInput(type) {
-                                    detectDragGestures(
-                                        onDragStart = { viewModel.bringScreenSaverWidgetToFront(type) },
-                                        onDragEnd = { viewModel.commitScreenSaverLayout() },
-                                        onDragCancel = { viewModel.commitScreenSaverLayout() }
-                                    ) { _, drag ->
-                                        viewModel.previewScreenSaverMove(type, drag.x / widthPx, drag.y / heightPx)
-                                    }
-                                }
+                            modifier = Modifier.align(Alignment.TopStart).padding(5.dp).pointerInput(type) {
+                                detectDragGestures(
+                                    onDragStart = { viewModel.bringScreenSaverWidgetToFront(type) },
+                                    onDragEnd = { viewModel.commitScreenSaverLayout() },
+                                    onDragCancel = { viewModel.commitScreenSaverLayout() }
+                                ) { _, drag -> viewModel.previewScreenSaverMove(type, drag.x / widthPx, drag.y / heightPx) }
+                            }
                         ) {
-                            Row(
-                                Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
+                            Row(Modifier.padding(horizontal = 7.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Icon(Icons.Default.DragIndicator, null, tint = AmberRacing, modifier = Modifier.size(16.dp))
                                 Text("تحريك", color = AmberRacing, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
@@ -290,40 +278,22 @@ private fun ScreenSaverCanvas(
                         Surface(
                             color = CyanNeon,
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(5.dp)
-                                .size(40.dp)
-                                .pointerInput(type) {
-                                    detectDragGestures(
-                                        onDragStart = { viewModel.bringScreenSaverWidgetToFront(type) },
-                                        onDragEnd = { viewModel.commitScreenSaverLayout() },
-                                        onDragCancel = { viewModel.commitScreenSaverLayout() }
-                                    ) { _, drag ->
-                                        viewModel.previewScreenSaverResize(type, drag.x / widthPx, drag.y / heightPx)
-                                    }
-                                }
-                        ) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.OpenInFull, "تغيير الحجم", tint = CarbonDark, modifier = Modifier.size(21.dp))
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(5.dp).size(40.dp).pointerInput(type) {
+                                detectDragGestures(
+                                    onDragStart = { viewModel.bringScreenSaverWidgetToFront(type) },
+                                    onDragEnd = { viewModel.commitScreenSaverLayout() },
+                                    onDragCancel = { viewModel.commitScreenSaverLayout() }
+                                ) { _, drag -> viewModel.previewScreenSaverResize(type, drag.x / widthPx, drag.y / heightPx) }
                             }
+                        ) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.Default.OpenInFull, "تغيير الحجم", tint = CarbonDark, modifier = Modifier.size(21.dp)) }
                         }
 
-                        Surface(
-                            color = CarbonDark.copy(alpha = .95f),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.align(Alignment.BottomStart).padding(5.dp)
-                        ) {
+                        Surface(color = CarbonDark.copy(alpha = .95f), shape = RoundedCornerShape(8.dp), modifier = Modifier.align(Alignment.BottomStart).padding(5.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(
-                                    onClick = { viewModel.setScreenSaverOpacity(type, layout.opacity - .10f) },
-                                    modifier = Modifier.size(30.dp)
-                                ) { Icon(Icons.Default.Remove, "شفافية أقل", tint = TextPrimary, modifier = Modifier.size(16.dp)) }
+                                IconButton(onClick = { viewModel.setScreenSaverOpacity(type, layout.opacity - .10f) }, modifier = Modifier.size(30.dp)) { Icon(Icons.Default.Remove, "شفافية أقل", tint = TextPrimary, modifier = Modifier.size(16.dp)) }
                                 Text("${(layout.opacity * 100).toInt()}%", color = CyanNeon, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                IconButton(
-                                    onClick = { viewModel.setScreenSaverOpacity(type, layout.opacity + .10f) },
-                                    modifier = Modifier.size(30.dp)
-                                ) { Icon(Icons.Default.Add, "شفافية أكثر", tint = TextPrimary, modifier = Modifier.size(16.dp)) }
+                                IconButton(onClick = { viewModel.setScreenSaverOpacity(type, layout.opacity + .10f) }, modifier = Modifier.size(30.dp)) { Icon(Icons.Default.Add, "شفافية أكثر", tint = TextPrimary, modifier = Modifier.size(16.dp)) }
                             }
                         }
                     }

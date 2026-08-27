@@ -2,7 +2,10 @@ package com.example.data
 
 import android.content.Context
 import android.location.Location
+import android.util.Xml
 import com.example.model.GpsTelemetry
+import com.example.model.MapOrientationMode
+import com.example.model.OffroadMapState
 import com.example.model.OffroadNavigationTarget
 import com.example.model.OffroadTrackPoint
 import com.example.model.SavedOffroadPlace
@@ -16,7 +19,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import org.xmlpull.v1.XmlPullParser
 import java.io.File
+import java.io.StringReader
 import java.util.UUID
 import kotlin.math.max
 
@@ -33,6 +38,9 @@ class OffroadTrackManager(private val context: Context) {
 
     private val _navigationTarget = MutableStateFlow<OffroadNavigationTarget?>(null)
     val navigationTarget: StateFlow<OffroadNavigationTarget?> = _navigationTarget.asStateFlow()
+
+    private val _mapState = MutableStateFlow(loadMapState())
+    val mapState: StateFlow<OffroadMapState> = _mapState.asStateFlow()
 
     private var totalTrackKm = 0.0
     private var lastPersistAt = 0L
@@ -61,22 +69,7 @@ class OffroadTrackManager(private val context: Context) {
         val updated = current.toMutableList()
         if (last != null) totalTrackKm += distanceMeters(last.latitude, last.longitude, newPoint.latitude, newPoint.longitude) / 1000.0
         updated += newPoint
-
-        // Garmin-style rolling breadcrumb: preserve approximately the newest 1000 km.
-        while (totalTrackKm > MAX_TRACK_KM && updated.size > 2) {
-            val a = updated[0]
-            val b = updated[1]
-            totalTrackKm -= distanceMeters(a.latitude, a.longitude, b.latitude, b.longitude) / 1000.0
-            updated.removeAt(0)
-        }
-
-        // Additional safety cap for the 1 GB head unit. Distance remains the primary retention rule.
-        while (updated.size > MAX_TRACK_POINTS) {
-            val a = updated[0]
-            val b = updated[1]
-            totalTrackKm = max(0.0, totalTrackKm - distanceMeters(a.latitude, a.longitude, b.latitude, b.longitude) / 1000.0)
-            updated.removeAt(0)
-        }
+        trimRollingTrack(updated)
 
         _trackPoints.value = updated
         if (now - lastPersistAt > 15_000L || updated.size % 8 == 0) {
@@ -85,25 +78,47 @@ class OffroadTrackManager(private val context: Context) {
         }
     }
 
+    fun trackDistanceKm(): Double = totalTrackKm
+
     fun clearTrack() {
         totalTrackKm = 0.0
         _trackPoints.value = emptyList()
         persistTrackAsync(emptyList())
     }
 
-    fun saveCurrentPlace(telemetry: GpsTelemetry): SavedOffroadPlace? {
+    fun saveCurrentPlace(telemetry: GpsTelemetry, requestedName: String? = null): SavedOffroadPlace? {
         if (!telemetry.hasGpsFix) return null
-        val nextNumber = _savedPlaces.value.size + 1
+        return savePlace(
+            requestedName?.trim().takeUnless { it.isNullOrBlank() } ?: "موقع محفوظ ${_savedPlaces.value.size + 1}",
+            telemetry.latitude,
+            telemetry.longitude
+        )
+    }
+
+    fun savePlace(name: String, latitude: Double, longitude: Double): SavedOffroadPlace {
+        val clean = name.trim().ifBlank { "موقع محفوظ ${_savedPlaces.value.size + 1}" }
         val place = SavedOffroadPlace(
             id = UUID.randomUUID().toString(),
-            name = "موقع محفوظ $nextNumber",
-            latitude = telemetry.latitude,
-            longitude = telemetry.longitude,
+            name = clean,
+            latitude = latitude,
+            longitude = longitude,
             createdAt = System.currentTimeMillis()
         )
         _savedPlaces.value = _savedPlaces.value + place
         persistPlaces()
         return place
+    }
+
+    fun renamePlace(id: String, newName: String) {
+        val clean = newName.trim()
+        if (clean.isBlank()) return
+        _savedPlaces.value = _savedPlaces.value.map { if (it.id == id) it.copy(name = clean) else it }
+        val target = _navigationTarget.value
+        if (target?.id == id) {
+            _navigationTarget.value = target.copy(name = clean)
+            persistNavigationTarget(_navigationTarget.value!!)
+        }
+        persistPlaces()
     }
 
     fun deletePlace(id: String) {
@@ -113,16 +128,18 @@ class OffroadTrackManager(private val context: Context) {
     }
 
     fun navigateTo(place: SavedOffroadPlace) {
-        val target = OffroadNavigationTarget(place.id, place.name, place.latitude, place.longitude)
+        navigateToCoordinates(place.id, place.name, place.latitude, place.longitude)
+    }
+
+    fun navigateToCoordinates(id: String, name: String, latitude: Double, longitude: Double) {
+        val target = OffroadNavigationTarget(id, name, latitude, longitude)
         _navigationTarget.value = target
         persistNavigationTarget(target)
     }
 
     fun navigateToTrackStart() {
         val start = _trackPoints.value.firstOrNull() ?: return
-        val target = OffroadNavigationTarget("track_start", "بداية المسار", start.latitude, start.longitude)
-        _navigationTarget.value = target
-        persistNavigationTarget(target)
+        navigateToCoordinates("track_start", "بداية المسار", start.latitude, start.longitude)
     }
 
     fun stopNavigation() {
@@ -139,9 +156,19 @@ class OffroadTrackManager(private val context: Context) {
     fun bearingToTarget(current: GpsTelemetry): Float? {
         val target = _navigationTarget.value ?: return null
         if (!current.hasGpsFix) return null
-        val results = FloatArray(2)
-        Location.distanceBetween(current.latitude, current.longitude, target.latitude, target.longitude, results)
-        return ((results[1] % 360f) + 360f) % 360f
+        return bearing(current.latitude, current.longitude, target.latitude, target.longitude)
+    }
+
+    fun distanceToTrackStartMeters(current: GpsTelemetry): Float? {
+        val start = _trackPoints.value.firstOrNull() ?: return null
+        if (!current.hasGpsFix) return null
+        return distanceMeters(current.latitude, current.longitude, start.latitude, start.longitude)
+    }
+
+    fun bearingToTrackStart(current: GpsTelemetry): Float? {
+        val start = _trackPoints.value.firstOrNull() ?: return null
+        if (!current.hasGpsFix) return null
+        return bearing(current.latitude, current.longitude, start.latitude, start.longitude)
     }
 
     fun renderPoints(maxPoints: Int = 6000): List<OffroadTrackPoint> {
@@ -153,8 +180,165 @@ class OffroadTrackManager(private val context: Context) {
         return sampled
     }
 
+    fun saveMapState(state: OffroadMapState) {
+        val sanitized = state.copy(zoomLevel = state.zoomLevel.coerceIn(3, 20))
+        _mapState.value = sanitized
+        prefs.edit().putString("map_state", JSONObject().apply {
+            put("lat", sanitized.latitude)
+            put("lon", sanitized.longitude)
+            put("zoom", sanitized.zoomLevel)
+            put("follow", sanitized.followGps)
+            put("orientation", sanitized.orientationMode.name)
+        }.toString()).apply()
+    }
+
+    fun exportGpx(): String {
+        val sb = StringBuilder(1024 + _trackPoints.value.size * 60)
+        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+        sb.append("<gpx version=\"1.1\" creator=\"Launcher 2026\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n")
+        _savedPlaces.value.forEach { p ->
+            sb.append("  <wpt lat=\"").append(p.latitude).append("\" lon=\"").append(p.longitude).append("\"><name>")
+                .append(xmlEscape(p.name)).append("</name></wpt>\n")
+        }
+        sb.append("  <trk><name>أثر Launcher 2026</name><trkseg>\n")
+        _trackPoints.value.forEach { p ->
+            sb.append("    <trkpt lat=\"").append(p.latitude).append("\" lon=\"").append(p.longitude).append("\" />\n")
+        }
+        sb.append("  </trkseg></trk>\n</gpx>\n")
+        return sb.toString()
+    }
+
+    fun importGpx(raw: String): Int {
+        val importedPoints = mutableListOf<OffroadTrackPoint>()
+        val importedPlaces = mutableListOf<SavedOffroadPlace>()
+        try {
+            val parser = Xml.newPullParser()
+            parser.setInput(StringReader(raw))
+            var event = parser.eventType
+            var pendingWptLat: Double? = null
+            var pendingWptLon: Double? = null
+            var pendingWptName: String? = null
+            while (event != XmlPullParser.END_DOCUMENT) {
+                if (event == XmlPullParser.START_TAG) {
+                    when (parser.name.lowercase()) {
+                        "trkpt", "rtept" -> {
+                            val lat = parser.getAttributeValue(null, "lat")?.toDoubleOrNull()
+                            val lon = parser.getAttributeValue(null, "lon")?.toDoubleOrNull()
+                            if (lat != null && lon != null) importedPoints += OffroadTrackPoint(lat, lon, System.currentTimeMillis() + importedPoints.size)
+                        }
+                        "wpt" -> {
+                            pendingWptLat = parser.getAttributeValue(null, "lat")?.toDoubleOrNull()
+                            pendingWptLon = parser.getAttributeValue(null, "lon")?.toDoubleOrNull()
+                            pendingWptName = null
+                        }
+                        "name" -> if (pendingWptLat != null) pendingWptName = parser.nextText()
+                    }
+                } else if (event == XmlPullParser.END_TAG && parser.name.equals("wpt", true)) {
+                    val lat = pendingWptLat
+                    val lon = pendingWptLon
+                    if (lat != null && lon != null) {
+                        importedPlaces += SavedOffroadPlace(
+                            id = UUID.randomUUID().toString(),
+                            name = pendingWptName?.trim().takeUnless { it.isNullOrBlank() } ?: "نقطة GPX",
+                            latitude = lat,
+                            longitude = lon,
+                            createdAt = System.currentTimeMillis()
+                        )
+                    }
+                    pendingWptLat = null
+                    pendingWptLon = null
+                    pendingWptName = null
+                }
+                event = parser.next()
+            }
+        } catch (_: Exception) {
+            return 0
+        }
+
+        if (importedPoints.isNotEmpty()) {
+            val merged = (_trackPoints.value + importedPoints).toMutableList()
+            totalTrackKm = calculateDistanceKm(merged)
+            trimRollingTrack(merged)
+            _trackPoints.value = merged
+            persistTrackAsync(merged)
+        }
+        if (importedPlaces.isNotEmpty()) {
+            _savedPlaces.value = _savedPlaces.value + importedPlaces
+            persistPlaces()
+        }
+        return importedPoints.size + importedPlaces.size
+    }
+
+    fun exportBackupJson(): String = JSONObject().apply {
+        put("version", 2)
+        put("createdAt", System.currentTimeMillis())
+        put("track", JSONArray().apply {
+            _trackPoints.value.forEach { p -> put(JSONObject().apply { put("lat", p.latitude); put("lon", p.longitude); put("time", p.timestamp) }) }
+        })
+        put("places", JSONArray().apply {
+            _savedPlaces.value.forEach { p -> put(JSONObject().apply {
+                put("id", p.id); put("name", p.name); put("lat", p.latitude); put("lon", p.longitude); put("time", p.createdAt)
+            }) }
+        })
+        _navigationTarget.value?.let { t -> put("navigation", JSONObject().apply {
+            put("id", t.id); put("name", t.name); put("lat", t.latitude); put("lon", t.longitude)
+        }) }
+        put("mapState", JSONObject().apply {
+            val s = _mapState.value
+            put("lat", s.latitude); put("lon", s.longitude); put("zoom", s.zoomLevel); put("follow", s.followGps); put("orientation", s.orientationMode.name)
+        })
+    }.toString(2)
+
+    fun importBackupJson(raw: String): Int {
+        return try {
+            val root = JSONObject(raw)
+            val importedTrack = mutableListOf<OffroadTrackPoint>()
+            root.optJSONArray("track")?.let { a ->
+                for (i in 0 until a.length()) {
+                    val o = a.getJSONObject(i)
+                    importedTrack += OffroadTrackPoint(o.getDouble("lat"), o.getDouble("lon"), o.optLong("time", System.currentTimeMillis()))
+                }
+            }
+            if (importedTrack.isNotEmpty()) {
+                val merged = (_trackPoints.value + importedTrack).distinctBy { "${it.latitude}:${it.longitude}:${it.timestamp}" }.sortedBy { it.timestamp }.toMutableList()
+                totalTrackKm = calculateDistanceKm(merged)
+                trimRollingTrack(merged)
+                _trackPoints.value = merged
+                persistTrackAsync(merged)
+            }
+
+            var placeCount = 0
+            root.optJSONArray("places")?.let { a ->
+                val merged = _savedPlaces.value.associateBy { it.id }.toMutableMap()
+                for (i in 0 until a.length()) {
+                    val o = a.getJSONObject(i)
+                    val p = SavedOffroadPlace(
+                        id = o.optString("id", UUID.randomUUID().toString()),
+                        name = o.optString("name", "موقع محفوظ"),
+                        latitude = o.getDouble("lat"),
+                        longitude = o.getDouble("lon"),
+                        createdAt = o.optLong("time", System.currentTimeMillis())
+                    )
+                    merged[p.id] = p
+                    placeCount++
+                }
+                _savedPlaces.value = merged.values.sortedBy { it.createdAt }
+                persistPlaces()
+            }
+
+            root.optJSONObject("navigation")?.let { o ->
+                navigateToCoordinates(o.optString("id", "backup_target"), o.optString("name", "هدف محفوظ"), o.getDouble("lat"), o.getDouble("lon"))
+            }
+            root.optJSONObject("mapState")?.let { o ->
+                val mode = try { MapOrientationMode.valueOf(o.optString("orientation", MapOrientationMode.NORTH_UP.name)) } catch (_: Exception) { MapOrientationMode.NORTH_UP }
+                saveMapState(OffroadMapState(o.optDouble("lat", 0.0), o.optDouble("lon", 0.0), o.optInt("zoom", 13), o.optBoolean("follow", true), mode))
+            }
+            importedTrack.size + placeCount
+        } catch (_: Exception) { 0 }
+    }
+
     fun release() {
-        persistTrackAsync(_trackPoints.value)
+        persistTrackNow(_trackPoints.value)
         scope.cancel()
     }
 
@@ -167,40 +351,37 @@ class OffroadTrackManager(private val context: Context) {
                 val o = array.getJSONObject(i)
                 points += OffroadTrackPoint(o.getDouble("lat"), o.getDouble("lon"), o.optLong("time", 0L))
             }
-            _trackPoints.value = points
             totalTrackKm = calculateDistanceKm(points)
-            if (totalTrackKm > MAX_TRACK_KM || points.size > MAX_TRACK_POINTS) {
-                val trimmed = points.toMutableList()
-                while ((totalTrackKm > MAX_TRACK_KM || trimmed.size > MAX_TRACK_POINTS) && trimmed.size > 2) {
-                    val a = trimmed[0]
-                    val b = trimmed[1]
-                    totalTrackKm = max(0.0, totalTrackKm - distanceMeters(a.latitude, a.longitude, b.latitude, b.longitude) / 1000.0)
-                    trimmed.removeAt(0)
-                }
-                _trackPoints.value = trimmed
-                persistTrackAsync(trimmed)
-            }
+            val trimmed = points.toMutableList()
+            trimRollingTrack(trimmed)
+            _trackPoints.value = trimmed
+            if (trimmed.size != points.size) persistTrackAsync(trimmed)
         } catch (_: Exception) {
             _trackPoints.value = emptyList()
             totalTrackKm = 0.0
         }
     }
 
+    private fun trimRollingTrack(points: MutableList<OffroadTrackPoint>) {
+        while ((totalTrackKm > MAX_TRACK_KM || points.size > MAX_TRACK_POINTS) && points.size > 2) {
+            val a = points[0]
+            val b = points[1]
+            totalTrackKm = max(0.0, totalTrackKm - distanceMeters(a.latitude, a.longitude, b.latitude, b.longitude) / 1000.0)
+            points.removeAt(0)
+        }
+    }
+
     private fun persistTrackAsync(points: List<OffroadTrackPoint>) {
         val snapshot = points.toList()
-        scope.launch {
-            try {
-                val array = JSONArray()
-                snapshot.forEach { point ->
-                    array.put(JSONObject().apply {
-                        put("lat", point.latitude)
-                        put("lon", point.longitude)
-                        put("time", point.timestamp)
-                    })
-                }
-                trackFile.writeText(array.toString())
-            } catch (_: Exception) { }
-        }
+        scope.launch { persistTrackNow(snapshot) }
+    }
+
+    private fun persistTrackNow(points: List<OffroadTrackPoint>) {
+        try {
+            val array = JSONArray()
+            points.forEach { point -> array.put(JSONObject().apply { put("lat", point.latitude); put("lon", point.longitude); put("time", point.timestamp) }) }
+            trackFile.writeText(array.toString())
+        } catch (_: Exception) { }
     }
 
     private fun loadPlaces() {
@@ -210,13 +391,7 @@ class OffroadTrackManager(private val context: Context) {
             val places = mutableListOf<SavedOffroadPlace>()
             for (i in 0 until array.length()) {
                 val o = array.getJSONObject(i)
-                places += SavedOffroadPlace(
-                    id = o.getString("id"),
-                    name = o.getString("name"),
-                    latitude = o.getDouble("lat"),
-                    longitude = o.getDouble("lon"),
-                    createdAt = o.optLong("time", 0L)
-                )
+                places += SavedOffroadPlace(o.getString("id"), o.getString("name"), o.getDouble("lat"), o.getDouble("lon"), o.optLong("time", 0L))
             }
             _savedPlaces.value = places
         } catch (_: Exception) { }
@@ -224,36 +399,33 @@ class OffroadTrackManager(private val context: Context) {
 
     private fun persistPlaces() {
         val array = JSONArray()
-        _savedPlaces.value.forEach { p ->
-            array.put(JSONObject().apply {
-                put("id", p.id)
-                put("name", p.name)
-                put("lat", p.latitude)
-                put("lon", p.longitude)
-                put("time", p.createdAt)
-            })
-        }
+        _savedPlaces.value.forEach { p -> array.put(JSONObject().apply {
+            put("id", p.id); put("name", p.name); put("lat", p.latitude); put("lon", p.longitude); put("time", p.createdAt)
+        }) }
         prefs.edit().putString("saved_places", array.toString()).apply()
     }
 
     private fun persistNavigationTarget(target: OffroadNavigationTarget) {
-        val o = JSONObject().apply {
-            put("id", target.id)
-            put("name", target.name)
-            put("lat", target.latitude)
-            put("lon", target.longitude)
-        }
-        prefs.edit().putString("navigation_target", o.toString()).apply()
+        prefs.edit().putString("navigation_target", JSONObject().apply {
+            put("id", target.id); put("name", target.name); put("lat", target.latitude); put("lon", target.longitude)
+        }.toString()).apply()
     }
 
     private fun restoreNavigationTarget() {
         try {
             val raw = prefs.getString("navigation_target", null) ?: return
             val o = JSONObject(raw)
-            _navigationTarget.value = OffroadNavigationTarget(
-                o.getString("id"), o.getString("name"), o.getDouble("lat"), o.getDouble("lon")
-            )
+            _navigationTarget.value = OffroadNavigationTarget(o.getString("id"), o.getString("name"), o.getDouble("lat"), o.getDouble("lon"))
         } catch (_: Exception) { }
+    }
+
+    private fun loadMapState(): OffroadMapState {
+        return try {
+            val raw = prefs.getString("map_state", null) ?: return OffroadMapState()
+            val o = JSONObject(raw)
+            val mode = try { MapOrientationMode.valueOf(o.optString("orientation", MapOrientationMode.NORTH_UP.name)) } catch (_: Exception) { MapOrientationMode.NORTH_UP }
+            OffroadMapState(o.optDouble("lat", 0.0), o.optDouble("lon", 0.0), o.optInt("zoom", 13), o.optBoolean("follow", true), mode)
+        } catch (_: Exception) { OffroadMapState() }
     }
 
     private fun calculateDistanceKm(points: List<OffroadTrackPoint>): Double {
@@ -271,6 +443,19 @@ class OffroadTrackManager(private val context: Context) {
         Location.distanceBetween(lat1, lon1, lat2, lon2, results)
         return results[0]
     }
+
+    private fun bearing(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
+        val results = FloatArray(2)
+        Location.distanceBetween(lat1, lon1, lat2, lon2, results)
+        return ((results[1] % 360f) + 360f) % 360f
+    }
+
+    private fun xmlEscape(value: String): String = value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&apos;")
 
     companion object {
         private const val MAX_TRACK_KM = 1000.0
