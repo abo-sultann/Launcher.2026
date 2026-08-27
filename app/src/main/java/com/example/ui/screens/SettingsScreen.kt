@@ -231,6 +231,7 @@ fun SettingsScreen(
                         }
 
                         SettingsCategory.SYSTEM -> {
+                            item { StableSystemPanel() }
                             item { ActionButton("فحص شامل للنظام", Icons.Default.HealthAndSafety) { viewModel.runDiagnostics(); onOpenDiagnostics() } }
                             item { ActionButton("إعادة تفعيل الوضع الآمن", Icons.Default.Security) { viewModel.resetSafeMode() } }
                         }
