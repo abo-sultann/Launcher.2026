@@ -105,12 +105,13 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
         settings.screenSaverTimeoutSeconds,
         interactionToken,
         isDesignMode,
-        isChildLockActive
+        isChildLockActive,
+        currentScreen
     ) {
         screenSaverVisible = false
-        if (settings.screenSaverEnabled && !isDesignMode && !isChildLockActive) {
+        if (settings.screenSaverEnabled && !isDesignMode && currentScreen != CarScreen.MAP) {
             delay(settings.screenSaverTimeoutSeconds.coerceIn(30, 1800) * 1000L)
-            screenSaverVisible = true
+            if (currentScreen != CarScreen.MAP) screenSaverVisible = true
         }
     }
 
@@ -225,7 +226,18 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
             }
         }
 
-        if (screenSaverVisible && !isChildLockActive) {
+        if (isChildLockActive) {
+            ChildLockOverlay(
+                holdSeconds = settings.childUnlockHoldSeconds,
+                onUnlock = {
+                    viewModel.deactivateChildLock()
+                    interactionToken = System.currentTimeMillis()
+                },
+                modifier = Modifier.zIndex(1000f)
+            )
+        }
+
+        if (screenSaverVisible && currentScreen != CarScreen.MAP) {
             ScreenSaverOverlay(
                 viewModel = viewModel,
                 settings = settings,
@@ -240,18 +252,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                     screenSaverVisible = false
                     interactionToken = System.currentTimeMillis()
                 },
-                modifier = Modifier.zIndex(900f)
-            )
-        }
-
-        if (isChildLockActive) {
-            ChildLockOverlay(
-                holdSeconds = settings.childUnlockHoldSeconds,
-                onUnlock = {
-                    viewModel.deactivateChildLock()
-                    interactionToken = System.currentTimeMillis()
-                },
-                modifier = Modifier.zIndex(1000f)
+                modifier = Modifier.zIndex(1100f)
             )
         }
     }
