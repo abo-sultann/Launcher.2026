@@ -330,7 +330,6 @@ private fun createMapsforgeView(
         mapView.model.mapViewPosition,
         AndroidGraphicFactory.INSTANCE
     ).apply {
-        // DEFAULT shows more settlement and POI labels than the motorcycle theme.
         setXmlRenderTheme(MapsforgeThemes.DEFAULT)
     }
     mapView.layerManager.layers.add(renderer)
@@ -338,7 +337,7 @@ private fun createMapsforgeView(
     val pinkPaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
         color = AndroidGraphicFactory.INSTANCE.createColor(255, 255, 70, 155)
         strokeWidth = 6f
-        style = Style.STROKE
+        setStyle(Style.STROKE)
     }
     val trackLayer = Polyline(pinkPaint, AndroidGraphicFactory.INSTANCE).apply {
         setPoints(trackPoints.map { LatLong(it.latitude, it.longitude) })
@@ -348,7 +347,7 @@ private fun createMapsforgeView(
     val navigationPaint = AndroidGraphicFactory.INSTANCE.createPaint().apply {
         color = AndroidGraphicFactory.INSTANCE.createColor(230, 255, 184, 0)
         strokeWidth = 4f
-        style = Style.STROKE
+        setStyle(Style.STROKE)
     }
     val navigationLayer = Polyline(navigationPaint, AndroidGraphicFactory.INSTANCE).apply {
         if (hasGpsFix && navigationTarget != null) {
