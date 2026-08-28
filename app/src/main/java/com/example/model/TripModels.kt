@@ -15,11 +15,29 @@ data class TripData(
     val startLongitude: Double = 0.0,
     val lastLatitude: Double = 0.0,
     val lastLongitude: Double = 0.0,
-    val validGpsSamples: Int = 0
+    val validGpsSamples: Int = 0,
+    val placesSavedCount: Int = 0
 ) {
     val totalTimeSec: Long
         get() = elapsedMovingTimeSec + elapsedStopTimeSec
 }
+
+data class SavedTrip(
+    val id: String,
+    val name: String,
+    val startTimeStamp: Long,
+    val endTimeStamp: Long,
+    val distanceKm: Float,
+    val movingTimeSec: Long,
+    val stopTimeSec: Long,
+    val maxSpeedKmH: Float,
+    val averageSpeedKmH: Float,
+    val startLatitude: Double,
+    val startLongitude: Double,
+    val endLatitude: Double,
+    val endLongitude: Double,
+    val placesSavedCount: Int = 0
+)
 
 data class GpsTelemetry(
     val latitude: Double = 0.0,
