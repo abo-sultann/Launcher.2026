@@ -10,7 +10,12 @@ data class TripData(
     val isRunning: Boolean = false,
     val isPaused: Boolean = false,
     val startTimeStamp: Long = 0L,
-    val lastUpdateTimestamp: Long = 0L
+    val lastUpdateTimestamp: Long = 0L,
+    val startLatitude: Double = 0.0,
+    val startLongitude: Double = 0.0,
+    val lastLatitude: Double = 0.0,
+    val lastLongitude: Double = 0.0,
+    val validGpsSamples: Int = 0
 ) {
     val totalTimeSec: Long
         get() = elapsedMovingTimeSec + elapsedStopTimeSec
@@ -25,5 +30,9 @@ data class GpsTelemetry(
     val accuracyMeters: Float = 0f,
     val hasGpsFix: Boolean = false,
     val satellitesCount: Int = 0,
-    val statusArabic: String = "في انتظار إشارة GPS..."
+    val statusArabic: String = "في انتظار إشارة GPS...",
+    val isSpeedReliable: Boolean = false,
+    val fixAgeMs: Long = Long.MAX_VALUE,
+    val providerName: String = "",
+    val rejectedReason: String = ""
 )
