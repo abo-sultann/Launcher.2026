@@ -22,6 +22,12 @@ data class TripData(
         get() = elapsedMovingTimeSec + elapsedStopTimeSec
 }
 
+data class TripRoutePoint(
+    val latitude: Double,
+    val longitude: Double,
+    val timestamp: Long
+)
+
 data class SavedTrip(
     val id: String,
     val name: String,
@@ -36,7 +42,8 @@ data class SavedTrip(
     val startLongitude: Double,
     val endLatitude: Double,
     val endLongitude: Double,
-    val placesSavedCount: Int = 0
+    val placesSavedCount: Int = 0,
+    val route: List<TripRoutePoint> = emptyList()
 )
 
 data class GpsTelemetry(
