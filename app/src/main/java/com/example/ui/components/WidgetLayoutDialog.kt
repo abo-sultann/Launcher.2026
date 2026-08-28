@@ -24,6 +24,7 @@ import com.example.ui.viewmodel.MainViewModel
 fun WidgetLayoutDialog(
     viewModel: MainViewModel,
     target: WidgetLayoutTarget,
+    onBackgroundFocus: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val savedNames by if (target == WidgetLayoutTarget.HOME) viewModel.savedHomeLayouts.collectAsState() else viewModel.savedScreenSaverLayouts.collectAsState()
@@ -40,14 +41,34 @@ fun WidgetLayoutDialog(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("ترتيب الودجات", color = CyanNeon, fontWeight = FontWeight.Black, fontSize = 20.sp)
-                        Text(if (target == WidgetLayoutTarget.HOME) "الرئيسية" else "شاشة التوقف", color = TextSecondary, fontSize = 11.sp)
+                        Text(if (target == WidgetLayoutTarget.HOME) "اترك الصورة هي العنصر الرئيسي" else "شاشة التوقف", color = TextSecondary, fontSize = 11.sp)
                     }
                     IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "إغلاق", tint = TextPrimary) }
                 }
 
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (target == WidgetLayoutTarget.HOME) {
+                        item {
+                            Surface(
+                                onClick = onBackgroundFocus,
+                                color = CarbonSurface,
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, AmberRacing.copy(alpha = .75f))
+                            ) {
+                                Row(Modifier.fillMaxWidth().padding(11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Icon(Icons.Default.Wallpaper, null, tint = AmberRacing, modifier = Modifier.size(28.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text("إبراز الخلفية", color = TextPrimary, fontWeight = FontWeight.Black)
+                                        Text("يوزع الودجات على الأطراف ويترك منتصف الشاشة واضحًا لصورة السيارة", color = TextSecondary, fontSize = 10.sp)
+                                    }
+                                    Icon(Icons.Default.ChevronLeft, null, tint = CyanNeon)
+                                }
+                            }
+                        }
+                    }
+
                     item {
-                        Text("قوالب جاهزة", color = AmberRacing, fontWeight = FontWeight.Bold)
+                        Text("ترتيبات عامة", color = AmberRacing, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(6.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             WidgetLayoutPreset.values().toList().chunked(3).forEach { row ->
@@ -74,7 +95,7 @@ fun WidgetLayoutDialog(
                     item {
                         HorizontalDivider(color = CarbonCardBorder)
                         Spacer(Modifier.height(8.dp))
-                        Text("أدوات المحاذاة", color = AmberRacing, fontWeight = FontWeight.Bold)
+                        Text("المحاذاة الذكية", color = AmberRacing, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(6.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             LayoutToolButton("توسيط أفقي", Icons.Default.AlignHorizontalCenter, Modifier.weight(1f)) {
@@ -93,7 +114,7 @@ fun WidgetLayoutDialog(
                                 if (target == WidgetLayoutTarget.HOME) viewModel.equalizeHomeWidgetSizes() else viewModel.equalizeScreenSaverSizes()
                             }
                         }
-                        Text("السحب اليدوي يبقى متاحًا، ومعه Snap تلقائي للمركز والحواف.", color = TextMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+                        Text("السحب الحر يبقى متاحًا مع تثبيت تلقائي قرب الحواف والمنتصف.", color = TextMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
                     }
 
                     item {
