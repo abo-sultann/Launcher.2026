@@ -1,8 +1,5 @@
 package com.example.ui.widgets
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -10,23 +7,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.GpsTelemetry
 import com.example.model.MapItem
+import com.example.model.OffroadNavigationTarget
 import com.example.model.TripData
 import com.example.model.WidgetStyle
 import com.example.ui.theme.*
+import com.example.util.bearingToArabicDirection
+import java.util.Locale
 
 @Composable
 fun MapWidget(
@@ -34,181 +30,113 @@ fun MapWidget(
     gpsTelemetry: GpsTelemetry,
     tripData: TripData,
     activeMap: MapItem?,
+    navigationTarget: OffroadNavigationTarget? = null,
+    targetDistanceMeters: Float? = null,
+    targetBearing: Float? = null,
     onOpenFullMap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var zoomLevel by remember { mutableStateOf(1f) }
+    val hasTarget = navigationTarget != null && targetDistanceMeters != null
+    val direction = if (hasTarget && targetBearing != null) bearingToArabicDirection(targetBearing) else if (gpsTelemetry.hasGpsFix) bearingToArabicDirection(gpsTelemetry.bearingDegrees) else "--"
+    val distance = targetDistanceMeters?.let(::formatWidgetDistance)
+    val title = navigationTarget?.name ?: activeMap?.name ?: "الخريطة"
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(12.dp))
-            .background(CarbonSurface)
-            .clickable { onOpenFullMap() }
+    BoxWithConstraints(
+        modifier = modifier.fillMaxSize().clickable(onClick = onOpenFullMap).padding(6.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // Offline Vector Map Canvas (Roads, grid, GPS marker)
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val width = size.width
-            val height = size.height
+        val tiny = maxWidth < 155.dp || maxHeight < 100.dp
+        val compact = maxWidth < 230.dp || maxHeight < 145.dp
 
-            // Background Grid (simulating navigation tiles)
-            val gridStep = 40f * zoomLevel
-            var x = 0f
-            while (x < width) {
-                drawLine(
-                    color = Color(0xFF1E2838),
-                    start = Offset(x, 0f),
-                    end = Offset(x, height),
-                    strokeWidth = 1f
-                )
-                x += gridStep
-            }
-            var y = 0f
-            while (y < height) {
-                drawLine(
-                    color = Color(0xFF1E2838),
-                    start = Offset(0f, y),
-                    end = Offset(width, y),
-                    strokeWidth = 1f
-                )
-                y += gridStep
-            }
-
-            // Stylized Offline Highway & Primary Roads
-            val highwayPath = Path().apply {
-                moveTo(width * 0.1f, height * 0.9f)
-                cubicTo(
-                    width * 0.3f, height * 0.7f,
-                    width * 0.6f, height * 0.3f,
-                    width * 0.9f, height * 0.1f
-                )
-            }
-            drawPath(
-                path = highwayPath,
-                color = Color(0xFF334A68),
-                style = Stroke(width = 10f * zoomLevel)
-            )
-            drawPath(
-                path = highwayPath,
-                color = CyanNeon.copy(alpha = 0.6f),
-                style = Stroke(width = 4f * zoomLevel)
-            )
-
-            // Secondary Ring Road
-            drawCircle(
-                color = Color(0xFF26354A),
-                radius = (height * 0.35f) * zoomLevel,
-                center = Offset(width * 0.5f, height * 0.5f),
-                style = Stroke(width = 5f)
-            )
-
-            // Live GPS Pinpoint Marker
-            val markerCenter = Offset(width * 0.5f, height * 0.5f)
-            drawCircle(
-                color = CyanNeon.copy(alpha = 0.25f),
-                radius = 24f,
-                center = markerCenter
-            )
-            drawCircle(
-                color = CyanNeon,
-                radius = 8f,
-                center = markerCenter
-            )
-        }
-
-        // Overlay based on Widget Style
         when (style) {
             WidgetStyle.MAP_MINI -> {
-                Surface(
-                    color = CarbonDark.copy(alpha = 0.8f),
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp)
-                ) {
-                    Text(
-                        text = "خريطة مصغرة",
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = CyanNeon
-                    )
-                }
-            }
-
-            WidgetStyle.MAP_WITH_SPEED -> {
-                Surface(
-                    color = CarbonDark.copy(alpha = 0.85f),
-                    shape = RoundedCornerShape(8.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(Icons.Default.Speed, contentDescription = null, tint = CyanNeon, modifier = Modifier.size(16.dp))
-                        Text(
-                            text = "${gpsTelemetry.speedKmH.toInt()} كم/س",
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                            color = TextPrimary
-                        )
+                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(color = CyanNeon.copy(alpha = .16f), shape = CircleShape, modifier = Modifier.size(if (tiny) 40.dp else 50.dp)) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Navigation,
+                                null,
+                                tint = CyanNeon,
+                                modifier = Modifier.size(if (tiny) 24.dp else 30.dp).rotate(if (hasTarget) targetBearing ?: 0f else gpsTelemetry.bearingDegrees)
+                            )
+                        }
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                        Text(if (hasTarget) distance ?: "--" else direction, color = TextPrimary, fontSize = if (tiny) 16.sp else 22.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                        Text(if (hasTarget) direction else if (gpsTelemetry.hasGpsFix) "اضغط لفتح الخريطة" else "بانتظار GPS", color = if (hasTarget) CyanNeon else TextSecondary, fontSize = if (tiny) 8.sp else 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
 
+            WidgetStyle.MAP_WITH_SPEED -> {
+                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(if (gpsTelemetry.hasGpsFix && gpsTelemetry.isSpeedReliable) gpsTelemetry.speedKmH.toInt().toString() else "--", color = CyanNeon, fontSize = if (tiny) 25.sp else 34.sp, fontWeight = FontWeight.Black)
+                        Text("كم/س", color = TextSecondary, fontSize = 8.sp)
+                    }
+                    VerticalDivider(Modifier.height(if (tiny) 36.dp else 50.dp), color = CarbonCardBorder)
+                    NavigationSummary(title, distance, direction, hasTarget, tiny)
+                }
+            }
+
             WidgetStyle.MAP_WITH_GPS -> {
-                Surface(
-                    color = CarbonDark.copy(alpha = 0.85f),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
-                ) {
-                    Text(
-                        text = if (gpsTelemetry.hasGpsFix) "GPS متصل • ${gpsTelemetry.satellitesCount} أقمار" else "خريطة بدون اتصال",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (gpsTelemetry.hasGpsFix) EmeraldSafe else TextSecondary
-                    )
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(if (gpsTelemetry.hasGpsFix) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed, null, tint = if (gpsTelemetry.hasGpsFix) EmeraldSafe else AmberRacing, modifier = Modifier.size(20.dp))
+                        Text(if (gpsTelemetry.hasGpsFix) "GPS ±${gpsTelemetry.accuracyMeters.toInt()}م" else "بانتظار GPS", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = if (tiny) 9.sp else 11.sp)
+                    }
+                    if (!tiny && gpsTelemetry.hasGpsFix) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(String.format(Locale.US, "%.5f , %.5f", gpsTelemetry.latitude, gpsTelemetry.longitude), color = TextSecondary, fontSize = 9.sp, maxLines = 1)
+                    }
+                    if (hasTarget) Text("${distance ?: "--"} • $direction", color = CyanNeon, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
             WidgetStyle.MAP_WITH_TRIP -> {
-                Surface(
-                    color = CarbonDark.copy(alpha = 0.85f),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)
-                ) {
-                    Text(
-                        text = "المسافة: ${String.format(java.util.Locale.US, "%.1f", tripData.distanceKm)} كم",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = AmberRacing
-                    )
+                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround) {
+                    NavigationSummary(title, distance, direction, hasTarget, tiny)
+                    if (!tiny) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Route, null, tint = AmberRacing, modifier = Modifier.size(19.dp))
+                            Text(String.format(Locale.US, "%.1f كم", tripData.distanceKm), color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            Text("رحلتي", color = TextSecondary, fontSize = 8.sp)
+                        }
+                    }
                 }
             }
 
-            else -> {
-                // Standard medium/large HUD overlay
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                        .background(CarbonDark.copy(alpha = 0.75f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = activeMap?.name ?: "الخريطة الملاحية Offline",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = TextPrimary,
-                        maxLines = 1
-                    )
-                    Text(
-                        text = "اضغط للتكبير والتحكم",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = CyanNeon
-                    )
+            WidgetStyle.MAP_LARGE, WidgetStyle.MAP_MEDIUM -> {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Map, null, tint = CyanNeon, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(title, color = TextPrimary, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("فتح", color = CyanNeon, fontSize = 9.sp)
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround) {
+                        Icon(Icons.Default.Navigation, null, tint = AmberRacing, modifier = Modifier.size(if (compact) 27.dp else 36.dp).rotate(if (hasTarget) targetBearing ?: 0f else gpsTelemetry.bearingDegrees))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(if (hasTarget) distance ?: "--" else direction, color = TextPrimary, fontSize = if (compact) 19.sp else 25.sp, fontWeight = FontWeight.Black)
+                            Text(if (hasTarget) direction else if (gpsTelemetry.hasGpsFix) "اتجاه السيارة" else "لا توجد إشارة", color = TextSecondary, fontSize = 9.sp)
+                        }
+                    }
+                    if (!tiny) Text(if (activeMap != null) "الخريطة: ${activeMap.name}" else "أضف خريطة Mapsforge للاستخدام دون إنترنت", color = TextMuted, fontSize = 8.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+
+            else -> NavigationSummary(title, distance, direction, hasTarget, tiny)
         }
     }
 }
+
+@Composable
+private fun NavigationSummary(title: String, distance: String?, direction: String, hasTarget: Boolean, tiny: Boolean) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(if (hasTarget) distance ?: "--" else direction, color = CyanNeon, fontSize = if (tiny) 17.sp else 22.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(if (hasTarget) title else "الخريطة", color = TextPrimary, fontSize = if (tiny) 8.sp else 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (hasTarget) Text(direction, color = TextSecondary, fontSize = 8.sp, maxLines = 1)
+    }
+}
+
+private fun formatWidgetDistance(meters: Float): String = if (meters < 1000f) "${meters.toInt()} م" else String.format(Locale.US, "%.1f كم", meters / 1000f)
