@@ -30,7 +30,7 @@ class OffroadTrackingService : Service(), LocationListener {
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("تسجيل مسار البر جاهز"))
+        startForeground(NOTIFICATION_ID, buildNotification("تسجيل مسار البر بالخلفية"))
         startTracking()
     }
 
@@ -52,22 +52,29 @@ class OffroadTrackingService : Service(), LocationListener {
 
     @Suppress("MissingPermission")
     private fun startTracking() {
-        if (!hasLocationPermission()) return
+        if (!hasLocationPermission()) {
+            stopSelf()
+            return
+        }
         try {
-            val lm = getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
+            val lm = getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: run { stopSelf(); return }
             locationManager = lm
             if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1500L, 2.5f, this)
+                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1800L, 3.0f, this)
+                listening = true
+            } else {
+                stopSelf()
             }
-            listening = true
         } catch (_: Exception) {
             listening = false
+            stopSelf()
         }
     }
 
     private fun stopTracking() {
         try { if (listening) locationManager?.removeUpdates(this) } catch (_: Exception) { }
         listening = false
+        previousLocation = null
     }
 
     override fun onLocationChanged(location: Location) {
@@ -96,24 +103,21 @@ class OffroadTrackingService : Service(), LocationListener {
     @Deprecated("Deprecated in Java")
     override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) { }
     override fun onProviderEnabled(provider: String) { if (!listening) startTracking() }
-    override fun onProviderDisabled(provider: String) { }
+    override fun onProviderDisabled(provider: String) { stopSelf() }
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "تسجيل مسار البر", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "يحافظ على تسجيل أثر المسار عند خروج Launcher أو إطفاء الشاشة"
+                description = "يحافظ على تسجيل أثر المسار عندما يكون Launcher في الخلفية"
                 setShowBadge(false)
             })
         }
     }
 
     private fun buildNotification(text: String): Notification {
-        val openIntent = Intent(this, MainActivity::class.java)
         val pending = PendingIntent.getActivity(
-            this,
-            0,
-            openIntent,
+            this, 0, Intent(this, MainActivity::class.java),
             if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
@@ -132,10 +136,18 @@ class OffroadTrackingService : Service(), LocationListener {
         private const val NOTIFICATION_ID = 20261
 
         fun start(context: Context) {
-            val intent = Intent(context, OffroadTrackingService::class.java)
+            val appContext = context.applicationContext
+            val hasPermission = ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (!hasPermission) return
+            val intent = Intent(appContext, OffroadTrackingService::class.java)
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) appContext.startForegroundService(intent) else appContext.startService(intent)
             } catch (_: Exception) { }
+        }
+
+        fun stop(context: Context) {
+            try { context.applicationContext.stopService(Intent(context.applicationContext, OffroadTrackingService::class.java)) } catch (_: Exception) { }
         }
     }
 }
