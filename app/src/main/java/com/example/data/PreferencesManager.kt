@@ -39,6 +39,7 @@ class PreferencesManager(context: Context) {
             .mapNotNull { name -> try { WidgetType.valueOf(name) } catch (_: Exception) { null } }
             .toSet()
             .ifEmpty { setOf(WidgetType.CLOCK) }
+        val is24 = prefs.getBoolean("clock_24h", true)
 
         LauncherSettings(
             safeArea = getSafeArea(),
@@ -53,8 +54,8 @@ class PreferencesManager(context: Context) {
             widgetHeightDp = prefs.getInt("widget_height", 138),
             gridHorizontalGapDp = prefs.getInt("grid_h_gap", 8),
             gridVerticalGapDp = prefs.getInt("grid_v_gap", 8),
-            is24HourClock = prefs.getBoolean("clock_24h", true),
-            is24HourFormat = prefs.getBoolean("clock_24h", true),
+            is24HourClock = is24,
+            is24HourFormat = is24,
             showSeconds = prefs.getBoolean("clock_seconds", false),
             speedUnit = prefs.getString("speed_unit", "كم/س") ?: "كم/س",
             autoStartEnabled = prefs.getBoolean("auto_start", true),
@@ -66,7 +67,7 @@ class PreferencesManager(context: Context) {
             highContrastMode = prefs.getBoolean("high_contrast", false),
             keepScreenOn = prefs.getBoolean("keep_screen_on", true),
             autoLogTrips = prefs.getBoolean("auto_log_trips", true),
-            childUnlockHoldSeconds = prefs.getInt("child_unlock_hold", 3).coerceIn(2, 6),
+            childUnlockHoldSeconds = prefs.getInt("child_unlock_hold", 4).coerceIn(2, 6),
             screenSaverEnabled = prefs.getBoolean("screensaver_enabled", false),
             screenSaverTimeoutSeconds = prefs.getInt("screensaver_timeout", 120).coerceIn(30, 1800),
             screenSaverUseWallpaper = prefs.getBoolean("screensaver_wallpaper", true),
@@ -202,9 +203,90 @@ class PreferencesManager(context: Context) {
     }
 
     fun getTripData(): TripData = try {
-        TripData(0f, prefs.getFloat("trip_max_speed", 0f), prefs.getFloat("trip_avg_speed", 0f), prefs.getFloat("trip_distance", 0f), prefs.getLong("trip_moving_time", 0L), prefs.getLong("trip_stop_time", 0L), false, false)
+        TripData(
+            currentSpeedKmH = 0f,
+            maxSpeedKmH = prefs.getFloat("trip_max_speed", 0f),
+            averageSpeedKmH = prefs.getFloat("trip_avg_speed", 0f),
+            distanceKm = prefs.getFloat("trip_distance", 0f),
+            elapsedMovingTimeSec = prefs.getLong("trip_moving_time", 0L),
+            elapsedStopTimeSec = prefs.getLong("trip_stop_time", 0L),
+            isRunning = prefs.getBoolean("trip_running", false),
+            isPaused = prefs.getBoolean("trip_paused", false),
+            startTimeStamp = prefs.getLong("trip_start_time", 0L),
+            lastUpdateTimestamp = prefs.getLong("trip_last_update", 0L),
+            startLatitude = java.lang.Double.longBitsToDouble(prefs.getLong("trip_start_lat", 0L)),
+            startLongitude = java.lang.Double.longBitsToDouble(prefs.getLong("trip_start_lon", 0L)),
+            lastLatitude = java.lang.Double.longBitsToDouble(prefs.getLong("trip_last_lat", 0L)),
+            lastLongitude = java.lang.Double.longBitsToDouble(prefs.getLong("trip_last_lon", 0L)),
+            validGpsSamples = prefs.getInt("trip_valid_samples", 0),
+            placesSavedCount = prefs.getInt("trip_places_saved", 0)
+        )
     } catch (_: Exception) { TripData() }
-    fun saveTripData(data: TripData) { prefs.edit().putFloat("trip_max_speed", data.maxSpeedKmH).putFloat("trip_avg_speed", data.averageSpeedKmH).putFloat("trip_distance", data.distanceKm).putLong("trip_moving_time", data.elapsedMovingTimeSec).putLong("trip_stop_time", data.elapsedStopTimeSec).apply() }
+
+    fun saveTripData(data: TripData) {
+        prefs.edit()
+            .putFloat("trip_max_speed", data.maxSpeedKmH)
+            .putFloat("trip_avg_speed", data.averageSpeedKmH)
+            .putFloat("trip_distance", data.distanceKm)
+            .putLong("trip_moving_time", data.elapsedMovingTimeSec)
+            .putLong("trip_stop_time", data.elapsedStopTimeSec)
+            .putBoolean("trip_running", data.isRunning)
+            .putBoolean("trip_paused", data.isPaused)
+            .putLong("trip_start_time", data.startTimeStamp)
+            .putLong("trip_last_update", data.lastUpdateTimestamp)
+            .putLong("trip_start_lat", java.lang.Double.doubleToRawLongBits(data.startLatitude))
+            .putLong("trip_start_lon", java.lang.Double.doubleToRawLongBits(data.startLongitude))
+            .putLong("trip_last_lat", java.lang.Double.doubleToRawLongBits(data.lastLatitude))
+            .putLong("trip_last_lon", java.lang.Double.doubleToRawLongBits(data.lastLongitude))
+            .putInt("trip_valid_samples", data.validGpsSamples)
+            .putInt("trip_places_saved", data.placesSavedCount)
+            .apply()
+    }
+
+    fun getSavedTrips(): List<SavedTrip> {
+        val raw = prefs.getString("saved_trips_json", "[]") ?: "[]"
+        return try {
+            val array = JSONArray(raw)
+            List(array.length()) { i ->
+                val o = array.getJSONObject(i)
+                SavedTrip(
+                    id = o.getString("id"),
+                    name = o.optString("name", "رحلة محفوظة"),
+                    startTimeStamp = o.optLong("start", 0L),
+                    endTimeStamp = o.optLong("end", 0L),
+                    distanceKm = o.optDouble("distance", 0.0).toFloat(),
+                    movingTimeSec = o.optLong("moving", 0L),
+                    stopTimeSec = o.optLong("stopped", 0L),
+                    maxSpeedKmH = o.optDouble("max", 0.0).toFloat(),
+                    averageSpeedKmH = o.optDouble("avg", 0.0).toFloat(),
+                    startLatitude = o.optDouble("startLat", 0.0),
+                    startLongitude = o.optDouble("startLon", 0.0),
+                    endLatitude = o.optDouble("endLat", 0.0),
+                    endLongitude = o.optDouble("endLon", 0.0),
+                    placesSavedCount = o.optInt("places", 0)
+                )
+            }.sortedByDescending { it.startTimeStamp }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading saved trips", e)
+            emptyList()
+        }
+    }
+
+    fun saveSavedTrips(trips: List<SavedTrip>) {
+        try {
+            val array = JSONArray()
+            trips.take(100).forEach { trip ->
+                array.put(JSONObject().apply {
+                    put("id", trip.id); put("name", trip.name); put("start", trip.startTimeStamp); put("end", trip.endTimeStamp)
+                    put("distance", trip.distanceKm.toDouble()); put("moving", trip.movingTimeSec); put("stopped", trip.stopTimeSec)
+                    put("max", trip.maxSpeedKmH.toDouble()); put("avg", trip.averageSpeedKmH.toDouble())
+                    put("startLat", trip.startLatitude); put("startLon", trip.startLongitude); put("endLat", trip.endLatitude); put("endLon", trip.endLongitude)
+                    put("places", trip.placesSavedCount)
+                })
+            }
+            prefs.edit().putString("saved_trips_json", array.toString()).apply()
+        } catch (e: Exception) { Log.e(TAG, "Error saving trip history", e) }
+    }
 
     fun getSavedMaps(): List<MapItem> {
         val raw = prefs.getString("maps_json", null) ?: return emptyList()
