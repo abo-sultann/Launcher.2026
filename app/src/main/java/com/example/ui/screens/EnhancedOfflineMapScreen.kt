@@ -188,7 +188,6 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             }
         }
 
-        // Four primary map services remain visible at all times.
         Row(
             modifier = Modifier.align(Alignment.TopStart).padding(top = 56.dp, start = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp)
@@ -350,10 +349,7 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
                 },
                 onRename = { p, name -> if (p.legacy) viewModel.renameSavedOffroadPlace(p.id, name) else mapStore.renameExtraPlace(p.id, name) },
                 onDelete = { p -> if (p.legacy) viewModel.deleteSavedOffroadPlace(p.id) else mapStore.deleteExtraPlace(p.id) },
-                onKind = { p, kind -> if (p.legacy) mapStore.setPlaceKind(p.id, kind) else {
-                    mapStore.deleteExtraPlace(p.id)
-                    mapStore.saveExtraPlace(p.name, p.latitude, p.longitude, kind)
-                } },
+                onKind = { p, kind -> if (p.legacy) mapStore.setPlaceKind(p.id, kind) else mapStore.updateExtraPlaceKind(p.id, kind) },
                 onClose = { showPlaces = false }
             )
         }
@@ -660,7 +656,7 @@ private fun MapToolToggle(icon: androidx.compose.ui.graphics.vector.ImageVector,
         Row(Modifier.fillMaxWidth().padding(9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(icon, null, tint = CyanNeon)
             Column(Modifier.weight(1f)) { Text(title, color = TextPrimary, fontWeight = FontWeight.Bold); Text(subtitle, color = TextSecondary, fontSize = 9.sp) }
-            Switch(checked = checked, onCheckedChange = { onToggle() })
+            Switch(checked = checked, onCheckedChange = null)
         }
     }
 }
@@ -882,6 +878,7 @@ private fun EnhancedUnsupportedMapState(onAdd: () -> Unit) {
 
 private fun placeKindIcon(kind: OffroadPlaceKind) = when (kind) {
     OffroadPlaceKind.CAMP -> Icons.Default.Home
+    OffroadPlaceKind.BIRD -> Icons.Default.FlutterDash
     OffroadPlaceKind.CAR -> Icons.Default.DirectionsCar
     OffroadPlaceKind.WATER -> Icons.Default.WaterDrop
     OffroadPlaceKind.WELL -> Icons.Default.Opacity
