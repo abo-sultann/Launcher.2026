@@ -10,6 +10,7 @@ import java.util.UUID
 
 enum class OffroadPlaceKind(val arabicName: String) {
     CAMP("مخيم"),
+    BIRD("طير / سمان"),
     CAR("السيارة"),
     WATER("ماء"),
     WELL("بئر"),
@@ -35,9 +36,6 @@ data class EnhancedMapUiPreferences(
     val detailedTheme: Boolean = true
 )
 
-/** Small persistent store dedicated to presentation options that must not alter the
- * existing rolling-track/navigation storage. This keeps backward compatibility with
- * previously saved places and routes. */
 class EnhancedMapStore(context: Context) {
     private val prefs = context.getSharedPreferences("enhanced_offroad_map_2026", Context.MODE_PRIVATE)
 
