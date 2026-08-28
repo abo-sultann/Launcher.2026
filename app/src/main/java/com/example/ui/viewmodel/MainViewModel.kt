@@ -72,6 +72,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val playbackState: StateFlow<MusicPlaybackState> = musicPlayerService.playbackState
     val gpsTelemetry: StateFlow<GpsTelemetry> = gpsTelemetryManager.telemetry
     val tripData: StateFlow<TripData> = tripComputer.tripData
+    val tripHistory: StateFlow<List<SavedTrip>> = tripComputer.history
     val mapsList: StateFlow<List<MapItem>> = offlineMapEngine.mapsList
     val activeMap: StateFlow<MapItem?> = offlineMapEngine.activeMap
     val mapError: StateFlow<String?> = offlineMapEngine.mapError
@@ -90,12 +91,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.Main) { gpsTelemetryManager.startGpsUpdates() }
         viewModelScope.launch {
             gpsTelemetry.collect { telemetry ->
-                val speed = if (telemetry.hasGpsFix) telemetry.speedKmH else 0f
-                tripComputer.updateSpeed(speed)
-                if (_settings.value.autoLogTrips && telemetry.hasGpsFix && speed >= 3f && !tripComputer.tripData.value.isRunning) {
-                    tripComputer.startTrip()
+                tripComputer.updateTelemetry(telemetry, _settings.value.autoLogTrips)
+                if (telemetry.hasGpsFix && telemetry.accuracyMeters <= 45f && telemetry.fixAgeMs <= 8_000L) {
+                    offroadTrackManager.record(telemetry)
                 }
-                if (telemetry.hasGpsFix) offroadTrackManager.record(telemetry)
             }
         }
     }
@@ -610,7 +609,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startTrip() = tripComputer.startTrip()
     fun pauseTrip() = tripComputer.pauseTrip()
+    fun finishTrip(name: String? = null) = tripComputer.finishTrip(name)
     fun resetTrip() = tripComputer.resetTrip()
+    fun renameSavedTrip(id: String, name: String) = tripComputer.renameSavedTrip(id, name)
+    fun deleteSavedTrip(id: String) = tripComputer.deleteSavedTrip(id)
+    fun noteTripSavedPlace() = tripComputer.noteSavedPlace()
 
     fun importMapFile(file: File, name: String? = null) = offlineMapEngine.importMapFile(file, name)
     fun importMapUri(uri: Uri) {
@@ -629,7 +632,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun renameMap(mapId: String, newName: String) = offlineMapEngine.renameMap(mapId, newName)
     fun deleteMap(mapId: String) { offlineMapEngine.deleteMap(mapId); offlineMapSearchEngine.clear() }
 
-    fun saveCurrentOffroadPlace(name: String? = null) = offroadTrackManager.saveCurrentPlace(gpsTelemetry.value, name)
+    fun saveCurrentOffroadPlace(name: String? = null): SavedOffroadPlace? {
+        val saved = offroadTrackManager.saveCurrentPlace(gpsTelemetry.value, name)
+        if (saved != null) tripComputer.noteSavedPlace()
+        return saved
+    }
     fun renameSavedOffroadPlace(id: String, name: String) = offroadTrackManager.renamePlace(id, name)
     fun deleteSavedOffroadPlace(id: String) = offroadTrackManager.deletePlace(id)
     fun navigateToSavedOffroadPlace(id: String) { savedOffroadPlaces.value.firstOrNull { it.id == id }?.let(offroadTrackManager::navigateTo) }
