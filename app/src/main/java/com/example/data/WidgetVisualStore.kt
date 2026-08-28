@@ -5,24 +5,64 @@ import com.example.model.WidgetItem
 import com.example.model.WidgetSurfaceStyle
 
 /**
- * V2 appearance settings live separately from the legacy widget JSON so upgrades do not
- * invalidate an existing home layout. Geometry/style continue to use PreferencesManager.
+ * Widget V2 keeps visual appearance and free-form home geometry separate from the legacy
+ * widget JSON. This lets very small transparent widgets coexist with older saved layouts.
  */
 class WidgetVisualStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("launcher_widget_v2_visuals", Context.MODE_PRIVATE)
+    private val previews = mutableMapOf<String, FloatArray>()
 
     fun decorate(item: WidgetItem): WidgetItem {
         val surface = try {
             prefs.getString("surface_${item.id}", null)?.let(WidgetSurfaceStyle::valueOf)
         } catch (_: Exception) { null } ?: WidgetItem.defaultSurfaceFor(item.type)
         val border = prefs.getBoolean("border_${item.id}", false)
-        return item.copy(surfaceStyle = surface, showBorder = border)
+        val preview = previews[item.id]
+        val hasStoredGeometry = prefs.contains("x_${item.id}") && prefs.contains("y_${item.id}") && prefs.contains("w_${item.id}") && prefs.contains("h_${item.id}")
+        val geometry = preview ?: if (hasStoredGeometry) {
+            floatArrayOf(
+                prefs.getFloat("x_${item.id}", item.xFraction),
+                prefs.getFloat("y_${item.id}", item.yFraction),
+                prefs.getFloat("w_${item.id}", item.widthFraction),
+                prefs.getFloat("h_${item.id}", item.heightFraction)
+            )
+        } else null
+        return if (geometry == null) {
+            item.copy(surfaceStyle = surface, showBorder = border)
+        } else {
+            item.copy(
+                xFraction = geometry[0],
+                yFraction = geometry[1],
+                widthFraction = geometry[2],
+                heightFraction = geometry[3],
+                surfaceStyle = surface,
+                showBorder = border
+            )
+        }
     }
 
-    fun saveAppearance(item: WidgetItem) {
+    fun previewGeometry(widgetId: String, x: Float, y: Float, width: Float, height: Float) {
+        previews[widgetId] = normalize(x, y, width, height)
+    }
+
+    fun commitGeometry(widgetId: String) {
+        val g = previews.remove(widgetId) ?: return
         prefs.edit()
-            .putString("surface_${item.id}", item.surfaceStyle.name)
-            .putBoolean("border_${item.id}", item.showBorder)
+            .putFloat("x_$widgetId", g[0])
+            .putFloat("y_$widgetId", g[1])
+            .putFloat("w_$widgetId", g[2])
+            .putFloat("h_$widgetId", g[3])
+            .apply()
+    }
+
+    fun setGeometry(widgetId: String, x: Float, y: Float, width: Float, height: Float) {
+        val g = normalize(x, y, width, height)
+        previews.remove(widgetId)
+        prefs.edit()
+            .putFloat("x_$widgetId", g[0])
+            .putFloat("y_$widgetId", g[1])
+            .putFloat("w_$widgetId", g[2])
+            .putFloat("h_$widgetId", g[3])
             .apply()
     }
 
@@ -35,8 +75,32 @@ class WidgetVisualStore(context: Context) {
     }
 
     fun remove(widgetId: String) {
-        prefs.edit().remove("surface_$widgetId").remove("border_$widgetId").apply()
+        previews.remove(widgetId)
+        prefs.edit()
+            .remove("surface_$widgetId")
+            .remove("border_$widgetId")
+            .remove("x_$widgetId")
+            .remove("y_$widgetId")
+            .remove("w_$widgetId")
+            .remove("h_$widgetId")
+            .apply()
     }
 
-    fun reset() = prefs.edit().clear().apply()
+    fun reset() {
+        previews.clear()
+        prefs.edit().clear().apply()
+    }
+
+    private fun normalize(x: Float, y: Float, width: Float, height: Float): FloatArray {
+        val w = width.coerceIn(MIN_WIDTH, 1f)
+        val h = height.coerceIn(MIN_HEIGHT, 1f)
+        val nx = x.coerceIn(0f, (1f - w).coerceAtLeast(0f))
+        val ny = y.coerceIn(0f, (1f - h).coerceAtLeast(0f))
+        return floatArrayOf(nx, ny, w, h)
+    }
+
+    companion object {
+        private const val MIN_WIDTH = .07f
+        private const val MIN_HEIGHT = .07f
+    }
 }
