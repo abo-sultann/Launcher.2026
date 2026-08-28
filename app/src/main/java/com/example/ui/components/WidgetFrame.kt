@@ -2,29 +2,40 @@ package com.example.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import com.example.data.WidgetVisualStore
 import com.example.model.WidgetItem
 import com.example.model.WidgetSizePreset
 import com.example.model.WidgetSurfaceStyle
+import com.example.model.WidgetType
 import com.example.ui.theme.*
 
+/**
+ * Widget V3 keeps the widget itself clean. Editing controls live in a fixed popup dock,
+ * so even a tiny clock can be selected, moved, recolored or deleted without covering it.
+ */
 @Composable
 fun WidgetFrame(
     widgetItem: WidgetItem,
@@ -46,15 +57,21 @@ fun WidgetFrame(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val context = LocalContext.current
+    val visualStore = remember { WidgetVisualStore(context.applicationContext) }
+    var foregroundVersion by remember { mutableIntStateOf(0) }
+    val foregroundArgb = remember(widgetItem.id, foregroundVersion) { visualStore.getForegroundColorArgb(widgetItem.id) }
+    val foregroundColor = foregroundArgb?.let { Color(it) }
+
+    val shape = RoundedCornerShape(14.dp)
     val normalBackground = when (widgetItem.surfaceStyle) {
         WidgetSurfaceStyle.TRANSPARENT -> Color.Transparent
-        WidgetSurfaceStyle.GLASS -> CarbonDark.copy(alpha = .48f)
-        WidgetSurfaceStyle.CARD -> CarbonCard.copy(alpha = .92f)
+        WidgetSurfaceStyle.GLASS -> CarbonDark.copy(alpha = .46f)
+        WidgetSurfaceStyle.CARD -> CarbonCard.copy(alpha = .91f)
     }
     val outlineColor = when {
         isDesignMode && isSelected -> CyanNeon
-        isDesignMode -> AmberRacing.copy(alpha = .42f)
+        isDesignMode -> AmberRacing.copy(alpha = .18f)
         widgetItem.showBorder -> CarbonCardBorder.copy(alpha = .85f)
         else -> Color.Transparent
     }
@@ -65,63 +82,96 @@ fun WidgetFrame(
             .alpha(widgetItem.opacity)
             .background(normalBackground, shape)
             .then(if (outlineWidth > 0.dp) Modifier.border(outlineWidth, outlineColor, shape) else Modifier)
-    ) {
-        content()
-
-        if (isDesignMode) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = if (isSelected) .035f else .015f), shape)
-                    .pointerInput(widgetItem.id, widgetItem.isLocked) {
-                        if (widgetItem.isLocked) {
-                            detectTapGestures(onTap = { onSelect() })
-                        } else {
-                            detectDragGestures(
-                                onDragStart = { onSelect(); onBringToFront() },
-                                onDragEnd = onTransformFinished,
-                                onDragCancel = onTransformFinished
-                            ) { change, dragAmount ->
-                                change.consume()
-                                onMoveBy(dragAmount.x, dragAmount.y)
-                            }
+            .then(if (isDesignMode) Modifier.clickable { onSelect() } else Modifier)
+            .then(
+                if (isDesignMode && !widgetItem.isLocked) {
+                    Modifier.pointerInput(widgetItem.id, widgetItem.isLocked) {
+                        var totalX = 0f
+                        var totalY = 0f
+                        detectDragGestures(
+                            onDragStart = {
+                                totalX = 0f
+                                totalY = 0f
+                                onSelect()
+                                onBringToFront()
+                            },
+                            onDragEnd = onTransformFinished,
+                            onDragCancel = onTransformFinished
+                        ) { change, dragAmount ->
+                            change.consume()
+                            // Home geometry is based on the position at drag start, therefore send
+                            // the cumulative gesture delta rather than one tiny event delta.
+                            totalX += dragAmount.x
+                            totalY += dragAmount.y
+                            onMoveBy(totalX, totalY)
                         }
                     }
-                    .pointerInput(widgetItem.id) { detectTapGestures(onTap = { onSelect() }) }
+                } else Modifier
             )
+    ) {
+        CompositionLocalProvider(LocalWidgetForegroundColor provides foregroundColor) {
+            content()
+        }
 
-            if (!isSelected) {
-                Surface(
-                    color = CarbonDark.copy(alpha = .70f),
-                    shape = CircleShape,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(24.dp)
-                ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(if (widgetItem.isLocked) Icons.Default.Lock else Icons.Default.TouchApp, null, tint = if (widgetItem.isLocked) HighContrastRed else AmberRacing, modifier = Modifier.size(13.dp))
-                    }
+        if (isDesignMode && isSelected) {
+            Surface(
+                color = CyanNeon,
+                shape = CircleShape,
+                modifier = Modifier.align(Alignment.TopEnd).padding(2.dp).size(20.dp)
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        if (widgetItem.isLocked) Icons.Default.Lock else Icons.Default.OpenWith,
+                        null,
+                        tint = CarbonDark,
+                        modifier = Modifier.size(12.dp)
+                    )
                 }
-            } else {
-                WidgetV2Editor(
-                    widgetItem = widgetItem,
-                    onChangeStyle = onChangeStyle,
-                    onOpacityChange = onOpacityChange,
-                    onToggleLock = onToggleLock,
-                    onDelete = onDelete,
-                    onDuplicate = onDuplicate,
-                    onSetSizePreset = onSetSizePreset,
-                    onSurfaceChange = onSurfaceChange,
-                    onToggleBorder = onToggleBorder,
-                    onResizeBy = onResizeBy,
-                    onResizeFinished = onTransformFinished
-                )
             }
+        }
+    }
+
+    if (isDesignMode && isSelected) {
+        val density = LocalDensity.current
+        val yOffset = with(density) { (-62).dp.roundToPx() }
+        Popup(
+            alignment = Alignment.BottomCenter,
+            offset = IntOffset(0, yOffset),
+            properties = PopupProperties(focusable = false, dismissOnBackPress = false, dismissOnClickOutside = false)
+        ) {
+            WidgetV3ControlDock(
+                widgetItem = widgetItem,
+                foregroundArgb = foregroundArgb,
+                onForeground = { argb ->
+                    visualStore.setForegroundColorArgb(widgetItem.id, argb)
+                    foregroundVersion++
+                },
+                onChangeStyle = onChangeStyle,
+                onOpacityChange = onOpacityChange,
+                onToggleLock = onToggleLock,
+                onDelete = onDelete,
+                onDuplicate = onDuplicate,
+                onSetSizePreset = onSetSizePreset,
+                onSurfaceChange = onSurfaceChange,
+                onToggleBorder = onToggleBorder,
+                onNudge = { dx, dy ->
+                    onMoveBy(dx, dy)
+                    onTransformFinished()
+                },
+                onResizeStep = { dw, dh ->
+                    onResizeBy(dw, dh)
+                    onTransformFinished()
+                }
+            )
         }
     }
 }
 
 @Composable
-private fun BoxScope.WidgetV2Editor(
+private fun WidgetV3ControlDock(
     widgetItem: WidgetItem,
+    foregroundArgb: Int?,
+    onForeground: (Int?) -> Unit,
     onChangeStyle: () -> Unit,
     onOpacityChange: (Float) -> Unit,
     onToggleLock: () -> Unit,
@@ -130,137 +180,130 @@ private fun BoxScope.WidgetV2Editor(
     onSetSizePreset: (WidgetSizePreset) -> Unit,
     onSurfaceChange: (WidgetSurfaceStyle) -> Unit,
     onToggleBorder: () -> Unit,
-    onResizeBy: (Float, Float) -> Unit,
-    onResizeFinished: () -> Unit
+    onNudge: (Float, Float) -> Unit,
+    onResizeStep: (Float, Float) -> Unit
 ) {
     Surface(
-        color = CarbonDark.copy(alpha = .96f),
-        shape = RoundedCornerShape(10.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, CyanNeon.copy(alpha = .45f)),
-        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
+        color = CarbonDark.copy(alpha = .97f),
+        shape = RoundedCornerShape(15.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, CyanNeon.copy(alpha = .55f)),
+        shadowElevation = 8.dp,
+        modifier = Modifier.widthIn(max = 980.dp).padding(horizontal = 12.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            EditorIcon(Icons.Default.Palette, "التصميم", CyanNeon, onChangeStyle, "btn_change_style_${widgetItem.id}")
-            EditorIcon(Icons.Default.ContentCopy, "نسخ الودجت", TextPrimary, onDuplicate)
-            EditorIcon(if (widgetItem.isLocked) Icons.Default.LockOpen else Icons.Default.Lock, if (widgetItem.isLocked) "فتح" else "قفل", if (widgetItem.isLocked) EmeraldSafe else TextPrimary, onToggleLock)
-            EditorIcon(Icons.Default.Delete, "حذف", HighContrastRed, onDelete, "btn_delete_widget_${widgetItem.id}")
-        }
-    }
-
-    Surface(
-        color = CarbonDark.copy(alpha = .96f),
-        shape = RoundedCornerShape(10.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
-        modifier = Modifier.align(Alignment.TopStart).padding(4.dp)
-    ) {
-        Row(Modifier.padding(3.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            WidgetSurfaceStyle.values().forEach { surface ->
-                val selected = widgetItem.surfaceStyle == surface
-                Surface(
-                    onClick = { onSurfaceChange(surface) },
-                    color = if (selected) CyanNeon else CarbonSurface,
-                    shape = RoundedCornerShape(7.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) CyanNeon else CarbonCardBorder)
-                ) {
-                    Text(surface.arabicName, color = if (selected) CarbonDark else TextPrimary, fontSize = 8.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
-                }
-            }
-            Surface(
-                onClick = onToggleBorder,
-                color = if (widgetItem.showBorder) AmberRacing else CarbonSurface,
-                shape = RoundedCornerShape(7.dp)
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("إطار", color = if (widgetItem.showBorder) CarbonDark else TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
-            }
-        }
-    }
+                Text(widgetItem.type.arabicTitle, color = CyanNeon, fontWeight = FontWeight.Black, fontSize = 11.sp, modifier = Modifier.widthIn(min = 55.dp))
 
-    if (!widgetItem.isLocked) {
-        Surface(
-            color = CarbonDark.copy(alpha = .96f),
-            shape = RoundedCornerShape(10.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp)
-        ) {
-            Row(Modifier.padding(horizontal = 3.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                CompactEditorButton(Icons.Default.Palette, "الشكل", CyanNeon, onChangeStyle, "btn_change_style_${widgetItem.id}")
+
+                WidgetSurfaceStyle.values().forEach { surface ->
+                    val selected = widgetItem.surfaceStyle == surface
+                    Surface(
+                        onClick = { onSurfaceChange(surface) },
+                        color = if (selected) CyanNeon else CarbonSurface,
+                        shape = RoundedCornerShape(7.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) CyanNeon else CarbonCardBorder)
+                    ) {
+                        Text(
+                            surface.arabicName,
+                            color = if (selected) CarbonDark else TextPrimary,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp)
+                        )
+                    }
+                }
+
+                CompactEditorButton(Icons.Default.BorderStyle, "الإطار", if (widgetItem.showBorder) AmberRacing else TextSecondary, onToggleBorder)
+                CompactEditorButton(if (widgetItem.isLocked) Icons.Default.LockOpen else Icons.Default.Lock, if (widgetItem.isLocked) "فتح" else "قفل", TextPrimary, onToggleLock)
+                CompactEditorButton(Icons.Default.ContentCopy, "نسخ", TextPrimary, onDuplicate)
+                Spacer(Modifier.weight(1f))
+                CompactEditorButton(Icons.Default.Delete, "حذف", HighContrastRed, onDelete, "btn_delete_widget_${widgetItem.id}")
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 WidgetSizePreset.values().forEach { preset ->
                     TextButton(
                         onClick = { onSetSizePreset(preset) },
                         contentPadding = PaddingValues(horizontal = 5.dp, vertical = 0.dp),
-                        modifier = Modifier.height(28.dp)
+                        modifier = Modifier.height(27.dp)
                     ) {
-                        Text(preset.arabicName, color = if (preset == WidgetSizePreset.CONTENT) CyanNeon else TextPrimary, fontSize = 8.sp, fontWeight = if (preset == WidgetSizePreset.CONTENT) FontWeight.Bold else FontWeight.Normal)
+                        Text(preset.arabicName, color = if (preset == WidgetSizePreset.CONTENT) CyanNeon else TextPrimary, fontSize = 8.sp)
                     }
                 }
+
+                VerticalDivider(Modifier.height(22.dp), color = CarbonCardBorder)
+                CompactEditorButton(Icons.Default.KeyboardArrowLeft, "يسار", TextPrimary, { onNudge(-18f, 0f) })
+                CompactEditorButton(Icons.Default.KeyboardArrowRight, "يمين", TextPrimary, { onNudge(18f, 0f) })
+                CompactEditorButton(Icons.Default.KeyboardArrowUp, "أعلى", TextPrimary, { onNudge(0f, -18f) })
+                CompactEditorButton(Icons.Default.KeyboardArrowDown, "أسفل", TextPrimary, { onNudge(0f, 18f) })
+                CompactEditorButton(Icons.Default.ZoomOut, "تصغير", TextSecondary, { onResizeStep(-24f, -15f) })
+                CompactEditorButton(Icons.Default.ZoomIn, "تكبير", CyanNeon, { onResizeStep(24f, 15f) })
+
+                if (widgetItem.type == WidgetType.CLOCK) {
+                    VerticalDivider(Modifier.height(22.dp), color = CarbonCardBorder)
+                    Text("لون", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    ColorChoice(null, foregroundArgb == null, onForeground)
+                    COLOR_PRESETS.forEach { argb -> ColorChoice(argb, foregroundArgb == argb, onForeground) }
+                }
+
+                Spacer(Modifier.weight(1f))
+                CompactEditorButton(Icons.Default.Remove, "شفافية أقل", TextPrimary, { onOpacityChange(widgetItem.opacity - .10f) })
+                Text("${(widgetItem.opacity * 100).toInt()}%", color = CyanNeon, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                CompactEditorButton(Icons.Default.Add, "شفافية أكثر", TextPrimary, { onOpacityChange(widgetItem.opacity + .10f) })
             }
-        }
-
-        ResizeHandle(
-            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp).width(22.dp).height(58.dp),
-            icon = Icons.Default.DragHandle,
-            description = "تغيير العرض",
-            onDrag = { dx, _ -> onResizeBy(dx, 0f) },
-            onFinished = onResizeFinished
-        )
-        ResizeHandle(
-            modifier = Modifier.align(Alignment.BottomEnd).padding(3.dp).size(46.dp),
-            icon = Icons.Default.OpenInFull,
-            description = "تغيير الحجم",
-            onDrag = { dx, dy -> onResizeBy(dx, dy) },
-            onFinished = onResizeFinished
-        )
-    }
-
-    Surface(
-        color = CarbonDark.copy(alpha = .96f),
-        shape = RoundedCornerShape(9.dp),
-        modifier = Modifier.align(Alignment.BottomStart).padding(4.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Opacity, null, tint = TextSecondary, modifier = Modifier.padding(start = 5.dp).size(13.dp))
-            EditorIcon(Icons.Default.Remove, "شفافية أقل", TextPrimary, { onOpacityChange(widgetItem.opacity - .10f) })
-            Text("${(widgetItem.opacity * 100).toInt()}%", color = CyanNeon, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            EditorIcon(Icons.Default.Add, "شفافية أكثر", TextPrimary, { onOpacityChange(widgetItem.opacity + .10f) })
         }
     }
 }
 
 @Composable
-private fun EditorIcon(
+private fun CompactEditorButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     description: String,
     tint: Color,
     onClick: () -> Unit,
     tag: String? = null
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.size(34.dp).then(if (tag != null) Modifier.testTag(tag) else Modifier)) {
-        Icon(icon, description, tint = tint, modifier = Modifier.size(17.dp))
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(29.dp).then(if (tag != null) Modifier.testTag(tag) else Modifier)
+    ) {
+        Icon(icon, description, tint = tint, modifier = Modifier.size(16.dp))
     }
 }
 
 @Composable
-private fun ResizeHandle(
-    modifier: Modifier,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    description: String,
-    onDrag: (Float, Float) -> Unit,
-    onFinished: () -> Unit
-) {
+private fun ColorChoice(argb: Int?, selected: Boolean, onSelect: (Int?) -> Unit) {
+    val color = argb?.let { Color(it) } ?: Color.Transparent
     Surface(
-        color = CyanNeon.copy(alpha = .96f),
-        shape = RoundedCornerShape(9.dp),
-        modifier = modifier.pointerInput(Unit) {
-            detectDragGestures(
-                onDragEnd = onFinished,
-                onDragCancel = onFinished
-            ) { change, dragAmount ->
-                change.consume()
-                onDrag(dragAmount.x, dragAmount.y)
-            }
-        }
+        onClick = { onSelect(argb) },
+        color = if (argb == null) CarbonSurface else color,
+        shape = CircleShape,
+        border = androidx.compose.foundation.BorderStroke(if (selected) 2.dp else 1.dp, if (selected) CyanNeon else CarbonCardBorder),
+        modifier = Modifier.size(21.dp)
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Icon(icon, description, tint = CarbonDark, modifier = Modifier.size(20.dp))
+            if (argb == null) Text("A", color = TextPrimary, fontSize = 8.sp, fontWeight = FontWeight.Black)
+            else if (selected) Icon(Icons.Default.Check, null, tint = if (argb == BLACK_ARGB) Color.White else Color.Black, modifier = Modifier.size(12.dp))
         }
     }
 }
+
+private const val WHITE_ARGB: Int = -1
+private const val BLACK_ARGB: Int = -15724528 // 0xFF101010
+private val COLOR_PRESETS = listOf(
+    WHITE_ARGB,
+    BLACK_ARGB,
+    0xFF59E6F2.toInt(),
+    0xFFFFC54D.toInt(),
+    0xFFB7C0CC.toInt(),
+    0xFFFF6B6B.toInt()
+)
