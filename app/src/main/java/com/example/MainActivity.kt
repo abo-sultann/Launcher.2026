@@ -133,6 +133,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
     val tripData by viewModel.tripData.collectAsState()
     val playbackState by viewModel.playbackState.collectAsState()
     val activeMap by viewModel.activeMap.collectAsState()
+    val offroadMapState by viewModel.offroadMapState.collectAsState()
 
     var activeSubOverlay by remember { mutableStateOf(SubOverlayScreen.NONE) }
     var screenSaverVisible by remember { mutableStateOf(false) }
@@ -180,7 +181,11 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
         val fullCanvas = activeSubOverlay == SubOverlayScreen.NONE && (currentScreen == CarScreen.HOME || currentScreen == CarScreen.MAP)
         if (fullCanvas) {
             if (currentScreen == CarScreen.MAP) {
-                EnhancedOfflineMapScreen(viewModel, Modifier.fillMaxSize())
+                // Recreate only when external actions (such as opening a saved trip) switch follow mode.
+                key(offroadMapState.followGps) {
+                    EnhancedOfflineMapScreen(viewModel, Modifier.fillMaxSize())
+                }
+                PersistentOffroadMapOverlay(viewModel, Modifier.fillMaxSize().zIndex(220f))
             } else {
                 val topContentInset = safeArea.topDp + if (settings.showTopBar) 48 else 0
                 val bottomContentInset = safeArea.bottomDp + if (settings.showBottomBar) 56 else 0
