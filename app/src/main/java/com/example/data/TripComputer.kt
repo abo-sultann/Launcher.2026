@@ -166,22 +166,22 @@ class TripComputer(private val preferencesManager: PreferencesManager) {
             val newLoc = telemetryToLocation(telemetry)
             val oldLoc = lastAcceptedTripLocation
             if (newLoc != null) {
-                var acceptedForDistance = false
                 if (oldLoc != null) {
                     val dtSec = ((newLoc.time - oldLoc.time) / 1000f).takeIf { it > 0f } ?: ((now - lastDistanceUpdateTime) / 1000f)
                     val distanceM = oldLoc.distanceTo(newLoc)
                     val impliedSpeed = if (dtSec > 0f) distanceM / dtSec * 3.6f else 0f
                     val movementThreshold = max(3f, (telemetry.accuracyMeters + oldLoc.accuracy) * 0.22f)
                     val validDistance = dtSec in 0.5f..8f && distanceM >= movementThreshold && impliedSpeed <= 180f && safeSpeed >= 2.2f
-                    if (validDistance) {
-                        next = next.copy(distanceKm = next.distanceKm + distanceM / 1000f)
-                        acceptedForDistance = true
-                    }
+                    if (validDistance) next = next.copy(distanceKm = next.distanceKm + distanceM / 1000f)
                 }
                 lastAcceptedTripLocation = newLoc
                 lastDistanceUpdateTime = now
                 next = next.copy(lastLatitude = telemetry.latitude, lastLongitude = telemetry.longitude, validGpsSamples = next.validGpsSamples + 1)
-                maybeAppendRoutePoint(telemetry, now, acceptedForDistance)
+
+                // Route shape is intentionally independent from trip-distance acceptance.
+                // A legitimate turn may contain short GPS steps that should not add distance noise,
+                // but those points are still needed to draw the road instead of a straight chord.
+                maybeAppendRoutePoint(telemetry, now)
             }
         }
 
@@ -201,18 +201,22 @@ class TripComputer(private val preferencesManager: PreferencesManager) {
         if (autoTrip && stoppedSince > 0L && now - stoppedSince >= AUTO_FINISH_STOP_MS && next.distanceKm >= 0.5f) finishTrip()
     }
 
-    private fun maybeAppendRoutePoint(telemetry: GpsTelemetry, now: Long, moved: Boolean) {
+    private fun maybeAppendRoutePoint(telemetry: GpsTelemetry, now: Long) {
         val last = currentRoute.lastOrNull()
         val append = if (last == null) true else {
             val result = FloatArray(1)
             Location.distanceBetween(last.latitude, last.longitude, telemetry.latitude, telemetry.longitude, result)
-            moved && (result[0] >= 20f || now - last.timestamp >= 15_000L)
+            val gapMs = now - last.timestamp
+            val routeThreshold = max(6f, telemetry.accuracyMeters * .30f).coerceAtMost(14f)
+            (result[0] >= routeThreshold && gapMs >= 2_000L) || gapMs >= 8_000L
         }
         if (!append) return
+
         currentRoute += TripRoutePoint(telemetry.latitude, telemetry.longitude, now)
         if (currentRoute.size > MAX_ROUTE_POINTS) {
             val compacted = currentRoute.filterIndexed { index, _ -> index % 2 == 0 }.takeLast(MAX_ROUTE_POINTS).toList()
-            currentRoute.clear(); currentRoute.addAll(compacted)
+            currentRoute.clear()
+            currentRoute.addAll(compacted)
         }
         if (currentRoute.size % 8 == 0) persistRoute(CURRENT_ROUTE_KEY, currentRoute)
     }
