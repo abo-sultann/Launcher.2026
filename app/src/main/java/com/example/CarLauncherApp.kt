@@ -44,8 +44,6 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
         }
 
         appScope.launch {
-            // A launcher that survives this long is considered a healthy session.
-            // Clear the crash streak so old failures cannot keep forcing Safe Mode.
             delay(STABLE_SESSION_MS)
             clearCrashStreakAfterStableSession()
         }
@@ -53,7 +51,12 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
         appScope.launch {
             delay(20_000L)
             updateManager.checkAndAutoDownload()
-            if (updateManager.state.value.status == UpdateStatus.READY_TO_INSTALL) showUpdateReadyNotification()
+            // Some old Android 7 head-unit ROMs are unstable when posting an install-ready
+            // notification immediately after a large APK download. On API 25 and below the
+            // update simply remains READY inside Launcher settings; no process hand-off happens.
+            if (updateManager.state.value.status == UpdateStatus.READY_TO_INSTALL && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                showUpdateReadyNotification()
+            }
         }
     }
 
@@ -80,21 +83,32 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 manager.createNotificationChannel(NotificationChannel(UPDATE_CHANNEL, "تحديث Launcher 2026", NotificationManager.IMPORTANCE_HIGH))
             }
-            val intent = Intent(this, UpdateInstallActivity::class.java)
-            val pending = PendingIntent.getActivity(this, 0, intent, if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_UPDATE_CURRENT)
+            // Notification opens Launcher only. The package installer is started explicitly from
+            // the update panel so OEM Android builds cannot unexpectedly kill the launcher.
+            val intent = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            val pendingFlags = if (Build.VERSION.SDK_INT >= 23) {
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val pending = PendingIntent.getActivity(this, 0, intent, pendingFlags)
             val info = updateManager.state.value.info
             manager.notify(
                 UPDATE_NOTIFICATION_ID,
                 NotificationCompat.Builder(this, UPDATE_CHANNEL)
-                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
                     .setContentTitle("تحديث Launcher 2026 جاهز")
-                    .setContentText("الإصدار ${info?.versionName ?: "الجديد"} تم تنزيله — اضغط للتثبيت")
+                    .setContentText("الإصدار ${info?.versionName ?: "الجديد"} تم تنزيله — افتح Launcher للتثبيت")
                     .setContentIntent(pending)
                     .setAutoCancel(true)
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .build()
             )
-        } catch (e: Exception) { Log.e(TAG, "Failed to show update notification", e) }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to show update notification", t)
+        }
     }
 
     private fun safeModePrefs() = getSharedPreferences("car_launcher_safe_mode", Context.MODE_PRIVATE)
@@ -135,7 +149,9 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
                 .putLong("last_crash_time", now)
                 .putString("last_crash_msg", throwable.localizedMessage ?: throwable.javaClass.simpleName)
                 .apply()
-        } catch (e: Exception) { Log.e(TAG, "Failed to record crash", e) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to record crash", e)
+        }
     }
 
     companion object {
