@@ -13,8 +13,8 @@ android {
     applicationId = "com.aistudio.carlauncher.lzrk26"
     minSdk = 25
     targetSdk = 36
-    versionCode = 10001
-    versionName = "1.0.1"
+    versionCode = 10002
+    versionName = "1.0.2"
     buildConfigField("String", "UPDATE_MANIFEST_URL", "\"https://drive.google.com/uc?export=download&id=15Ki1PBf0_erdbITrYh8k80Kt4rWC5yLi\"")
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
