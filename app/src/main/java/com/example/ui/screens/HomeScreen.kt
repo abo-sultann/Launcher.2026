@@ -37,6 +37,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val gpsTelemetry by viewModel.gpsTelemetry.collectAsState()
     val tripData by viewModel.tripData.collectAsState()
     val activeMap by viewModel.activeMap.collectAsState()
+    val navigationTarget by viewModel.offroadNavigationTarget.collectAsState()
 
     val context = LocalContext.current
     val visualStore = remember { WidgetVisualStore(context.applicationContext) }
@@ -60,14 +61,12 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         snapshot.forEach { previous ->
             val now = current[previous.id] ?: return@forEach
             if (now.style != previous.style) viewModel.updateWidgetStyle(previous.id, previous.style)
-            viewModel.previewWidgetResize(previous.id, previous.widthFraction - now.widthFraction, previous.heightFraction - now.heightFraction)
-            viewModel.previewWidgetMove(previous.id, previous.xFraction - now.xFraction, previous.yFraction - now.yFraction)
             if (kotlin.math.abs(now.opacity - previous.opacity) > .01f) viewModel.setWidgetOpacity(previous.id, previous.opacity)
             if (now.isLocked != previous.isLocked) viewModel.toggleWidgetLock(previous.id)
+            visualStore.setGeometry(previous.id, previous.xFraction, previous.yFraction, previous.widthFraction, previous.heightFraction)
             visualStore.setSurface(previous.id, previous.surfaceStyle)
             visualStore.setBorder(previous.id, previous.showBorder)
         }
-        viewModel.commitWidgetLayout()
         visualVersion++
         undoSnapshot = null
     }
@@ -76,15 +75,12 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         rememberUndoPoint()
         visualWidgets.filter { it.isVisible }.forEach { item ->
             val target = backgroundFocusGeometry(item.type)
-            viewModel.previewWidgetResize(item.id, target[2] - item.widthFraction, target[3] - item.heightFraction)
-            viewModel.previewWidgetMove(item.id, target[0] - item.xFraction, target[1] - item.yFraction)
+            visualStore.setGeometry(item.id, target[0], target[1], target[2], target[3])
             val recommendedStyle = backgroundFocusStyle(item.type)
             if (item.style != recommendedStyle) viewModel.updateWidgetStyle(item.id, recommendedStyle)
-            val surface = WidgetItem.defaultSurfaceFor(item.type)
-            visualStore.setSurface(item.id, surface)
+            visualStore.setSurface(item.id, WidgetItem.defaultSurfaceFor(item.type))
             visualStore.setBorder(item.id, false)
         }
-        viewModel.commitWidgetLayout()
         visualVersion++
         selectedWidgetId = null
     }
@@ -102,8 +98,8 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             .sortedBy { it.zIndex }
             .forEach { item ->
                 val normalized = WidgetItem.withDefaultGeometry(item)
-                val width = maxWidth * normalized.widthFraction.coerceIn(.10f, 1f)
-                val height = maxHeight * normalized.heightFraction.coerceIn(.12f, 1f)
+                val width = maxWidth * normalized.widthFraction.coerceIn(.07f, 1f)
+                val height = maxHeight * normalized.heightFraction.coerceIn(.07f, 1f)
                 val x = maxWidth * normalized.xFraction.coerceIn(0f, 1f)
                 val y = maxHeight * normalized.yFraction.coerceIn(0f, 1f)
 
@@ -118,13 +114,22 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     onChangeStyle = { rememberUndoPoint(); selectedWidgetId = normalized.id; editingWidgetForStyle = normalized },
                     onMoveBy = { dxPx, dyPx ->
                         selectedWidgetId = normalized.id
-                        viewModel.previewWidgetMove(normalized.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                        val nx = (normalized.xFraction + dxPx / canvasWidthPx).coerceIn(0f, (1f - normalized.widthFraction).coerceAtLeast(0f))
+                        val ny = (normalized.yFraction + dyPx / canvasHeightPx).coerceIn(0f, (1f - normalized.heightFraction).coerceAtLeast(0f))
+                        visualStore.previewGeometry(normalized.id, nx, ny, normalized.widthFraction, normalized.heightFraction)
+                        visualVersion++
                     },
                     onResizeBy = { dwPx, dhPx ->
                         selectedWidgetId = normalized.id
-                        viewModel.previewWidgetResize(normalized.id, dwPx / canvasWidthPx, dhPx / canvasHeightPx)
+                        val nw = (normalized.widthFraction + dwPx / canvasWidthPx).coerceIn(.07f, (1f - normalized.xFraction).coerceAtLeast(.07f))
+                        val nh = (normalized.heightFraction + dhPx / canvasHeightPx).coerceIn(.07f, (1f - normalized.yFraction).coerceAtLeast(.07f))
+                        visualStore.previewGeometry(normalized.id, normalized.xFraction, normalized.yFraction, nw, nh)
+                        visualVersion++
                     },
-                    onTransformFinished = { viewModel.commitWidgetLayout() },
+                    onTransformFinished = {
+                        visualStore.commitGeometry(normalized.id)
+                        visualVersion++
+                    },
                     onOpacityChange = { viewModel.setWidgetOpacity(normalized.id, it) },
                     onToggleLock = { rememberUndoPoint(); viewModel.toggleWidgetLock(normalized.id) },
                     onBringToFront = { viewModel.bringWidgetToFront(normalized.id) },
@@ -142,8 +147,8 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     onSetSizePreset = { preset ->
                         rememberUndoPoint()
                         val target = WidgetItem.recommendedSize(normalized.type, preset)
-                        viewModel.previewWidgetResize(normalized.id, target.first - normalized.widthFraction, target.second - normalized.heightFraction)
-                        viewModel.commitWidgetLayout()
+                        visualStore.setGeometry(normalized.id, normalized.xFraction, normalized.yFraction, target.first, target.second)
+                        visualVersion++
                     },
                     onSurfaceChange = { surface ->
                         rememberUndoPoint()
@@ -157,7 +162,19 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     },
                     modifier = Modifier.offset(x = x, y = y).size(width = width, height = height).zIndex(normalized.zIndex.toFloat())
                 ) {
-                    RenderWidgetContent(normalized, viewModel, settings, installedApps, playbackState, gpsTelemetry, tripData, activeMap)
+                    RenderWidgetContent(
+                        normalized,
+                        viewModel,
+                        settings,
+                        installedApps,
+                        playbackState,
+                        gpsTelemetry,
+                        tripData,
+                        activeMap,
+                        navigationTarget,
+                        if (navigationTarget != null) viewModel.offroadDistanceToTargetMeters() else null,
+                        if (navigationTarget != null) viewModel.offroadBearingToTarget() else null
+                    )
                 }
             }
 
@@ -286,9 +303,9 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
 
 private fun backgroundFocusGeometry(type: WidgetType): FloatArray = when (type) {
     WidgetType.SPEEDOMETER -> floatArrayOf(.025f, .05f, .17f, .24f)
-    WidgetType.CLOCK -> floatArrayOf(.39f, .015f, .22f, .14f)
-    WidgetType.DATE -> floatArrayOf(.39f, .15f, .22f, .12f)
-    WidgetType.GPS -> floatArrayOf(.025f, .30f, .17f, .15f)
+    WidgetType.CLOCK -> floatArrayOf(.40f, .015f, .20f, .12f)
+    WidgetType.DATE -> floatArrayOf(.39f, .14f, .22f, .10f)
+    WidgetType.GPS -> floatArrayOf(.025f, .30f, .16f, .13f)
     WidgetType.MUSIC -> floatArrayOf(.70f, .035f, .27f, .17f)
     WidgetType.MAP -> floatArrayOf(.025f, .48f, .22f, .23f)
     WidgetType.TRIP -> floatArrayOf(.80f, .39f, .18f, .27f)
@@ -317,7 +334,10 @@ private fun RenderWidgetContent(
     p: MusicPlaybackState,
     gps: GpsTelemetry,
     trip: TripData,
-    map: MapItem?
+    map: MapItem?,
+    navigationTarget: OffroadNavigationTarget?,
+    targetDistanceMeters: Float?,
+    targetBearing: Float?
 ) {
     when (w.type) {
         WidgetType.CLOCK -> ClockWidget(w.style, s.is24HourFormat)
@@ -325,7 +345,7 @@ private fun RenderWidgetContent(
         WidgetType.DATE -> DateWidget(w.style)
         WidgetType.GPS -> GpsWidget(w.style, gps)
         WidgetType.MUSIC -> MusicWidget(w.style, p, { vm.togglePlayPause() }, { vm.playNext() }, { vm.playPrevious() }, { vm.seekTo(it) })
-        WidgetType.MAP -> MapWidget(w.style, gps, trip, map, onOpenFullMap = { vm.navigateTo(CarScreen.MAP) })
+        WidgetType.MAP -> MapWidget(w.style, gps, trip, map, navigationTarget, targetDistanceMeters, targetBearing, onOpenFullMap = { vm.navigateTo(CarScreen.MAP) })
         WidgetType.TRIP -> TripWidget(w.style, trip, { vm.startTrip() }, { vm.pauseTrip() }, { vm.resetTrip() })
         WidgetType.APPS -> AppsWidget(w.style, apps, onOpenAppDrawer = { vm.navigateTo(CarScreen.APPS) }, onLaunchApp = { vm.launchApp(it) })
         WidgetType.CONTROLS -> ControlsWidget(w.style, p, { vm.adjustVolume(it) }, { vm.toggleMute() }, { vm.togglePlayPause() }, { vm.playNext() }, { vm.playPrevious() })
