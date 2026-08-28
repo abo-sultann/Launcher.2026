@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,7 +9,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import coil.size.Precision
+import coil.size.Scale
 import com.example.model.BackgroundType
 import com.example.model.LauncherSettings
 import com.example.ui.theme.CarbonDark
@@ -21,10 +27,27 @@ fun LauncherBackground(
 ) {
     Box(modifier.fillMaxSize().background(backgroundBrush(settings.backgroundType))) {
         if (settings.backgroundType == BackgroundType.CUSTOM_IMAGE && !settings.customWallpaperPath.isNullOrBlank()) {
+            val context = LocalContext.current
             val path = settings.customWallpaperPath
             val model: Any = if (path.startsWith("content://") || path.startsWith("file://")) path else File(path)
+
+            // The target head unit is 1024x600 with limited RAM. Force Coil to decode only
+            // what the screen can display instead of keeping a phone-size bitmap in memory.
+            val request = ImageRequest.Builder(context)
+                .data(model)
+                .size(1024, 600)
+                .precision(Precision.INEXACT)
+                .scale(Scale.FILL)
+                .bitmapConfig(Bitmap.Config.RGB_565)
+                .allowHardware(false)
+                .crossfade(false)
+                // Wallpaper imports reuse a local filename. Avoid stale cached images.
+                .memoryCachePolicy(CachePolicy.DISABLED)
+                .diskCachePolicy(CachePolicy.DISABLED)
+                .build()
+
             AsyncImage(
-                model = model,
+                model = request,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
