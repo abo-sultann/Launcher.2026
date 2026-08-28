@@ -11,7 +11,6 @@ import android.os.Bundle
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.model.GpsTelemetry
-import com.example.service.OffroadTrackingService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,15 +31,9 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
     @SuppressLint("MissingPermission")
     fun startGpsUpdates() {
         if (!hasLocationPermission()) {
-            _telemetry.value = _telemetry.value.copy(
-                hasGpsFix = false,
-                statusArabic = "في انتظار منح إذن الموقع"
-            )
+            _telemetry.value = _telemetry.value.copy(hasGpsFix = false, statusArabic = "في انتظار منح إذن الموقع")
             return
         }
-
-        // Keep the rolling offroad track alive even if the launcher Activity is no longer visible.
-        OffroadTrackingService.start(context.applicationContext)
         if (isListening) return
 
         try {
@@ -49,16 +42,12 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
             val isNetworkEnabled = try { lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) } catch (_: Exception) { false }
 
             if (!isGpsEnabled && !isNetworkEnabled) {
-                _telemetry.value = _telemetry.value.copy(
-                    hasGpsFix = false,
-                    statusArabic = "خدمة تحديد المواقع (GPS) غير مفعلة"
-                )
+                _telemetry.value = _telemetry.value.copy(hasGpsFix = false, statusArabic = "خدمة تحديد المواقع (GPS) غير مفعلة")
                 return
             }
 
             if (isGpsEnabled) lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 1.0f, this)
             if (isNetworkEnabled) lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 2500L, 5.0f, this)
-
             isListening = true
 
             val lastGps = if (isGpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null
@@ -77,19 +66,11 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
         }
     }
 
-    fun restartGpsUpdates() {
-        stopGpsUpdates()
-        startGpsUpdates()
-    }
+    fun restartGpsUpdates() { stopGpsUpdates(); startGpsUpdates() }
 
     fun stopGpsUpdates() {
-        try {
-            if (isListening) locationManager?.removeUpdates(this)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error stopping GPS updates", e)
-        } finally {
-            isListening = false
-        }
+        try { if (isListening) locationManager?.removeUpdates(this) } catch (e: Exception) { Log.e(TAG, "Error stopping GPS updates", e) }
+        finally { isListening = false }
     }
 
     override fun onLocationChanged(location: Location) {
@@ -99,12 +80,10 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
                 val dtSec = (location.time - previous.time) / 1000f
                 if (dtSec in 0.4f..10f) (previous.distanceTo(location) / dtSec) * 3.6f else 0f
             } ?: 0f
-
             var speedKmH = if (directSpeed >= 0f) directSpeed else fallbackSpeed
             if (speedKmH < 1.2f) speedKmH = 0f
             speedKmH = speedKmH.coerceIn(0f, 260f)
             previousLocation = Location(location)
-
             _telemetry.value = GpsTelemetry(
                 latitude = location.latitude,
                 longitude = location.longitude,
@@ -116,24 +95,13 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
                 satellitesCount = location.extras?.getInt("satellites", 0) ?: 0,
                 statusArabic = "GPS يعمل"
             )
-        } catch (e: Exception) {
-            Log.e(TAG, "Error processing location update", e)
-        }
+        } catch (e: Exception) { Log.e(TAG, "Error processing location update", e) }
     }
 
     @Deprecated("Deprecated in Java")
     override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+    override fun onProviderEnabled(provider: String) { _telemetry.value = _telemetry.value.copy(statusArabic = "تم تفعيل GPS"); if (!isListening) startGpsUpdates() }
+    override fun onProviderDisabled(provider: String) { _telemetry.value = _telemetry.value.copy(hasGpsFix = false, speedKmH = 0f, statusArabic = "GPS متوقف") }
 
-    override fun onProviderEnabled(provider: String) {
-        _telemetry.value = _telemetry.value.copy(statusArabic = "تم تفعيل GPS")
-        if (!isListening) startGpsUpdates()
-    }
-
-    override fun onProviderDisabled(provider: String) {
-        _telemetry.value = _telemetry.value.copy(hasGpsFix = false, speedKmH = 0f, statusArabic = "GPS متوقف")
-    }
-
-    companion object {
-        private const val TAG = "GpsTelemetryManager"
-    }
+    companion object { private const val TAG = "GpsTelemetryManager" }
 }
