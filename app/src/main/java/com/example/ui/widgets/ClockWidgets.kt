@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.WidgetStyle
+import com.example.ui.components.LocalWidgetForegroundColor
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -34,6 +35,7 @@ fun ClockWidget(style: WidgetStyle, is24Hour: Boolean, modifier: Modifier = Modi
         }
     }
 
+    val customForeground = LocalWidgetForegroundColor.current
     val timeFormat = if (is24Hour) "HH:mm" else "hh:mm"
     val timeWithSecFormat = if (is24Hour) "HH:mm:ss" else "hh:mm:ss"
     val timeStr = SimpleDateFormat(timeFormat, Locale("ar")).format(currentTime)
@@ -53,25 +55,25 @@ fun ClockWidget(style: WidgetStyle, is24Hour: Boolean, modifier: Modifier = Modi
         when (style) {
             WidgetStyle.CLOCK_DIGITAL_LARGE -> {
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(timeStr, fontSize = bigTime, fontWeight = FontWeight.Black, color = CyanNeon, maxLines = 1)
-                    if (!is24Hour && !micro) Text(amPmStr, fontSize = smallText, color = TextSecondary, modifier = Modifier.padding(bottom = 4.dp))
+                    Text(timeStr, fontSize = bigTime, fontWeight = FontWeight.Black, color = customForeground ?: CyanNeon, maxLines = 1)
+                    if (!is24Hour && !micro) Text(amPmStr, fontSize = smallText, color = customForeground?.copy(alpha = .75f) ?: TextSecondary, modifier = Modifier.padding(bottom = 4.dp))
                 }
             }
             WidgetStyle.CLOCK_WITH_DATE -> {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text(timeStr, fontSize = mediumTime, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
-                    if (!micro) Text("$dayStr • $dateStr", fontSize = smallText, color = AmberRacing, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(timeStr, fontSize = mediumTime, fontWeight = FontWeight.Bold, color = customForeground ?: TextPrimary, maxLines = 1)
+                    if (!micro) Text("$dayStr • $dateStr", fontSize = smallText, color = customForeground?.copy(alpha = .78f) ?: AmberRacing, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            WidgetStyle.CLOCK_WITH_SECONDS -> Text(timeWithSecStr, fontSize = if (micro) 18.sp else if (tiny) 23.sp else if (compact) 29.sp else 39.sp, fontWeight = FontWeight.Bold, color = CyanNeon, maxLines = 1)
-            WidgetStyle.CLOCK_MINIMAL -> Text(timeStr, fontSize = bigTime, fontWeight = FontWeight.Light, color = TextPrimary, maxLines = 1)
+            WidgetStyle.CLOCK_WITH_SECONDS -> Text(timeWithSecStr, fontSize = if (micro) 18.sp else if (tiny) 23.sp else if (compact) 29.sp else 39.sp, fontWeight = FontWeight.Bold, color = customForeground ?: CyanNeon, maxLines = 1)
+            WidgetStyle.CLOCK_MINIMAL -> Text(timeStr, fontSize = bigTime, fontWeight = FontWeight.Light, color = customForeground ?: TextPrimary, maxLines = 1)
             WidgetStyle.CLOCK_CARD -> {
                 Surface(color = CarbonSurface.copy(alpha = .90f), shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, CyanNeon.copy(alpha = .30f)), modifier = Modifier.fillMaxSize()) {
                     Row(Modifier.fillMaxSize().padding(if (compact) 6.dp else 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround) {
-                        if (!tiny) Icon(Icons.Default.AccessTime, null, tint = CyanNeon, modifier = Modifier.size(if (compact) 23.dp else 33.dp))
+                        if (!tiny) Icon(Icons.Default.AccessTime, null, tint = customForeground ?: CyanNeon, modifier = Modifier.size(if (compact) 23.dp else 33.dp))
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(timeStr, fontSize = if (micro) 20.sp else if (tiny) 25.sp else if (compact) 30.sp else 35.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
-                            if (!tiny) Text("$dayStr • $dateStr", fontSize = smallText, color = AmberRacing, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(timeStr, fontSize = if (micro) 20.sp else if (tiny) 25.sp else if (compact) 30.sp else 35.sp, fontWeight = FontWeight.Bold, color = customForeground ?: TextPrimary, maxLines = 1)
+                            if (!tiny) Text("$dayStr • $dateStr", fontSize = smallText, color = customForeground?.copy(alpha = .78f) ?: AmberRacing, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -82,21 +84,21 @@ fun ClockWidget(style: WidgetStyle, is24Hour: Boolean, modifier: Modifier = Modi
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(timeStr, fontSize = bigTime, fontWeight = FontWeight.Black, color = CyanNeon, maxLines = 1)
-                        if (!is24Hour && !micro) Text(amPmStr, fontSize = smallText, fontWeight = FontWeight.Bold, color = AmberRacing, modifier = Modifier.padding(bottom = 5.dp))
+                        Text(timeStr, fontSize = bigTime, fontWeight = FontWeight.Black, color = customForeground ?: CyanNeon, maxLines = 1)
+                        if (!is24Hour && !micro) Text(amPmStr, fontSize = smallText, fontWeight = FontWeight.Bold, color = customForeground?.copy(alpha = .78f) ?: AmberRacing, modifier = Modifier.padding(bottom = 5.dp))
                     }
                 }
             }
             WidgetStyle.CLOCK_DAY_DATE -> {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text(timeStr, fontSize = mediumTime, fontWeight = FontWeight.Bold, color = CyanNeon, maxLines = 1)
+                    Text(timeStr, fontSize = mediumTime, fontWeight = FontWeight.Bold, color = customForeground ?: CyanNeon, maxLines = 1)
                     if (!tiny) {
-                        Text(dayStr, fontSize = if (compact) 10.sp else 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
-                        Text(dateStr, fontSize = smallText, color = TextSecondary, maxLines = 1)
+                        Text(dayStr, fontSize = if (compact) 10.sp else 13.sp, fontWeight = FontWeight.Bold, color = customForeground ?: TextPrimary, maxLines = 1)
+                        Text(dateStr, fontSize = smallText, color = customForeground?.copy(alpha = .75f) ?: TextSecondary, maxLines = 1)
                     }
                 }
             }
-            else -> Text(timeStr, style = MaterialTheme.typography.displayMedium, color = TextPrimary)
+            else -> Text(timeStr, style = MaterialTheme.typography.displayMedium, color = customForeground ?: TextPrimary)
         }
     }
 }
