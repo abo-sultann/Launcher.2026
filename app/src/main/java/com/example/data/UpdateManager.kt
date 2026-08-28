@@ -1,7 +1,9 @@
 package com.example.data
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -11,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -29,7 +33,8 @@ data class LauncherUpdateInfo(
     val apkUrl: String,
     val notes: String = "",
     val mandatory: Boolean = false,
-    val sha256: String = ""
+    val sha256: String = "",
+    val sizeBytes: Long = 0L
 )
 
 data class LauncherUpdateState(
@@ -45,8 +50,15 @@ class UpdateManager(private val context: Context) {
 
     private val updateDir = File(context.filesDir, "updates").apply { mkdirs() }
     private val apkFile = File(updateDir, "Launcher-2026-update.apk")
+    private val updatePrefs = context.getSharedPreferences("launcher_update_state", Context.MODE_PRIVATE)
+    private val downloadMutex = Mutex()
+
+    init {
+        restoreReadyState()
+    }
 
     suspend fun checkForUpdate(): LauncherUpdateInfo? = withContext(Dispatchers.IO) {
+        if (_state.value.status == UpdateStatus.DOWNLOADING) return@withContext _state.value.info
         _state.value = LauncherUpdateState(UpdateStatus.CHECKING, message = "جارٍ فحص التحديث...")
         try {
             val raw = readTextUrl(BuildConfig.UPDATE_MANIFEST_URL)
@@ -57,12 +69,20 @@ class UpdateManager(private val context: Context) {
                 apkUrl = json.getString("apkUrl"),
                 notes = json.optString("notes", ""),
                 mandatory = json.optBoolean("mandatory", false),
-                sha256 = json.optString("sha256", "").trim().lowercase(Locale.US)
+                sha256 = json.optString("sha256", "").trim().lowercase(Locale.US),
+                sizeBytes = json.optLong("size", 0L).coerceAtLeast(0L)
             )
             if (info.versionCode > BuildConfig.VERSION_CODE) {
-                _state.value = LauncherUpdateState(UpdateStatus.AVAILABLE, info = info, message = "يتوفر إصدار ${info.versionName}")
-                info
+                val ready = loadSavedReadyInfo()
+                if (ready?.versionCode == info.versionCode && isReadyFilePlausible(ready)) {
+                    _state.value = LauncherUpdateState(UpdateStatus.READY_TO_INSTALL, info = info, progressPercent = 100, message = "التحديث جاهز للتثبيت")
+                    info
+                } else {
+                    _state.value = LauncherUpdateState(UpdateStatus.AVAILABLE, info = info, message = "يتوفر إصدار ${info.versionName}")
+                    info
+                }
             } else {
+                clearStaleReadyFile()
                 _state.value = LauncherUpdateState(UpdateStatus.UP_TO_DATE, info = info, message = "لديك أحدث إصدار")
                 null
             }
@@ -73,75 +93,178 @@ class UpdateManager(private val context: Context) {
     }
 
     suspend fun checkAndAutoDownload() {
+        when (_state.value.status) {
+            UpdateStatus.DOWNLOADING, UpdateStatus.READY_TO_INSTALL -> return
+            else -> Unit
+        }
         val info = checkForUpdate() ?: return
-        download(info)
+        if (_state.value.status != UpdateStatus.READY_TO_INSTALL) download(info)
     }
 
     suspend fun download(info: LauncherUpdateInfo? = _state.value.info): Boolean = withContext(Dispatchers.IO) {
-        val target = info ?: return@withContext false
-        _state.value = LauncherUpdateState(UpdateStatus.DOWNLOADING, info = target, progressPercent = 0, message = "جارٍ تنزيل التحديث...")
-        val temp = File(updateDir, "Launcher-2026-update.tmp")
-        temp.delete()
-        try {
-            var lastError: Exception? = null
-            var success = false
-            for (attempt in 1..2) {
-                try {
-                    downloadApk(target.apkUrl, temp, target, attempt)
-                    validateApk(temp, target)
-                    success = true
-                    break
-                } catch (e: Exception) {
-                    lastError = e
-                    temp.delete()
-                    if (attempt < 2) {
-                        _state.value = LauncherUpdateState(UpdateStatus.DOWNLOADING, target, 0, "إعادة محاولة التنزيل...")
+        downloadMutex.withLock {
+            val target = info ?: return@withLock false
+            if (target.versionCode <= BuildConfig.VERSION_CODE) return@withLock false
+            if (loadSavedReadyInfo()?.versionCode == target.versionCode && isReadyFilePlausible(target)) {
+                _state.value = LauncherUpdateState(UpdateStatus.READY_TO_INSTALL, target, 100, "التحديث جاهز للتثبيت")
+                return@withLock true
+            }
+
+            _state.value = LauncherUpdateState(UpdateStatus.DOWNLOADING, info = target, progressPercent = 0, message = "جارٍ تنزيل التحديث...")
+            val temp = File(updateDir, "Launcher-2026-update.tmp")
+            temp.delete()
+            try {
+                var lastError: Exception? = null
+                var success = false
+                for (attempt in 1..2) {
+                    try {
+                        downloadApk(target.apkUrl, temp, target, attempt)
+                        validateApk(temp, target)
+                        success = true
+                        break
+                    } catch (e: Exception) {
+                        lastError = e
+                        temp.delete()
+                        if (attempt < 2) {
+                            _state.value = LauncherUpdateState(UpdateStatus.DOWNLOADING, target, 0, "إعادة محاولة التنزيل...")
+                        }
                     }
                 }
-            }
-            if (!success) throw lastError ?: IllegalStateException("تعذر تنزيل ملف التحديث")
+                if (!success) throw lastError ?: IllegalStateException("تعذر تنزيل ملف التحديث")
 
-            if (apkFile.exists()) apkFile.delete()
-            if (!temp.renameTo(apkFile)) {
-                temp.copyTo(apkFile, overwrite = true)
+                if (apkFile.exists()) apkFile.delete()
+                if (!temp.renameTo(apkFile)) {
+                    temp.copyTo(apkFile, overwrite = true)
+                    temp.delete()
+                }
+                saveReadyInfo(target)
+                _state.value = LauncherUpdateState(UpdateStatus.READY_TO_INSTALL, target, 100, "التحديث جاهز للتثبيت")
+                true
+            } catch (e: Exception) {
                 temp.delete()
+                _state.value = LauncherUpdateState(UpdateStatus.ERROR, target, message = friendlyError("تعذر تنزيل التحديث", e))
+                false
             }
-            _state.value = LauncherUpdateState(UpdateStatus.READY_TO_INSTALL, target, 100, "التحديث جاهز للتثبيت")
-            true
-        } catch (e: Exception) {
-            temp.delete()
-            _state.value = LauncherUpdateState(UpdateStatus.ERROR, target, message = friendlyError("تعذر تنزيل التحديث", e))
-            false
         }
     }
 
     fun installDownloadedUpdate(): Boolean {
-        if (!apkFile.exists() || apkFile.length() < MIN_APK_BYTES) {
+        val info = _state.value.info ?: loadSavedReadyInfo()
+        if (!apkFile.exists() || apkFile.length() < MIN_APK_BYTES || info == null) {
             _state.value = _state.value.copy(status = UpdateStatus.ERROR, message = "لا يوجد تحديث جاهز للتثبيت")
             return false
         }
+        if (!isReadyFilePlausible(info)) {
+            _state.value = _state.value.copy(status = UpdateStatus.ERROR, message = "ملف التحديث غير مكتمل — أعد تنزيله")
+            return false
+        }
+
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
-                context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                context.startActivity(
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
                 _state.value = _state.value.copy(message = "فعّل السماح بالتثبيت ثم أعد الضغط على تثبيت")
                 false
             } else {
                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apkFile)
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, APK_MIME)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
+                val intent = buildInstallerIntent(uri)
+                grantInstallerUriPermission(intent, uri)
                 context.startActivity(intent)
+                _state.value = _state.value.copy(message = "تم فتح مثبت أندرويد — أكمل التثبيت من نافذة النظام")
                 true
             }
-        } catch (e: Exception) {
-            _state.value = _state.value.copy(status = UpdateStatus.ERROR, message = friendlyError("تعذر فتح مثبت أندرويد", e))
+        } catch (t: Throwable) {
+            _state.value = _state.value.copy(status = UpdateStatus.ERROR, message = friendlyError("تعذر فتح مثبت أندرويد", t))
             false
         }
     }
 
     fun resetMessage() {
-        if (_state.value.status == UpdateStatus.ERROR) _state.value = LauncherUpdateState()
+        if (_state.value.status == UpdateStatus.ERROR) {
+            restoreReadyState()
+            if (_state.value.status == UpdateStatus.ERROR) _state.value = LauncherUpdateState()
+        }
+    }
+
+    private fun buildInstallerIntent(uri: Uri): Intent {
+        val flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+        val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, APK_MIME)
+            addFlags(flags)
+            clipData = ClipData.newRawUri("Launcher 2026 update", uri)
+        }
+        if (context.packageManager.resolveActivity(viewIntent, PackageManager.MATCH_DEFAULT_ONLY) != null) return viewIntent
+
+        val installIntent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+            data = uri
+            addFlags(flags)
+            clipData = ClipData.newRawUri("Launcher 2026 update", uri)
+            putExtra(Intent.EXTRA_RETURN_RESULT, false)
+        }
+        if (context.packageManager.resolveActivity(installIntent, PackageManager.MATCH_DEFAULT_ONLY) != null) return installIntent
+        throw IllegalStateException("لم يتم العثور على مثبت الحزم في النظام")
+    }
+
+    private fun grantInstallerUriPermission(intent: Intent, uri: Uri) {
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        val resolved = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        resolved.forEach { result ->
+            val packageName = result.activityInfo?.packageName ?: return@forEach
+            runCatching { context.grantUriPermission(packageName, uri, flags) }
+        }
+    }
+
+    private fun restoreReadyState() {
+        val info = loadSavedReadyInfo()
+        if (info != null && info.versionCode > BuildConfig.VERSION_CODE && isReadyFilePlausible(info)) {
+            _state.value = LauncherUpdateState(UpdateStatus.READY_TO_INSTALL, info, 100, "التحديث جاهز للتثبيت")
+        } else if (info != null && info.versionCode <= BuildConfig.VERSION_CODE) {
+            clearStaleReadyFile()
+        }
+    }
+
+    private fun saveReadyInfo(info: LauncherUpdateInfo) {
+        updatePrefs.edit()
+            .putInt(KEY_VERSION_CODE, info.versionCode)
+            .putString(KEY_VERSION_NAME, info.versionName)
+            .putString(KEY_APK_URL, info.apkUrl)
+            .putString(KEY_NOTES, info.notes)
+            .putBoolean(KEY_MANDATORY, info.mandatory)
+            .putString(KEY_SHA256, info.sha256)
+            .putLong(KEY_SIZE, if (info.sizeBytes > 0L) info.sizeBytes else apkFile.length())
+            .apply()
+    }
+
+    private fun loadSavedReadyInfo(): LauncherUpdateInfo? {
+        val versionCode = updatePrefs.getInt(KEY_VERSION_CODE, 0)
+        if (versionCode <= 0) return null
+        return LauncherUpdateInfo(
+            versionCode = versionCode,
+            versionName = updatePrefs.getString(KEY_VERSION_NAME, versionCode.toString()) ?: versionCode.toString(),
+            apkUrl = updatePrefs.getString(KEY_APK_URL, "") ?: "",
+            notes = updatePrefs.getString(KEY_NOTES, "") ?: "",
+            mandatory = updatePrefs.getBoolean(KEY_MANDATORY, false),
+            sha256 = updatePrefs.getString(KEY_SHA256, "") ?: "",
+            sizeBytes = updatePrefs.getLong(KEY_SIZE, 0L)
+        )
+    }
+
+    private fun isReadyFilePlausible(info: LauncherUpdateInfo): Boolean {
+        if (!apkFile.exists() || apkFile.length() < MIN_APK_BYTES) return false
+        if (info.sizeBytes > 0L && apkFile.length() != info.sizeBytes) return false
+        return try {
+            FileInputStream(apkFile).use { input ->
+                val first = ByteArray(4)
+                input.read(first) == 4 && first[0] == 0x50.toByte() && first[1] == 0x4B.toByte()
+            }
+        } catch (_: Exception) { false }
+    }
+
+    private fun clearStaleReadyFile() {
+        runCatching { apkFile.delete() }
+        updatePrefs.edit().clear().apply()
     }
 
     private fun downloadApk(rawUrl: String, targetFile: File, info: LauncherUpdateInfo, attempt: Int) {
@@ -163,9 +286,7 @@ class UpdateManager(private val context: Context) {
                     throw IllegalStateException("Google Drive أعاد صفحة بدل ملف APK")
                 }
                 conn.inputStream.use { input ->
-                    FileOutputStream(targetFile).use { output ->
-                        copyWithProgress(input, output, total, info)
-                    }
+                    FileOutputStream(targetFile).use { output -> copyWithProgress(input, output, total, info) }
                 }
                 conn.disconnect()
                 return
@@ -199,10 +320,15 @@ class UpdateManager(private val context: Context) {
             if (read == 0) continue
             output.write(buffer, 0, read)
             done += read
-            val progress = if (total > 0) ((done * 100L) / total).toInt().coerceIn(0, 100) else 0
+            val denominator = when {
+                info.sizeBytes > 0L -> info.sizeBytes
+                total > 0L -> total
+                else -> 0L
+            }
+            val progress = if (denominator > 0L) ((done * 100L) / denominator).toInt().coerceIn(0, 100) else 0
             if (progress != lastProgress) {
                 lastProgress = progress
-                _state.value = LauncherUpdateState(UpdateStatus.DOWNLOADING, info, progress, if (total > 0) "تنزيل التحديث $progress%" else "جارٍ تنزيل التحديث...")
+                _state.value = LauncherUpdateState(UpdateStatus.DOWNLOADING, info, progress, if (denominator > 0L) "تنزيل التحديث $progress%" else "جارٍ تنزيل التحديث...")
             }
         }
         output.fd.sync()
@@ -210,6 +336,7 @@ class UpdateManager(private val context: Context) {
 
     private fun validateApk(file: File, info: LauncherUpdateInfo) {
         if (!file.exists() || file.length() < MIN_APK_BYTES) throw IllegalStateException("الملف الذي وصل من Drive غير مكتمل")
+        if (info.sizeBytes > 0L && file.length() != info.sizeBytes) throw IllegalStateException("حجم ملف التحديث لا يطابق الإصدار المنشور")
         FileInputStream(file).use { input ->
             val first = ByteArray(4)
             if (input.read(first) != 4 || first[0] != 0x50.toByte() || first[1] != 0x4B.toByte()) {
@@ -296,13 +423,20 @@ class UpdateManager(private val context: Context) {
         throw IllegalStateException("تحويلات كثيرة في رابط التحديث")
     }
 
-    private fun friendlyError(prefix: String, e: Exception): String {
-        val detail = e.message?.takeIf { it.isNotBlank() } ?: "خطأ اتصال"
+    private fun friendlyError(prefix: String, t: Throwable): String {
+        val detail = t.message?.takeIf { it.isNotBlank() } ?: t.javaClass.simpleName.ifBlank { "خطأ غير معروف" }
         return "$prefix: $detail"
     }
 
     companion object {
         private const val MIN_APK_BYTES = 1_000_000L
         private const val APK_MIME = "application/vnd.android.package-archive"
+        private const val KEY_VERSION_CODE = "ready_version_code"
+        private const val KEY_VERSION_NAME = "ready_version_name"
+        private const val KEY_APK_URL = "ready_apk_url"
+        private const val KEY_NOTES = "ready_notes"
+        private const val KEY_MANDATORY = "ready_mandatory"
+        private const val KEY_SHA256 = "ready_sha256"
+        private const val KEY_SIZE = "ready_size"
     }
 }
