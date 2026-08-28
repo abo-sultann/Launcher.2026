@@ -41,7 +41,12 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     var showLibraryDialog by remember { mutableStateOf(false) }
     var showLayoutDialog by remember { mutableStateOf(false) }
     var editingWidgetForStyle by remember { mutableStateOf<WidgetItem?>(null) }
+    var selectedWidgetId by remember { mutableStateOf<String?>(null) }
     val density = LocalDensity.current
+
+    LaunchedEffect(isDesignMode) {
+        if (!isDesignMode) selectedWidgetId = null
+    }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val canvasWidthPx = with(density) { maxWidth.toPx() }.coerceAtLeast(1f)
@@ -60,14 +65,22 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 WidgetFrame(
                     widgetItem = normalized,
                     isDesignMode = isDesignMode,
-                    onChangeStyle = { editingWidgetForStyle = normalized },
-                    onMoveBy = { dxPx, dyPx -> viewModel.previewWidgetMove(normalized.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx) },
-                    onResizeBy = { dwPx, dhPx -> viewModel.previewWidgetResize(normalized.id, dwPx / canvasWidthPx, dhPx / canvasHeightPx) },
+                    isSelected = selectedWidgetId == normalized.id,
+                    onSelect = { selectedWidgetId = normalized.id },
+                    onChangeStyle = { selectedWidgetId = normalized.id; editingWidgetForStyle = normalized },
+                    onMoveBy = { dxPx, dyPx ->
+                        selectedWidgetId = normalized.id
+                        viewModel.previewWidgetMove(normalized.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                    },
+                    onResizeBy = { dwPx, dhPx ->
+                        selectedWidgetId = normalized.id
+                        viewModel.previewWidgetResize(normalized.id, dwPx / canvasWidthPx, dhPx / canvasHeightPx)
+                    },
                     onTransformFinished = { viewModel.commitWidgetLayout() },
                     onOpacityChange = { viewModel.setWidgetOpacity(normalized.id, it) },
                     onToggleLock = { viewModel.toggleWidgetLock(normalized.id) },
                     onBringToFront = { viewModel.bringWidgetToFront(normalized.id) },
-                    onDelete = { viewModel.removeWidget(normalized.id) },
+                    onDelete = { viewModel.removeWidget(normalized.id); if (selectedWidgetId == normalized.id) selectedWidgetId = null },
                     modifier = Modifier.offset(x = x, y = y).size(width = width, height = height).zIndex(normalized.zIndex.toFloat())
                 ) {
                     RenderWidgetContent(normalized, viewModel, settings, installedApps, playbackState, gpsTelemetry, tripData, activeMap)
@@ -86,7 +99,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    Text("وضع التصميم الحر", color = AmberRacing, fontWeight = FontWeight.Bold)
+                    Text("المس ودجت ثم اسحبه من أي مكان", color = AmberRacing, fontWeight = FontWeight.Bold)
                     Button(
                         onClick = { showLayoutDialog = true },
                         colors = ButtonDefaults.buttonColors(containerColor = AmberRacing),
@@ -108,7 +121,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         Text("إضافة", color = CarbonDark)
                     }
                     OutlinedButton(
-                        onClick = { viewModel.resetWidgetsToDefault() },
+                        onClick = { viewModel.resetWidgetsToDefault(); selectedWidgetId = null },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                         modifier = Modifier.height(31.dp)
                     ) {
@@ -116,6 +129,17 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         Spacer(Modifier.width(3.dp))
                         Text("افتراضي")
                     }
+                }
+            }
+
+            if (selectedWidgetId == null) {
+                Surface(
+                    color = CarbonSurface.copy(alpha = .88f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, CyanNeon.copy(alpha = .5f)),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 7.dp).zIndex(10000f)
+                ) {
+                    Text("اختر ودجت للتعديل — السحب والتحجيم يعملان باللمس", color = TextSecondary, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                 }
             }
 
@@ -128,7 +152,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Add, "إضافة ودجت", tint = CyanNeon)
                     Spacer(Modifier.width(5.dp))
-                    Text("إضافة ودجت", color = CyanNeon, fontWeight = FontWeight.Bold)
+                    Text("إضافة", color = CyanNeon, fontWeight = FontWeight.Bold)
                 }
             }
         }
