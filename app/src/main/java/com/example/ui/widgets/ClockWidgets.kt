@@ -25,13 +25,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
-fun ClockWidget(
-    style: WidgetStyle,
-    is24Hour: Boolean,
-    modifier: Modifier = Modifier
-) {
+fun ClockWidget(style: WidgetStyle, is24Hour: Boolean, modifier: Modifier = Modifier) {
     var currentTime by remember { mutableStateOf(Date()) }
-
     LaunchedEffect(Unit) {
         while (true) {
             currentTime = Date()
@@ -47,78 +42,60 @@ fun ClockWidget(
     val dateStr = SimpleDateFormat("yyyy/MM/dd", Locale("ar")).format(currentTime)
     val dayStr = SimpleDateFormat("EEEE", Locale("ar")).format(currentTime)
 
-    BoxWithConstraints(
-        modifier = modifier.fillMaxSize().padding(8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        val tiny = maxWidth < 150.dp || maxHeight < 95.dp
-        val compact = maxWidth < 220.dp || maxHeight < 135.dp
-        val bigTime = when { tiny -> 27.sp; compact -> 36.sp; else -> 50.sp }
-        val mediumTime = when { tiny -> 23.sp; compact -> 31.sp; else -> 42.sp }
-        val smallText = when { tiny -> 8.sp; compact -> 10.sp; else -> 12.sp }
+    BoxWithConstraints(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val micro = maxWidth < 115.dp || maxHeight < 58.dp
+        val tiny = maxWidth < 155.dp || maxHeight < 82.dp
+        val compact = maxWidth < 225.dp || maxHeight < 125.dp
+        val bigTime = when { micro -> 22.sp; tiny -> 30.sp; compact -> 39.sp; else -> 52.sp }
+        val mediumTime = when { micro -> 20.sp; tiny -> 27.sp; compact -> 34.sp; else -> 44.sp }
+        val smallText = when { micro -> 7.sp; tiny -> 8.sp; compact -> 10.sp; else -> 12.sp }
 
         when (style) {
             WidgetStyle.CLOCK_DIGITAL_LARGE -> {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(timeStr, fontSize = bigTime, fontWeight = FontWeight.Black, color = CyanNeon, maxLines = 1)
-                    if (!is24Hour) Text(amPmStr, fontSize = smallText, color = TextSecondary)
+                    if (!is24Hour && !micro) Text(amPmStr, fontSize = smallText, color = TextSecondary, modifier = Modifier.padding(bottom = 4.dp))
                 }
             }
-
             WidgetStyle.CLOCK_WITH_DATE -> {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Text(timeStr, fontSize = mediumTime, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
-                    if (!tiny) {
-                        Spacer(Modifier.height(3.dp))
-                        Surface(color = CarbonSurface, shape = RoundedCornerShape(6.dp), border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder)) {
-                            Text("$dayStr • $dateStr", modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp), fontSize = smallText, color = AmberRacing, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
+                    if (!micro) Text("$dayStr • $dateStr", fontSize = smallText, color = AmberRacing, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-
-            WidgetStyle.CLOCK_WITH_SECONDS -> {
-                Text(timeWithSecStr, fontSize = if (tiny) 21.sp else if (compact) 28.sp else 39.sp, fontWeight = FontWeight.Bold, color = CyanNeon, maxLines = 1)
-            }
-
-            WidgetStyle.CLOCK_MINIMAL -> {
-                Text(timeStr, fontSize = bigTime, fontWeight = FontWeight.Light, color = TextPrimary, maxLines = 1)
-            }
-
+            WidgetStyle.CLOCK_WITH_SECONDS -> Text(timeWithSecStr, fontSize = if (micro) 18.sp else if (tiny) 23.sp else if (compact) 29.sp else 39.sp, fontWeight = FontWeight.Bold, color = CyanNeon, maxLines = 1)
+            WidgetStyle.CLOCK_MINIMAL -> Text(timeStr, fontSize = bigTime, fontWeight = FontWeight.Light, color = TextPrimary, maxLines = 1)
             WidgetStyle.CLOCK_CARD -> {
-                Surface(color = CarbonSurface, shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, CyanNeon.copy(alpha = 0.3f)), modifier = Modifier.fillMaxSize()) {
-                    Row(Modifier.fillMaxSize().padding(if (compact) 7.dp else 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround) {
-                        if (!tiny) Icon(Icons.Default.AccessTime, null, tint = CyanNeon, modifier = Modifier.size(if (compact) 24.dp else 34.dp))
+                Surface(color = CarbonSurface.copy(alpha = .90f), shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, CyanNeon.copy(alpha = .30f)), modifier = Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxSize().padding(if (compact) 6.dp else 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround) {
+                        if (!tiny) Icon(Icons.Default.AccessTime, null, tint = CyanNeon, modifier = Modifier.size(if (compact) 23.dp else 33.dp))
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(timeStr, fontSize = if (tiny) 24.sp else if (compact) 29.sp else 34.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
+                            Text(timeStr, fontSize = if (micro) 20.sp else if (tiny) 25.sp else if (compact) 30.sp else 35.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
                             if (!tiny) Text("$dayStr • $dateStr", fontSize = smallText, color = AmberRacing, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
             }
-
             WidgetStyle.CLOCK_AUTOMOTIVE_LARGE -> {
                 Box(
-                    Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(CarbonCard, CarbonSurface)), RoundedCornerShape(10.dp)).border(1.dp, CarbonCardBorder, RoundedCornerShape(10.dp)).padding(6.dp),
+                    Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(CarbonCard.copy(alpha = .92f), CarbonSurface.copy(alpha = .88f))), RoundedCornerShape(10.dp)).border(1.dp, CarbonCardBorder, RoundedCornerShape(10.dp)).padding(4.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(timeStr, fontSize = bigTime, fontWeight = FontWeight.Black, color = CyanNeon, maxLines = 1)
-                        if (!is24Hour) Text(amPmStr, fontSize = smallText, fontWeight = FontWeight.Bold, color = AmberRacing, modifier = Modifier.padding(bottom = if (tiny) 3.dp else 6.dp))
+                        if (!is24Hour && !micro) Text(amPmStr, fontSize = smallText, fontWeight = FontWeight.Bold, color = AmberRacing, modifier = Modifier.padding(bottom = 5.dp))
                     }
                 }
             }
-
             WidgetStyle.CLOCK_DAY_DATE -> {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Text(timeStr, fontSize = mediumTime, fontWeight = FontWeight.Bold, color = CyanNeon, maxLines = 1)
                     if (!tiny) {
-                        Text(dayStr, fontSize = if (compact) 11.sp else 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
+                        Text(dayStr, fontSize = if (compact) 10.sp else 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
                         Text(dateStr, fontSize = smallText, color = TextSecondary, maxLines = 1)
                     }
                 }
             }
-
             else -> Text(timeStr, style = MaterialTheme.typography.displayMedium, color = TextPrimary)
         }
     }
