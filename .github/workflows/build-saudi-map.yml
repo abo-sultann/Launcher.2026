@@ -50,7 +50,7 @@ jobs:
       - name: Show runner capacity
         run: |
           java -version
-          osmosis -version
+          dpkg-query -W -f='osmosis ${Version}\\n' osmosis
           osmium --version
           sqlite3 --version
           df -h "${RUNNER_TEMP}"
