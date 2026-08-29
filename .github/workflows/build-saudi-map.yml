@@ -1,0 +1,75 @@
+name: Build Saudi Offline Map Pack
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - map-pack-build
+    paths:
+      - ".github/workflows/build-saudi-map.yml"
+      - "map-pack/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: saudi-map-pack
+  cancel-in-progress: true
+
+jobs:
+  build-map-pack:
+    name: Build and verify Saudi map
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      MAP_BUILD_WORK_ROOT: ${{ runner.temp }}/saudi-map-work
+      MAP_BUILD_OUTPUT_ROOT: ${{ github.workspace }}/map-output
+      JAVACMD_OPTIONS: -Xmx5200m
+
+    steps:
+      - name: Checkout map-pack branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: map-pack/verifier/pom.xml
+
+      - name: Install map build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc \
+            gdal-bin \
+            jq \
+            maven \
+            osmosis \
+            osmium-tool \
+            python3-gdal \
+            sqlite3 \
+            unzip
+
+      - name: Show runner capacity
+        run: |
+          java -version
+          osmosis -version
+          osmium --version
+          sqlite3 --version
+          df -h "${RUNNER_TEMP}"
+          free -h
+
+      - name: Build and verify map pack
+        run: bash map-pack/build-saudi-map.sh
+
+      - name: Upload verified map pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: Saudi-2026-Map-Pack-${{ github.run_number }}
+          path: map-output/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
