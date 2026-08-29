@@ -85,7 +85,7 @@ class OfflineMapSearchEngine {
         val output = LinkedHashMap<String, OfflineMapSearchResult>()
         var mapFile: MapFile? = null
         try {
-            mapFile = MapFile(file)
+            mapFile = MapFile(file, MAP_LANGUAGE_ARABIC)
             val info = mapFile.mapFileInfo
             val bbox = mapFile.boundingBox()
             val preferredZoom = 9
@@ -176,5 +176,6 @@ class OfflineMapSearchEngine {
 
     companion object {
         private const val MAX_INDEX_ITEMS = 8_000
+        private const val MAP_LANGUAGE_ARABIC = "ar"
     }
 }

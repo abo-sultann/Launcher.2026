@@ -241,7 +241,7 @@ fun SettingsScreen(
                                 item { ActionButton("تصفير الرحلة الحالية", Icons.Default.Refresh) { viewModel.resetTrip() } }
 
                                 item { SectionTitle("الخريطة دون إنترنت", Icons.Default.Map) }
-                                item { InfoCard("أضف ملف Mapsforge بامتداد .map. ستظهر الخريطة النشطة مع GPS والوجهة المحفوظة وبيانات الرحلة.") }
+                                item { InfoCard("المعتمد: خريطة السعودية العربية، مع خريطة الخليج كخيار إضافي. أضف ملف Mapsforge بامتداد .map؛ تُعرض الأسماء العربية أولًا وتعمل الخريطة بالكامل دون إنترنت.") }
                                 item { ActionButton("إضافة خريطة", Icons.Default.AddLocationAlt) { mapPicker.launch(arrayOf("*/*")) } }
                                 if (maps.isEmpty()) item { StatusMetric("الخرائط", "لا توجد خريطة مضافة", false) }
                                 items(maps, key = { it.id }) { map ->

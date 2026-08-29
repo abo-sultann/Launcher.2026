@@ -803,7 +803,11 @@ private fun EnhancedMapsforgeMap(
                     if (mapView.model.mapViewPosition.zoomLevel.toInt() != autoZoom) mapView.setZoomLevel(autoZoom.coerceIn(3, 20).toByte())
                 }
                 val rotation = if (orientationMode == MapOrientationMode.HEADING_UP && gps.hasGpsFix) -smoothedBearing else 0f
-                mapView.rotate(Rotation(rotation, mapView.width * .5f, mapView.height * .5f))
+                val rotationDelta = shortestAngleDelta(holderRef?.appliedRotation ?: 0f, rotation)
+                if (mapView.width > 0 && mapView.height > 0 && abs(rotationDelta) >= MAP_ROTATION_STEP_DEGREES) {
+                    mapView.rotate(Rotation(rotation, mapView.width * .5f, mapView.height * .5f))
+                    holderRef?.appliedRotation = rotation
+                }
                 holderRef?.trackLayer?.setPoints(if (trackVisible) trackPoints.map { LatLong(it.latitude, it.longitude) } else emptyList())
                 holderRef?.navigationLayer?.setPoints(if (gps.hasGpsFix && navigationTarget != null) listOf(LatLong(gps.latitude, gps.longitude), LatLong(navigationTarget.latitude, navigationTarget.longitude)) else emptyList())
                 holderRef?.measureLayer?.setPoints(if (measureA != null && measureB != null) listOf(measureA, measureB) else emptyList())
@@ -826,7 +830,8 @@ private data class EnhancedMapHolder(
     val mapFile: MapFile,
     val trackLayer: Polyline,
     val navigationLayer: Polyline,
-    val measureLayer: Polyline
+    val measureLayer: Polyline,
+    var appliedRotation: Float = 0f
 )
 
 private fun createEnhancedMapView(
@@ -849,12 +854,23 @@ private fun createEnhancedMapView(
         setBuiltInZoomControls(false)
         isClickable = true
         setMapViewCenterY(if (initialState.followGps && drivingView) .65f else .50f)
+        // Mapsforge rotation needs a larger framebuffer than the visible screen.
+        // Without it, older GPUs can expose dark/empty rectangles around rendered tiles.
+        model.frameBufferModel.setOverdrawFactor(MAP_FRAMEBUFFER_OVERDRAW)
     }
-    val mapFile = MapFile(File(mapItem.filePath))
-    val tileCache: TileCache = AndroidUtil.createTileCache(context, "enhanced_${mapItem.id}_${if (detailedTheme) "detail" else "trail"}", mapView.model.displayModel.tileSize, 1f, mapView.model.frameBufferModel.overdrawFactor)
+    val mapFile = MapFile(File(mapItem.filePath), MAP_LANGUAGE_ARABIC)
+    val tileCache: TileCache = AndroidUtil.createTileCache(
+        context,
+        "enhanced_${mapItem.id}_${if (detailedTheme) "detail" else "labels"}",
+        mapView.model.displayModel.tileSize,
+        MAP_TILE_CACHE_SCREEN_RATIO,
+        mapView.model.frameBufferModel.overdrawFactor
+    )
     val renderer = TileRendererLayer(tileCache, mapFile, mapView.model.mapViewPosition, AndroidGraphicFactory.INSTANCE).apply {
-        setXmlRenderTheme(if (detailedTheme) MapsforgeThemes.DEFAULT else MapsforgeThemes.MOTORIDER)
-        textScale = if (detailedTheme) 1.30f else 1.16f
+        // Keep the complete road/place label rules in both modes. The compact mode only
+        // reduces text size; it must not hide surrounding place names while driving.
+        setXmlRenderTheme(MapsforgeThemes.DEFAULT)
+        textScale = if (detailedTheme) 1.36f else 1.20f
     }
     mapView.layerManager.layers.add(renderer)
 
@@ -964,6 +980,8 @@ private fun smoothAngle(old: Float, new: Float, factor: Float): Float {
     return ((old + delta * factor) % 360f + 360f) % 360f
 }
 
+private fun shortestAngleDelta(old: Float, new: Float): Float = ((new - old + 540f) % 360f) - 180f
+
 private fun sampleTrack(points: List<OffroadTrackPoint>, maxPoints: Int): List<OffroadTrackPoint> {
     if (points.size <= maxPoints) return points
     val step = (points.size.toFloat() / maxPoints).toInt().coerceAtLeast(1)
@@ -989,3 +1007,8 @@ private fun distanceMetersEnhanced(lat1: Double, lon1: Double, lat2: Double, lon
 }
 
 private fun formatDistanceEnhanced(meters: Float): String = if (meters < 1000f) "${meters.toInt()} م" else String.format(Locale.US, "%.1f كم", meters / 1000f)
+
+private const val MAP_LANGUAGE_ARABIC = "ar"
+private const val MAP_FRAMEBUFFER_OVERDRAW = 1.5
+private const val MAP_TILE_CACHE_SCREEN_RATIO = 2f
+private const val MAP_ROTATION_STEP_DEGREES = 2f

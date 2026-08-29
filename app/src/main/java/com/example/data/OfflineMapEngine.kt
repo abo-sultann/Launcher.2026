@@ -78,7 +78,7 @@ class OfflineMapEngine(
                 }
                 "map" -> {
                     try {
-                        val mapFile = MapFile(file)
+                        val mapFile = MapFile(file, MAP_LANGUAGE_ARABIC)
                         mapFile.boundingBox()
                         mapFile.close()
                     } catch (e: Exception) {
@@ -159,5 +159,6 @@ class OfflineMapEngine(
 
     companion object {
         private const val TAG = "OfflineMapEngine"
+        private const val MAP_LANGUAGE_ARABIC = "ar"
     }
 }
