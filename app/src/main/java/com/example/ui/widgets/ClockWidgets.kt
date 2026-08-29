@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.WidgetStyle
 import com.example.ui.components.resolvedWidgetColors
+import com.example.ui.components.resolvedWidgetSurface
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -68,7 +69,7 @@ fun ClockWidget(style: WidgetStyle, is24Hour: Boolean, modifier: Modifier = Modi
             WidgetStyle.CLOCK_WITH_SECONDS -> Text(timeWithSecStr, fontSize = if (micro) 18.sp else if (tiny) 23.sp else if (compact) 29.sp else 39.sp, fontWeight = FontWeight.Bold, color = widgetColors.accent, maxLines = 1)
             WidgetStyle.CLOCK_MINIMAL -> Text(timeStr, fontSize = bigTime, fontWeight = FontWeight.Light, color = widgetColors.primary, maxLines = 1)
             WidgetStyle.CLOCK_CARD -> {
-                Surface(color = CarbonSurface.copy(alpha = .90f), shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, widgetColors.accent.copy(alpha = .30f)), modifier = Modifier.fillMaxSize()) {
+                Surface(color = resolvedWidgetSurface(CarbonSurface.copy(alpha = .90f)), shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, widgetColors.accent.copy(alpha = .30f)), modifier = Modifier.fillMaxSize()) {
                     Row(Modifier.fillMaxSize().padding(if (compact) 6.dp else 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround) {
                         if (!tiny) Icon(Icons.Default.AccessTime, null, tint = widgetColors.accent, modifier = Modifier.size(if (compact) 23.dp else 33.dp))
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {

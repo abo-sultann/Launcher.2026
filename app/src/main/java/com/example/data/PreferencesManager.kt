@@ -43,6 +43,7 @@ class PreferencesManager(context: Context) {
         val screenSaverTypes = (prefs.getStringSet("screensaver_widgets", null)
             ?: setOf(WidgetType.CLOCK.name, WidgetType.SPEEDOMETER.name))
             .mapNotNull { name -> try { WidgetType.valueOf(name) } catch (_: Exception) { null } }
+            .filter { it in SCREEN_SAVER_DISPLAY_WIDGET_TYPES }
             .toSet()
             .ifEmpty { setOf(WidgetType.CLOCK) }
         val is24 = prefs.getBoolean("clock_24h", true)
@@ -53,18 +54,15 @@ class PreferencesManager(context: Context) {
             customWallpaperPath = prefs.getString("custom_wallpaper_path", null),
             wallpaperDimPercent = prefs.getInt("wallpaper_dim", 10).coerceIn(0, 80),
             iconSizeDp = prefs.getInt("icon_size", 64),
-            showAppNames = prefs.getBoolean("show_app_names", true),
-            showAppLabels = prefs.getBoolean("show_app_labels", true),
+            showAppLabels = if (prefs.contains("show_app_labels")) prefs.getBoolean("show_app_labels", true) else prefs.getBoolean("show_app_names", true),
             appDrawerColumns = prefs.getInt("app_columns", 5),
             homeGridColumns = prefs.getInt("home_columns", 4),
             widgetHeightDp = prefs.getInt("widget_height", 138),
             gridHorizontalGapDp = prefs.getInt("grid_h_gap", 8),
             gridVerticalGapDp = prefs.getInt("grid_v_gap", 8),
-            is24HourClock = is24,
             is24HourFormat = is24,
             showSeconds = prefs.getBoolean("clock_seconds", false),
             speedUnit = prefs.getString("speed_unit", "كم/س") ?: "كم/س",
-            autoStartEnabled = prefs.getBoolean("auto_start", true),
             autoStartOnBoot = prefs.getBoolean("auto_start", true),
             resumeMusicPlayback = prefs.getBoolean("resume_music", true),
             safeModeActive = prefs.getBoolean("safe_mode", false),
@@ -97,7 +95,7 @@ class PreferencesManager(context: Context) {
                 .putString("custom_wallpaper_path", settings.customWallpaperPath)
                 .putInt("wallpaper_dim", settings.wallpaperDimPercent.coerceIn(0, 80))
                 .putInt("icon_size", settings.iconSizeDp.coerceIn(40, 110))
-                .putBoolean("show_app_names", settings.showAppNames)
+                .putBoolean("show_app_names", settings.showAppLabels)
                 .putBoolean("show_app_labels", settings.showAppLabels)
                 .putInt("app_columns", settings.appDrawerColumns.coerceIn(2, 8))
                 .putInt("home_columns", settings.homeGridColumns.coerceIn(2, 6))
@@ -167,6 +165,11 @@ class PreferencesManager(context: Context) {
                     opacity = obj.optDouble("opacity", 0.92).toFloat().coerceIn(0.20f, 1f),
                     isLocked = obj.optBoolean("isLocked", false),
                     zIndex = obj.optInt("zIndex", obj.optInt("order", i))
+                    ,surfaceStyle = try { WidgetSurfaceStyle.valueOf(obj.optString("surfaceStyle", WidgetItem.defaultSurfaceFor(type).name)) } catch (_: Exception) { WidgetItem.defaultSurfaceFor(type) }
+                    ,showBorder = obj.optBoolean("showBorder", false)
+                    ,foregroundColorArgb = if (obj.has("foregroundColorArgb") && !obj.isNull("foregroundColorArgb")) obj.optInt("foregroundColorArgb") else null
+                    ,accentColorArgb = if (obj.has("accentColorArgb") && !obj.isNull("accentColorArgb")) obj.optInt("accentColorArgb") else null
+                    ,surfaceOpacity = obj.optDouble("surfaceOpacity", 1.0).toFloat().coerceIn(.25f, 1f)
                 )
                 list.add(WidgetItem.withDefaultGeometry(base))
             }
@@ -196,6 +199,11 @@ class PreferencesManager(context: Context) {
                     put("opacity", item.opacity.toDouble())
                     put("isLocked", item.isLocked)
                     put("zIndex", item.zIndex)
+                    put("surfaceStyle", item.surfaceStyle.name)
+                    put("showBorder", item.showBorder)
+                    if (item.foregroundColorArgb != null) put("foregroundColorArgb", item.foregroundColorArgb)
+                    if (item.accentColorArgb != null) put("accentColorArgb", item.accentColorArgb)
+                    put("surfaceOpacity", item.surfaceOpacity.toDouble())
                 })
             }
             prefs.edit().putString("widgets_json", array.toString()).apply()

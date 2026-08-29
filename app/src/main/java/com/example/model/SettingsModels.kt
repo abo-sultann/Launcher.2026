@@ -32,7 +32,12 @@ data class ScreenSaverWidgetLayout(
     val heightFraction: Float,
     val opacity: Float = 0.90f,
     val zIndex: Int = 0,
-    val style: WidgetStyle? = null
+    val style: WidgetStyle? = null,
+    val surfaceStyle: WidgetSurfaceStyle = WidgetSurfaceStyle.TRANSPARENT,
+    val showBorder: Boolean = false,
+    val foregroundColorArgb: Int? = null,
+    val accentColorArgb: Int? = null,
+    val surfaceOpacity: Float = 1f
 ) {
     companion object {
         fun defaultFor(type: WidgetType, index: Int): ScreenSaverWidgetLayout {
@@ -47,7 +52,8 @@ data class ScreenSaverWidgetLayout(
                 heightFraction = 0.34f,
                 opacity = 0.90f,
                 zIndex = slot,
-                style = null
+                style = null,
+                surfaceStyle = WidgetItem.defaultSurfaceFor(type)
             )
         }
     }
@@ -59,18 +65,15 @@ data class LauncherSettings(
     val customWallpaperPath: String? = null,
     val wallpaperDimPercent: Int = 10,
     val iconSizeDp: Int = 64,
-    val showAppNames: Boolean = true,
     val showAppLabels: Boolean = true,
     val appDrawerColumns: Int = 5,
     val homeGridColumns: Int = 4,
     val widgetHeightDp: Int = 138,
     val gridHorizontalGapDp: Int = 8,
     val gridVerticalGapDp: Int = 8,
-    val is24HourClock: Boolean = true,
     val is24HourFormat: Boolean = true,
     val showSeconds: Boolean = false,
     val speedUnit: String = "كم/س",
-    val autoStartEnabled: Boolean = true,
     val autoStartOnBoot: Boolean = true,
     val resumeMusicPlayback: Boolean = true,
     val safeModeActive: Boolean = false,
@@ -90,3 +93,26 @@ data class LauncherSettings(
     val screenSaverNightMode: Boolean = false,
     val screenSaverNightBrightnessPercent: Int = 14
 )
+
+/** Screen saver widgets are informative only: no launchers or touch controls. */
+val SCREEN_SAVER_DISPLAY_WIDGET_TYPES: Set<WidgetType> = linkedSetOf(
+    WidgetType.CLOCK,
+    WidgetType.SPEEDOMETER,
+    WidgetType.DATE,
+    WidgetType.GPS,
+    WidgetType.MUSIC,
+    WidgetType.MAP,
+    WidgetType.TRIP
+)
+
+fun screenSaverStylesFor(type: WidgetType): List<WidgetStyle> = WidgetStyle.values().filter { style ->
+    style.type == type && when (style) {
+        WidgetStyle.MUSIC_MINI,
+        WidgetStyle.MUSIC_COMPACT,
+        WidgetStyle.MUSIC_COVER,
+        WidgetStyle.MUSIC_CONTROLS,
+        WidgetStyle.MUSIC_LARGE_AUTOMOTIVE,
+        WidgetStyle.TRIP_FULL_METRICS -> false
+        else -> true
+    }
+}

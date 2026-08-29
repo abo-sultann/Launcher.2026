@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.example.model.MusicPlaybackState
 import com.example.model.WidgetStyle
 import com.example.ui.components.resolvedWidgetColors
+import com.example.ui.components.resolvedWidgetSurface
 import com.example.ui.theme.*
 
 @Composable
@@ -80,7 +81,7 @@ fun ControlsWidget(
 
             WidgetStyle.CONTROLS_HORIZONTAL_BAR -> {
                 Surface(
-                    color = CarbonSurface,
+                    color = resolvedWidgetSurface(CarbonSurface),
                     shape = RoundedCornerShape(20.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
                     modifier = Modifier.fillMaxWidth().height(46.dp)
@@ -115,7 +116,7 @@ fun ControlsWidget(
 
             WidgetStyle.CONTROLS_CARD -> {
                 Surface(
-                    color = CarbonSurface,
+                    color = resolvedWidgetSurface(CarbonSurface),
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
                     modifier = Modifier.fillMaxSize()
@@ -160,7 +161,7 @@ fun ControlsWidget(
                 ) {
                     Button(
                         onClick = { onVolumeAdjust(-1f) },
-                        colors = ButtonDefaults.buttonColors(containerColor = CarbonSurface),
+                        colors = ButtonDefaults.buttonColors(containerColor = resolvedWidgetSurface(CarbonSurface)),
                         border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         shape = RoundedCornerShape(10.dp)
@@ -182,7 +183,7 @@ fun ControlsWidget(
                     }
                     Button(
                         onClick = { onVolumeAdjust(1f) },
-                        colors = ButtonDefaults.buttonColors(containerColor = CarbonSurface),
+                        colors = ButtonDefaults.buttonColors(containerColor = resolvedWidgetSurface(CarbonSurface)),
                         border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         shape = RoundedCornerShape(10.dp)
@@ -233,7 +234,7 @@ private fun SquareControlButton(
 ) {
     val widgetColors = resolvedWidgetColors()
     Surface(
-        color = CarbonSurface,
+        color = resolvedWidgetSurface(CarbonSurface),
         shape = RoundedCornerShape(10.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
         modifier = Modifier.size(54.dp)

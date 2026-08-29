@@ -10,7 +10,8 @@ import com.example.ui.theme.TextSecondary
 /** Color tokens shared by every widget type on Home and Screen Saver. */
 data class WidgetVisualTokens(
     val foreground: Color? = null,
-    val accent: Color? = null
+    val accent: Color? = null,
+    val surface: Color? = null
 ) {
     fun primaryOr(default: Color): Color = foreground ?: default
     fun secondaryOr(default: Color): Color = foreground?.copy(alpha = .68f) ?: default
@@ -34,6 +35,9 @@ fun resolvedWidgetColors(): ResolvedWidgetColors {
         accent = tokens.accentOr(CyanNeon)
     )
 }
+
+@Composable
+fun resolvedWidgetSurface(default: Color): Color = LocalWidgetVisualTokens.current.surface ?: default
 
 /** Kept as a compatibility alias while older widget renderers migrate to the unified tokens. */
 val LocalWidgetForegroundColor = staticCompositionLocalOf<Color?> { null }

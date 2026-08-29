@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.example.model.AppItem
 import com.example.model.WidgetStyle
 import com.example.ui.components.resolvedWidgetColors
+import com.example.ui.components.resolvedWidgetSurface
 import com.example.ui.theme.*
 
 @Composable
@@ -109,7 +110,7 @@ fun AppsWidget(
 
             WidgetStyle.APPS_FAVORITES_CARD -> {
                 Surface(
-                    color = CarbonSurface,
+                    color = resolvedWidgetSurface(CarbonSurface),
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
                     modifier = Modifier.fillMaxSize()
@@ -142,7 +143,7 @@ private fun AppShortcutItem(app: AppItem, showLabel: Boolean, onClick: () -> Uni
         modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(4.dp).testTag("app_shortcut_${app.packageName}")
     ) {
         Surface(
-            color = CarbonSurface,
+            color = resolvedWidgetSurface(CarbonSurface),
             shape = RoundedCornerShape(10.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
             modifier = Modifier.size(44.dp)

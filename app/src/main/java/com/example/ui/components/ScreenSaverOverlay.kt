@@ -4,7 +4,6 @@ import android.app.Activity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,13 +22,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import com.example.data.WidgetVisualStore
 import com.example.model.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.widgets.*
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun ScreenSaverOverlay(
     viewModel: MainViewModel,
@@ -44,8 +41,6 @@ fun ScreenSaverOverlay(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var editMode by remember { mutableStateOf(false) }
-    var showLayoutDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     DisposableEffect(settings.screenSaverNightMode, settings.screenSaverNightBrightnessPercent) {
@@ -79,73 +74,11 @@ fun ScreenSaverOverlay(
             gpsTelemetry = gpsTelemetry,
             tripData = tripData,
             activeMap = activeMap,
-            editMode = editMode,
+            editMode = false,
             modifier = Modifier.fillMaxSize().zIndex(3f)
         )
 
-        if (editMode) {
-            Surface(
-                color = CarbonDark.copy(alpha = .94f),
-                shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(1.dp, CyanNeon.copy(alpha = .7f)),
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp).zIndex(1500f)
-            ) {
-                Row(
-                    Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text("تحكم حر", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    FilledTonalButton(
-                        onClick = { showLayoutDialog = true },
-                        modifier = Modifier.height(34.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 3.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = AmberRacing, contentColor = CarbonDark)
-                    ) {
-                        Icon(Icons.Default.ViewQuilt, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(3.dp))
-                        Text("ترتيب", fontSize = 10.sp)
-                    }
-                    IconButton(onClick = { viewModel.resetScreenSaverLayout() }, modifier = Modifier.size(34.dp)) {
-                        Icon(Icons.Default.RestartAlt, "إعادة الترتيب", tint = AmberRacing)
-                    }
-                    Button(
-                        onClick = { viewModel.commitScreenSaverLayout(); editMode = false },
-                        contentPadding = PaddingValues(horizontal = 9.dp, vertical = 4.dp),
-                        modifier = Modifier.height(34.dp)
-                    ) {
-                        Icon(Icons.Default.Check, null, modifier = Modifier.size(17.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("حفظ")
-                    }
-                }
-            }
-        } else {
-            Box(
-                Modifier.fillMaxSize().zIndex(1000f).combinedClickable(
-                    onClick = onDismiss,
-                    onLongClick = { editMode = true }
-                )
-            )
-
-            FilledTonalButton(
-                onClick = { viewModel.updateSettings(settings.copy(screenSaverNightMode = !settings.screenSaverNightMode)) },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp).height(34.dp).zIndex(1200f),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = CarbonDark.copy(alpha = .90f),
-                    contentColor = if (settings.screenSaverNightMode) AmberRacing else TextPrimary
-                )
-            ) {
-                Icon(Icons.Default.DarkMode, null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(5.dp))
-                Text(if (settings.screenSaverNightMode) "الوضع الليلي مفعل" else "وضع القيادة الليلي", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        if (showLayoutDialog) {
-            WidgetLayoutDialog(viewModel, WidgetLayoutTarget.SCREEN_SAVER) { showLayoutDialog = false }
-        }
+        Box(Modifier.fillMaxSize().zIndex(1000f).clickable(onClick = onDismiss))
     }
 }
 
@@ -220,11 +153,8 @@ private fun ScreenSaverCanvas(
     editMode: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val selectedTypes = WidgetType.values().filter { it in settings.screenSaverWidgetTypes }.take(4)
+    val selectedTypes = WidgetType.values().filter { it in settings.screenSaverWidgetTypes && it in SCREEN_SAVER_DISPLAY_WIDGET_TYPES }.take(4)
     val density = LocalDensity.current
-    val context = LocalContext.current
-    val visualStore = remember { WidgetVisualStore(context.applicationContext) }
-    var appearanceVersion by remember { mutableIntStateOf(0) }
     var selectedType by remember { mutableStateOf(selectedTypes.firstOrNull()) }
     val interfaceAccent = Color(settings.interfaceAccent.argb)
 
@@ -248,14 +178,11 @@ private fun ScreenSaverCanvas(
                 val layout = layouts.firstOrNull { it.type == type } ?: ScreenSaverWidgetLayout.defaultFor(type, index)
                 val source = widgets.firstOrNull { it.type == type }
                 val style = layout.style?.takeIf { it.type == type } ?: source?.style ?: defaultScreenSaverStyle(type)
-                val visualId = screenSaverVisualId(type)
-                val surfaceStyle = remember(type, appearanceVersion) {
-                    visualStore.getSurface(visualId, WidgetItem.defaultSurfaceFor(type))
-                }
-                val showBorder = remember(type, appearanceVersion) { visualStore.getBorder(visualId) }
-                val surfaceOpacity = remember(type, appearanceVersion) { visualStore.getSurfaceOpacity(visualId) }
-                val foreground = remember(type, appearanceVersion) { visualStore.getForegroundColorArgb(visualId)?.let(::Color) }
-                val accent = remember(type, appearanceVersion) { visualStore.getAccentColorArgb(visualId)?.let(::Color) }
+                val surfaceStyle = layout.surfaceStyle
+                val showBorder = layout.showBorder
+                val surfaceOpacity = layout.surfaceOpacity
+                val foreground = layout.foregroundColorArgb?.let(::Color)
+                val accent = layout.accentColorArgb?.let(::Color)
                 val isSelected = editMode && selectedType == type
                 val shape = screenSaverShape(type)
                 val background = when (surfaceStyle) {
@@ -283,7 +210,7 @@ private fun ScreenSaverCanvas(
                         .then(if (editMode) Modifier.clickable { selectedType = type } else Modifier)
                 ) {
                     CompositionLocalProvider(
-                        LocalWidgetVisualTokens provides WidgetVisualTokens(foreground, accent),
+                        LocalWidgetVisualTokens provides WidgetVisualTokens(foreground, accent, background.takeIf { it != Color.Transparent }),
                         LocalWidgetForegroundColor provides foreground
                     ) {
                         Box(Modifier.fillMaxSize()) {
@@ -342,9 +269,12 @@ private fun ScreenSaverCanvas(
                     type = type,
                     style = style,
                     widgetOpacity = layout.opacity,
-                    visualStore = visualStore,
-                    appearanceVersion = appearanceVersion,
-                    onAppearanceChanged = { appearanceVersion++ },
+                    layout = layout,
+                    onSurface = { viewModel.setScreenSaverSurface(type, it) },
+                    onBorder = { viewModel.toggleScreenSaverBorder(type) },
+                    onForeground = { viewModel.setScreenSaverForeground(type, it) },
+                    onAccent = { viewModel.setScreenSaverAccent(type, it) },
+                    onSurfaceOpacity = { viewModel.setScreenSaverSurfaceOpacity(type, it) },
                     onCycleStyle = { viewModel.cycleScreenSaverStyle(type) },
                     onOpacityChange = { viewModel.setScreenSaverOpacity(type, it) },
                     accentColor = interfaceAccent,
@@ -360,20 +290,22 @@ private fun ScreenSaverAppearanceDock(
     type: WidgetType,
     style: WidgetStyle,
     widgetOpacity: Float,
-    visualStore: WidgetVisualStore,
-    appearanceVersion: Int,
-    onAppearanceChanged: () -> Unit,
+    layout: ScreenSaverWidgetLayout,
+    onSurface: (WidgetSurfaceStyle) -> Unit,
+    onBorder: () -> Unit,
+    onForeground: (Int?) -> Unit,
+    onAccent: (Int?) -> Unit,
+    onSurfaceOpacity: (Float) -> Unit,
     onCycleStyle: () -> Unit,
     onOpacityChange: (Float) -> Unit,
     accentColor: Color,
     modifier: Modifier = Modifier
 ) {
-    val visualId = screenSaverVisualId(type)
-    val surface = remember(visualId, appearanceVersion) { visualStore.getSurface(visualId, WidgetItem.defaultSurfaceFor(type)) }
-    val border = remember(visualId, appearanceVersion) { visualStore.getBorder(visualId) }
-    val foreground = remember(visualId, appearanceVersion) { visualStore.getForegroundColorArgb(visualId) }
-    val widgetAccent = remember(visualId, appearanceVersion) { visualStore.getAccentColorArgb(visualId) }
-    val backgroundOpacity = remember(visualId, appearanceVersion) { visualStore.getSurfaceOpacity(visualId) }
+    val surface = layout.surfaceStyle
+    val border = layout.showBorder
+    val foreground = layout.foregroundColorArgb
+    val widgetAccent = layout.accentColorArgb
+    val backgroundOpacity = layout.surfaceOpacity
 
     Surface(
         color = CarbonDark.copy(alpha = .97f),
@@ -402,8 +334,7 @@ private fun ScreenSaverAppearanceDock(
                 WidgetSurfaceStyle.values().forEach { option ->
                     Surface(
                         onClick = {
-                            visualStore.setSurface(visualId, option)
-                            onAppearanceChanged()
+                            onSurface(option)
                         },
                         color = if (surface == option) accentColor else CarbonSurface,
                         shape = RoundedCornerShape(7.dp),
@@ -415,8 +346,7 @@ private fun ScreenSaverAppearanceDock(
 
                 IconButton(
                     onClick = {
-                        visualStore.setBorder(visualId, !border)
-                        onAppearanceChanged()
+                        onBorder()
                     },
                     modifier = Modifier.size(30.dp)
                 ) { Icon(Icons.Default.BorderStyle, "الإطار", tint = if (border) AmberRacing else TextSecondary, modifier = Modifier.size(17.dp)) }
@@ -429,12 +359,12 @@ private fun ScreenSaverAppearanceDock(
 
                 Text("الخلفية", color = TextSecondary, fontSize = 8.sp)
                 IconButton(
-                    onClick = { visualStore.setSurfaceOpacity(visualId, backgroundOpacity - .10f); onAppearanceChanged() },
+                    onClick = { onSurfaceOpacity(backgroundOpacity - .10f) },
                     modifier = Modifier.size(28.dp)
                 ) { Icon(Icons.Default.Remove, "الخلفية أخف", tint = TextPrimary, modifier = Modifier.size(15.dp)) }
                 Text("${(backgroundOpacity * 100).toInt()}%", color = accentColor, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 IconButton(
-                    onClick = { visualStore.setSurfaceOpacity(visualId, backgroundOpacity + .10f); onAppearanceChanged() },
+                    onClick = { onSurfaceOpacity(backgroundOpacity + .10f) },
                     modifier = Modifier.size(28.dp)
                 ) { Icon(Icons.Default.Add, "الخلفية أوضح", tint = TextPrimary, modifier = Modifier.size(15.dp)) }
             }
@@ -446,22 +376,22 @@ private fun ScreenSaverAppearanceDock(
             ) {
                 Text("لون النص", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 ScreenSaverColorChoice(null, foreground == null, accentColor) {
-                    visualStore.setForegroundColorArgb(visualId, it); onAppearanceChanged()
+                    onForeground(it)
                 }
                 SCREEN_SAVER_TEXT_COLORS.forEach { color ->
                     ScreenSaverColorChoice(color, foreground == color, accentColor) {
-                        visualStore.setForegroundColorArgb(visualId, it); onAppearanceChanged()
+                        onForeground(it)
                     }
                 }
 
                 VerticalDivider(Modifier.height(22.dp), color = CarbonCardBorder)
                 Text("اللون المميّز", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 ScreenSaverColorChoice(null, widgetAccent == null, accentColor) {
-                    visualStore.setAccentColorArgb(visualId, it); onAppearanceChanged()
+                    onAccent(it)
                 }
                 SCREEN_SAVER_ACCENT_COLORS.forEach { color ->
                     ScreenSaverColorChoice(color, widgetAccent == color, accentColor) {
-                        visualStore.setAccentColorArgb(visualId, it); onAppearanceChanged()
+                        onAccent(it)
                     }
                 }
             }
@@ -485,8 +415,6 @@ private fun ScreenSaverColorChoice(argb: Int?, selected: Boolean, selectionColor
         }
     }
 }
-
-private fun screenSaverVisualId(type: WidgetType) = "screensaver_${type.name.lowercase()}"
 
 private fun screenSaverShape(type: WidgetType) = when (type) {
     WidgetType.CLOCK -> RoundedCornerShape(28.dp)

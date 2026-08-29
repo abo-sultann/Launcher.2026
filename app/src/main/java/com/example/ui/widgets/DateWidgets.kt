@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.WidgetStyle
 import com.example.ui.components.resolvedWidgetColors
+import com.example.ui.components.resolvedWidgetSurface
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -76,7 +77,7 @@ fun DateWidget(style: WidgetStyle, modifier: Modifier = Modifier) {
 
             WidgetStyle.DATE_CARD -> {
                 Surface(
-                    color = CarbonSurface.copy(alpha = .58f),
+                    color = resolvedWidgetSurface(CarbonSurface.copy(alpha = .58f)),
                     shape = RoundedCornerShape(14.dp),
                     border = BorderStroke(1.dp, widgetColors.accent.copy(alpha = .30f)),
                     modifier = Modifier.fillMaxSize()

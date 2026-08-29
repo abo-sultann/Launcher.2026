@@ -52,6 +52,10 @@ fun SettingsScreen(
     val playback by viewModel.playbackState.collectAsState()
     val gps by viewModel.gpsTelemetry.collectAsState()
     var selected by remember { mutableStateOf(SettingsCategory.INTERFACE) }
+    var interfaceBackgroundOpen by remember { mutableStateOf(true) }
+    var interfaceBarsOpen by remember { mutableStateOf(false) }
+    var interfaceAppsOpen by remember { mutableStateOf(false) }
+    var interfaceSafeAreaOpen by remember { mutableStateOf(false) }
     val accent = Color(settings.interfaceAccent.argb)
 
     val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(viewModel::importMusicUri) }
@@ -119,7 +123,8 @@ fun SettingsScreen(
                     LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 8.dp)) {
                         when (selected) {
                             SettingsCategory.INTERFACE -> {
-                                item { SectionTitle("الخلفية والألوان", Icons.Default.Palette) }
+                                item { ExpandableSectionHeader("الخلفية والألوان", Icons.Default.Palette, interfaceBackgroundOpen) { interfaceBackgroundOpen = !interfaceBackgroundOpen } }
+                                if (interfaceBackgroundOpen) {
                                 item {
                                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         items(BackgroundType.values().toList()) { bg ->
@@ -141,8 +146,10 @@ fun SettingsScreen(
                                         }
                                     }
                                 }
+                                }
 
-                                item { SectionTitle("شريطا الشاشة", Icons.Default.ViewDay) }
+                                item { ExpandableSectionHeader("شريطا الشاشة", Icons.Default.ViewDay, interfaceBarsOpen) { interfaceBarsOpen = !interfaceBarsOpen } }
+                                if (interfaceBarsOpen) {
                                 item { SwitchRow("مؤشر Wi‑Fi العلوي", "عنصر واحد فقط؛ المسه لفتح إعدادات الشبكة", settings.showTopBar) { viewModel.updateSettings(settings.copy(showTopBar = it)) } }
                                 item { SwitchRow("شريط التنقل السفلي", "الرئيسية والتطبيقات والموسيقى والخريطة والرحلة والإعدادات", settings.showBottomBar) { viewModel.updateSettings(settings.copy(showBottomBar = it)) } }
                                 if (settings.showBottomBar) {
@@ -155,17 +162,24 @@ fun SettingsScreen(
                                     }
                                     item { NumberSlider("شفافية الشريط السفلي", settings.bottomDockOpacityPercent, 35, 100, "%") { viewModel.updateSettings(settings.copy(bottomDockOpacityPercent = it)) } }
                                 }
+                                }
 
-                                item { SectionTitle("التطبيقات والمساحة الآمنة", Icons.Default.Apps) }
+                                item { ExpandableSectionHeader("التطبيقات", Icons.Default.Apps, interfaceAppsOpen) { interfaceAppsOpen = !interfaceAppsOpen } }
+                                if (interfaceAppsOpen) {
                                 item { NumberSlider("حجم أيقونات التطبيقات", settings.iconSizeDp, 40, 110, "dp") { viewModel.updateSettings(settings.copy(iconSizeDp = it)) } }
                                 item { NumberSlider("أعمدة درج التطبيقات", settings.appDrawerColumns, 2, 8, "أعمدة") { viewModel.updateSettings(settings.copy(appDrawerColumns = it)) } }
-                                item { SwitchRow("أسماء التطبيقات", "إظهار الاسم أسفل الأيقونة", settings.showAppLabels) { viewModel.updateSettings(settings.copy(showAppLabels = it, showAppNames = it)) } }
+                                item { SwitchRow("أسماء التطبيقات", "إظهار الاسم أسفل الأيقونة", settings.showAppLabels) { viewModel.updateSettings(settings.copy(showAppLabels = it)) } }
+                                }
+
+                                item { ExpandableSectionHeader("المساحة الآمنة", Icons.Default.AspectRatio, interfaceSafeAreaOpen) { interfaceSafeAreaOpen = !interfaceSafeAreaOpen } }
+                                if (interfaceSafeAreaOpen) {
                                 item { InfoCard("الهوامش الحالية: أعلى ${safeArea.topDp} • أسفل ${safeArea.bottomDp} • يمين ${safeArea.rightDp} • يسار ${safeArea.leftDp} dp") }
                                 item {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         ActionButton("ضبط الهوامش", Icons.Default.AspectRatio, onOpenSafeAreaPreview)
                                         ActionButton("تصفير", Icons.Default.Refresh) { viewModel.resetSafeArea() }
                                     }
+                                }
                                 }
                             }
 
@@ -188,7 +202,7 @@ fun SettingsScreen(
                                 item { SectionTitle("ودجت شاشة التوقف — حتى 4", Icons.Default.Widgets) }
                                 item {
                                     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                        WidgetType.values().toList().chunked(3).forEach { row ->
+                                        SCREEN_SAVER_DISPLAY_WIDGET_TYPES.toList().chunked(3).forEach { row ->
                                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 row.forEach { type ->
                                                     FilterChip(selected = type in settings.screenSaverWidgetTypes, onClick = { viewModel.toggleScreenSaverWidget(type) }, label = { Text(type.arabicTitle, fontSize = 9.sp) })
@@ -252,10 +266,10 @@ fun SettingsScreen(
                             }
 
                             SettingsCategory.SYSTEM -> {
-                                item { SwitchRow("التشغيل التلقائي", "فتح Launcher بعد تشغيل الشاشة", settings.autoStartOnBoot) { viewModel.updateSettings(settings.copy(autoStartOnBoot = it, autoStartEnabled = it)) } }
+                                item { SwitchRow("التشغيل التلقائي", "فتح Launcher بعد تشغيل الشاشة", settings.autoStartOnBoot) { viewModel.updateSettings(settings.copy(autoStartOnBoot = it)) } }
                                 item { SwitchRow("إبقاء الشاشة مضاءة", "منع إطفاء الشاشة أثناء استخدام Launcher", settings.keepScreenOn) { viewModel.updateSettings(settings.copy(keepScreenOn = it)) } }
                                 item { SwitchRow("الوضع عالي التباين", "رفع وضوح النصوص والعناصر", settings.highContrastMode) { viewModel.updateSettings(settings.copy(highContrastMode = it)) } }
-                                item { ClockFormatRow(settings.is24HourFormat) { is24 -> viewModel.updateSettings(settings.copy(is24HourFormat = is24, is24HourClock = is24)) } }
+                                item { ClockFormatRow(settings.is24HourFormat) { is24 -> viewModel.updateSettings(settings.copy(is24HourFormat = is24)) } }
                                 item { StableSystemPanel() }
                                 item { ActionButton("فحص النظام", Icons.Default.HealthAndSafety) { viewModel.runDiagnostics(); onOpenDiagnostics() } }
                                 item { ActionButton("تصفير سجل الوضع الآمن", Icons.Default.Security) { viewModel.resetSafeMode() } }
@@ -274,6 +288,25 @@ private fun SectionTitle(title: String, icon: ImageVector) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
         Icon(icon, null, tint = accent, modifier = Modifier.size(18.dp))
         Text(title, color = accent, fontWeight = FontWeight.Black, fontSize = 13.sp)
+    }
+}
+
+@Composable
+private fun ExpandableSectionHeader(title: String, icon: ImageVector, expanded: Boolean, onToggle: () -> Unit) {
+    val accent = LocalSettingsAccent.current
+    Surface(
+        onClick = onToggle,
+        color = if (expanded) accent.copy(alpha = .10f) else CarbonSurface,
+        shape = RoundedCornerShape(11.dp),
+        border = BorderStroke(1.dp, if (expanded) accent.copy(alpha = .45f) else CarbonCardBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(Modifier.padding(horizontal = 11.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = accent, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(7.dp))
+            Text(title, color = TextPrimary, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+            Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = TextSecondary)
+        }
     }
 }
 

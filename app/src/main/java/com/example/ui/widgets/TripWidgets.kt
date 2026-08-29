@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import com.example.model.TripData
 import com.example.model.WidgetStyle
 import com.example.ui.components.resolvedWidgetColors
+import com.example.ui.components.resolvedWidgetSurface
 import com.example.ui.theme.*
 import java.util.Locale
 
@@ -80,7 +81,7 @@ fun TripWidget(
 
             WidgetStyle.TRIP_DASHBOARD -> {
                 Surface(
-                    color = CarbonSurface,
+                    color = resolvedWidgetSurface(CarbonSurface),
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
                     modifier = Modifier.fillMaxSize()
@@ -121,7 +122,7 @@ fun TripWidget(
 
             WidgetStyle.TRIP_CARD -> {
                 Surface(
-                    color = CarbonSurface,
+                    color = resolvedWidgetSurface(CarbonSurface),
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
                     modifier = Modifier.fillMaxSize()

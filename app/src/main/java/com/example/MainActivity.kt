@@ -244,7 +244,8 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                                 onScreenSelected = { screen -> activeSubOverlay = SubOverlayScreen.NONE; viewModel.navigateTo(screen) },
                                 surfaceStyle = settings.bottomDockStyle,
                                 opacityPercent = settings.bottomDockOpacityPercent,
-                                accentColor = Color(settings.interfaceAccent.argb)
+                                accentColor = Color(settings.interfaceAccent.argb),
+                                highContrast = settings.highContrastMode
                             )
                         }
                     }
@@ -330,7 +331,8 @@ private fun BoxScope.OverlayLauncherBars(
                 onScreenSelected = { screen -> viewModel.navigateTo(screen) },
                 surfaceStyle = settings.bottomDockStyle,
                 opacityPercent = settings.bottomDockOpacityPercent,
-                accentColor = Color(settings.interfaceAccent.argb)
+                accentColor = Color(settings.interfaceAccent.argb),
+                highContrast = settings.highContrastMode
             )
         }
     }

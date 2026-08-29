@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.example.model.GpsTelemetry
 import com.example.model.WidgetStyle
 import com.example.ui.components.resolvedWidgetColors
+import com.example.ui.components.resolvedWidgetSurface
 import com.example.ui.theme.*
 import com.example.util.bearingToArabicDirection
 import java.util.Locale
@@ -70,7 +71,7 @@ fun GpsWidget(
 
             WidgetStyle.GPS_CARD -> {
                 Surface(
-                    color = CarbonSurface,
+                    color = resolvedWidgetSurface(CarbonSurface),
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
                     modifier = Modifier.fillMaxSize()
@@ -175,7 +176,7 @@ fun GpsWidget(
 
             WidgetStyle.GPS_ACCURACY -> {
                 Surface(
-                    color = CarbonSurface,
+                    color = resolvedWidgetSurface(CarbonSurface),
                     shape = RoundedCornerShape(18.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
                     modifier = Modifier.fillMaxSize()

@@ -26,6 +26,7 @@ import com.example.model.GpsTelemetry
 import com.example.model.TripData
 import com.example.model.WidgetStyle
 import com.example.ui.components.resolvedWidgetColors
+import com.example.ui.components.resolvedWidgetSurface
 import com.example.ui.theme.*
 
 @Composable
@@ -110,7 +111,7 @@ fun SpeedWidget(
             }
 
             WidgetStyle.SPEED_DASHBOARD -> {
-                Surface(color = CarbonSurface, shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxSize()) {
+                Surface(color = resolvedWidgetSurface(CarbonSurface), shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxSize()) {
                     Column(Modifier.fillMaxSize().padding(if (compact) 7.dp else 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
                         if (!tiny) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text("السرعة", fontSize = labelSize, fontWeight = FontWeight.Bold, color = widgetColors.accent)

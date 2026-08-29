@@ -105,7 +105,10 @@ data class WidgetItem(
     val isLocked: Boolean = false,
     val zIndex: Int = 0,
     val surfaceStyle: WidgetSurfaceStyle = WidgetSurfaceStyle.TRANSPARENT,
-    val showBorder: Boolean = false
+    val showBorder: Boolean = false,
+    val foregroundColorArgb: Int? = null,
+    val accentColorArgb: Int? = null,
+    val surfaceOpacity: Float = 1f
 ) {
     fun hasFreeGeometry(): Boolean = xFraction >= 0f && yFraction >= 0f && widthFraction > 0f && heightFraction > 0f
 
@@ -185,7 +188,10 @@ data class WidgetItem(
                 isLocked = false,
                 zIndex = order,
                 surfaceStyle = defaultSurfaceFor(type),
-                showBorder = false
+                showBorder = false,
+                foregroundColorArgb = null,
+                accentColorArgb = null,
+                surfaceOpacity = 1f
             )
         }
 

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.example.model.MusicPlaybackState
 import com.example.model.WidgetStyle
 import com.example.ui.components.resolvedWidgetColors
+import com.example.ui.components.resolvedWidgetSurface
 import com.example.ui.theme.*
 
 @Composable
@@ -97,7 +98,7 @@ fun MusicWidget(
 
             WidgetStyle.MUSIC_COMPACT -> {
                 Surface(
-                    color = CarbonSurface,
+                    color = resolvedWidgetSurface(CarbonSurface),
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
                     modifier = Modifier.fillMaxSize()
@@ -151,7 +152,7 @@ fun MusicWidget(
 
             WidgetStyle.MUSIC_COVER -> {
                 Surface(
-                    color = CarbonSurface,
+                    color = resolvedWidgetSurface(CarbonSurface),
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
                     modifier = Modifier.fillMaxSize()
@@ -268,7 +269,7 @@ fun MusicWidget(
 
             WidgetStyle.MUSIC_LARGE_AUTOMOTIVE -> {
                 Surface(
-                    color = CarbonSurface,
+                    color = resolvedWidgetSurface(CarbonSurface),
                     shape = RoundedCornerShape(14.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, widgetColors.accent.copy(alpha = 0.4f)),
                     modifier = Modifier.fillMaxSize()

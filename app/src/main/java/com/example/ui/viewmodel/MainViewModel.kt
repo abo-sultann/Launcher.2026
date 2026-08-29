@@ -28,6 +28,7 @@ import kotlin.math.min
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesManager = PreferencesManager(application)
+    private val legacyWidgetVisualStore = WidgetVisualStore(application)
     private val appRepository = AppRepository(application, preferencesManager)
     private val musicPlayerService = MusicPlayerService(application, preferencesManager)
     private val gpsTelemetryManager = GpsTelemetryManager(application)
@@ -107,7 +108,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun navigateTo(screen: CarScreen) { if (_currentScreen.value != screen) _currentScreen.value = screen }
     fun restartGps() = gpsTelemetryManager.restartGpsUpdates()
 
-    private fun loadWidgets() { _widgets.value = preferencesManager.getWidgets() }
+    private fun loadWidgets() {
+        val migrated = preferencesManager.getWidgets().map(legacyWidgetVisualStore::decorate)
+        _widgets.value = migrated
+        preferencesManager.saveWidgets(migrated)
+        migrated.forEach { legacyWidgetVisualStore.remove(it.id) }
+    }
     fun toggleDesignMode() { _isDesignMode.value = !_isDesignMode.value }
 
     fun addWidget(type: WidgetType, style: WidgetStyle) {
@@ -174,7 +180,61 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun commitWidgetLayout() = preferencesManager.saveWidgets(_widgets.value)
     fun setWidgetOpacity(widgetId: String, opacity: Float) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(opacity = opacity.coerceIn(0.20f, 1f)) else it }
+    fun setWidgetSurface(widgetId: String, surface: WidgetSurfaceStyle) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(surfaceStyle = surface) else it }
+    fun toggleWidgetBorder(widgetId: String) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(showBorder = !it.showBorder) else it }
+    fun setWidgetForeground(widgetId: String, argb: Int?) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(foregroundColorArgb = argb) else it }
+    fun setWidgetAccent(widgetId: String, argb: Int?) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(accentColorArgb = argb) else it }
+    fun setWidgetSurfaceOpacity(widgetId: String, opacity: Float) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(surfaceOpacity = opacity.coerceIn(.25f, 1f)) else it }
     fun toggleWidgetLock(widgetId: String) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(isLocked = !it.isLocked) else it }
+
+    fun setWidgetSizePreset(widgetId: String, preset: WidgetSizePreset) = updateAndSaveWidgets { item ->
+        if (item.id != widgetId) item else {
+            val (width, height) = WidgetItem.recommendedSize(item.type, preset)
+            item.copy(
+                widthFraction = width,
+                heightFraction = height,
+                xFraction = item.xFraction.coerceAtMost((1f - width).coerceAtLeast(0f)),
+                yFraction = item.yFraction.coerceAtMost((1f - height).coerceAtLeast(0f))
+            )
+        }
+    }
+
+    fun replaceWidgetGeometry(widgetId: String, x: Float, y: Float, width: Float, height: Float) = updateAndSaveWidgets { item ->
+        if (item.id != widgetId) item else {
+            val w = width.coerceIn(.07f, 1f)
+            val h = height.coerceIn(.07f, 1f)
+            item.copy(
+                xFraction = x.coerceIn(0f, (1f - w).coerceAtLeast(0f)),
+                yFraction = y.coerceIn(0f, (1f - h).coerceAtLeast(0f)),
+                widthFraction = w,
+                heightFraction = h
+            )
+        }
+    }
+
+    fun replaceWidgets(items: List<WidgetItem>) {
+        _widgets.value = items
+        preferencesManager.saveWidgets(items)
+    }
+
+    fun resetWidget(widgetId: String) = updateAndSaveWidgets { item ->
+        if (item.id != widgetId) item else {
+            val (width, height) = WidgetItem.recommendedSize(item.type, WidgetSizePreset.SMALL)
+            item.copy(
+                widthFraction = width,
+                heightFraction = height,
+                xFraction = item.xFraction.coerceAtMost((1f - width).coerceAtLeast(0f)),
+                yFraction = item.yFraction.coerceAtMost((1f - height).coerceAtLeast(0f)),
+                opacity = 1f,
+                isLocked = false,
+                surfaceStyle = WidgetItem.defaultSurfaceFor(item.type),
+                showBorder = false,
+                foregroundColorArgb = null,
+                accentColorArgb = null,
+                surfaceOpacity = 1f
+            )
+        }
+    }
 
     fun bringWidgetToFront(widgetId: String) {
         val next = (_widgets.value.maxOfOrNull { it.zIndex } ?: 0) + 1
@@ -313,6 +373,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateSettings(newSettings: LauncherSettings) { _settings.value = newSettings; preferencesManager.saveSettings(newSettings) }
 
     fun toggleScreenSaverWidget(type: WidgetType) {
+        if (type !in SCREEN_SAVER_DISPLAY_WIDGET_TYPES) return
         val current = _settings.value.screenSaverWidgetTypes.toMutableSet()
         if (type in current) current.remove(type) else if (current.size < 4) current.add(type)
         val selected = current.ifEmpty { mutableSetOf(WidgetType.CLOCK) }.toSet()
@@ -340,14 +401,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         heightFraction = o.optDouble("h", 0.34).toFloat(),
                         opacity = o.optDouble("opacity", 0.90).toFloat().coerceIn(0.25f, 1f),
                         zIndex = o.optInt("z", i),
-                        style = style
+                        style = style,
+                        surfaceStyle = try { WidgetSurfaceStyle.valueOf(o.optString("surface", WidgetItem.defaultSurfaceFor(type).name)) } catch (_: Exception) { WidgetItem.defaultSurfaceFor(type) },
+                        showBorder = o.optBoolean("border", false),
+                        foregroundColorArgb = if (o.has("foreground") && !o.isNull("foreground")) o.optInt("foreground") else null,
+                        accentColorArgb = if (o.has("accent") && !o.isNull("accent")) o.optInt("accent") else null,
+                        surfaceOpacity = o.optDouble("surfaceOpacity", 1.0).toFloat().coerceIn(.25f, 1f)
                     )
                 }
             }
         } catch (_: Exception) { }
-        val orderedTypes = WidgetType.values().filter { it in _settings.value.screenSaverWidgetTypes }.take(4)
-        _screenSaverLayouts.value = orderedTypes.mapIndexed { index, type -> saved.firstOrNull { it.type == type } ?: ScreenSaverWidgetLayout.defaultFor(type, index) }
+        val orderedTypes = WidgetType.values().filter { it in _settings.value.screenSaverWidgetTypes && it in SCREEN_SAVER_DISPLAY_WIDGET_TYPES }.take(4)
+        _screenSaverLayouts.value = orderedTypes.mapIndexed { index, type ->
+            legacyWidgetVisualStore.decorate(saved.firstOrNull { it.type == type } ?: ScreenSaverWidgetLayout.defaultFor(type, index))
+        }
         saveScreenSaverLayouts()
+        orderedTypes.forEach { legacyWidgetVisualStore.remove("screensaver_${it.name.lowercase()}") }
     }
 
     private fun saveScreenSaverLayouts() {
@@ -355,6 +424,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val array = JSONArray()
             _screenSaverLayouts.value.forEach { item -> array.put(JSONObject().apply {
                 put("type", item.type.name); put("x", item.xFraction.toDouble()); put("y", item.yFraction.toDouble()); put("w", item.widthFraction.toDouble()); put("h", item.heightFraction.toDouble()); put("opacity", item.opacity.toDouble()); put("z", item.zIndex); put("style", item.style?.name ?: "")
+                put("surface", item.surfaceStyle.name); put("border", item.showBorder); if (item.foregroundColorArgb != null) put("foreground", item.foregroundColorArgb); if (item.accentColorArgb != null) put("accent", item.accentColorArgb); put("surfaceOpacity", item.surfaceOpacity.toDouble())
             }) }
             screenSaverPrefs().edit().putString("screensaver_layouts_json", array.toString()).apply()
         } catch (_: Exception) { }
@@ -385,8 +455,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         saveScreenSaverLayouts()
     }
 
+    fun setScreenSaverSurface(type: WidgetType, surface: WidgetSurfaceStyle) = updateScreenSaverAppearance(type) { it.copy(surfaceStyle = surface) }
+    fun toggleScreenSaverBorder(type: WidgetType) = updateScreenSaverAppearance(type) { it.copy(showBorder = !it.showBorder) }
+    fun setScreenSaverForeground(type: WidgetType, argb: Int?) = updateScreenSaverAppearance(type) { it.copy(foregroundColorArgb = argb) }
+    fun setScreenSaverAccent(type: WidgetType, argb: Int?) = updateScreenSaverAppearance(type) { it.copy(accentColorArgb = argb) }
+    fun setScreenSaverSurfaceOpacity(type: WidgetType, opacity: Float) = updateScreenSaverAppearance(type) { it.copy(surfaceOpacity = opacity.coerceIn(.25f, 1f)) }
+
+    private fun updateScreenSaverAppearance(type: WidgetType, transform: (ScreenSaverWidgetLayout) -> ScreenSaverWidgetLayout) {
+        _screenSaverLayouts.value = _screenSaverLayouts.value.map { if (it.type == type) transform(it) else it }
+        saveScreenSaverLayouts()
+    }
+
     fun cycleScreenSaverStyle(type: WidgetType) {
-        val styles = WidgetStyle.values().filter { it.type == type }
+        val styles = screenSaverStylesFor(type)
         if (styles.isEmpty()) return
         _screenSaverLayouts.value = _screenSaverLayouts.value.map { item ->
             if (item.type != type) item else {
@@ -404,7 +485,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun commitScreenSaverLayout() = saveScreenSaverLayouts()
     fun resetScreenSaverLayout() {
-        val ordered = WidgetType.values().filter { it in _settings.value.screenSaverWidgetTypes }.take(4)
+        val ordered = WidgetType.values().filter { it in _settings.value.screenSaverWidgetTypes && it in SCREEN_SAVER_DISPLAY_WIDGET_TYPES }.take(4)
         _screenSaverLayouts.value = ordered.mapIndexed { index, type -> ScreenSaverWidgetLayout.defaultFor(type, index) }
         saveScreenSaverLayouts()
     }
@@ -516,22 +597,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun serializeHomeLayout(items: List<WidgetItem>): JSONArray = JSONArray().apply {
         items.forEach { item -> put(JSONObject().apply {
-            put("id", item.id); put("style", item.style.name); put("x", item.xFraction); put("y", item.yFraction); put("w", item.widthFraction); put("h", item.heightFraction); put("opacity", item.opacity); put("locked", item.isLocked); put("z", item.zIndex)
+            put("id", item.id); put("style", item.style.name); put("x", item.xFraction); put("y", item.yFraction); put("w", item.widthFraction); put("h", item.heightFraction); put("opacity", item.opacity); put("locked", item.isLocked); put("z", item.zIndex); put("surface", item.surfaceStyle.name); put("border", item.showBorder); if (item.foregroundColorArgb != null) put("foreground", item.foregroundColorArgb); if (item.accentColorArgb != null) put("accent", item.accentColorArgb); put("surfaceOpacity", item.surfaceOpacity)
         }) }
     }
 
     private fun applySavedHome(item: WidgetItem, o: JSONObject): WidgetItem {
         val style = try { WidgetStyle.valueOf(o.optString("style", item.style.name)).takeIf { it.type == item.type } ?: item.style } catch (_: Exception) { item.style }
-        return item.copy(style = style, xFraction = o.optDouble("x", item.xFraction.toDouble()).toFloat(), yFraction = o.optDouble("y", item.yFraction.toDouble()).toFloat(), widthFraction = o.optDouble("w", item.widthFraction.toDouble()).toFloat(), heightFraction = o.optDouble("h", item.heightFraction.toDouble()).toFloat(), opacity = o.optDouble("opacity", item.opacity.toDouble()).toFloat(), isLocked = o.optBoolean("locked", item.isLocked), zIndex = o.optInt("z", item.zIndex))
+        return item.copy(style = style, xFraction = o.optDouble("x", item.xFraction.toDouble()).toFloat(), yFraction = o.optDouble("y", item.yFraction.toDouble()).toFloat(), widthFraction = o.optDouble("w", item.widthFraction.toDouble()).toFloat(), heightFraction = o.optDouble("h", item.heightFraction.toDouble()).toFloat(), opacity = o.optDouble("opacity", item.opacity.toDouble()).toFloat(), isLocked = o.optBoolean("locked", item.isLocked), zIndex = o.optInt("z", item.zIndex), surfaceStyle = try { WidgetSurfaceStyle.valueOf(o.optString("surface", item.surfaceStyle.name)) } catch (_: Exception) { item.surfaceStyle }, showBorder = o.optBoolean("border", item.showBorder), foregroundColorArgb = if (o.has("foreground") && !o.isNull("foreground")) o.optInt("foreground") else item.foregroundColorArgb, accentColorArgb = if (o.has("accent") && !o.isNull("accent")) o.optInt("accent") else item.accentColorArgb, surfaceOpacity = o.optDouble("surfaceOpacity", item.surfaceOpacity.toDouble()).toFloat())
     }
 
     private fun serializeSaverLayout(items: List<ScreenSaverWidgetLayout>): JSONArray = JSONArray().apply {
-        items.forEach { item -> put(JSONObject().apply { put("type", item.type.name); put("style", item.style?.name ?: ""); put("x", item.xFraction); put("y", item.yFraction); put("w", item.widthFraction); put("h", item.heightFraction); put("opacity", item.opacity); put("z", item.zIndex) }) }
+        items.forEach { item -> put(JSONObject().apply { put("type", item.type.name); put("style", item.style?.name ?: ""); put("x", item.xFraction); put("y", item.yFraction); put("w", item.widthFraction); put("h", item.heightFraction); put("opacity", item.opacity); put("z", item.zIndex); put("surface", item.surfaceStyle.name); put("border", item.showBorder); if (item.foregroundColorArgb != null) put("foreground", item.foregroundColorArgb); if (item.accentColorArgb != null) put("accent", item.accentColorArgb); put("surfaceOpacity", item.surfaceOpacity) }) }
     }
 
     private fun applySavedSaver(item: ScreenSaverWidgetLayout, o: JSONObject): ScreenSaverWidgetLayout {
         val style = try { o.optString("style", "").takeIf { it.isNotBlank() }?.let { WidgetStyle.valueOf(it) }?.takeIf { it.type == item.type } ?: item.style } catch (_: Exception) { item.style }
-        return item.copy(xFraction = o.optDouble("x", item.xFraction.toDouble()).toFloat(), yFraction = o.optDouble("y", item.yFraction.toDouble()).toFloat(), widthFraction = o.optDouble("w", item.widthFraction.toDouble()).toFloat(), heightFraction = o.optDouble("h", item.heightFraction.toDouble()).toFloat(), opacity = o.optDouble("opacity", item.opacity.toDouble()).toFloat(), zIndex = o.optInt("z", item.zIndex), style = style)
+        return item.copy(xFraction = o.optDouble("x", item.xFraction.toDouble()).toFloat(), yFraction = o.optDouble("y", item.yFraction.toDouble()).toFloat(), widthFraction = o.optDouble("w", item.widthFraction.toDouble()).toFloat(), heightFraction = o.optDouble("h", item.heightFraction.toDouble()).toFloat(), opacity = o.optDouble("opacity", item.opacity.toDouble()).toFloat(), zIndex = o.optInt("z", item.zIndex), style = style, surfaceStyle = try { WidgetSurfaceStyle.valueOf(o.optString("surface", item.surfaceStyle.name)) } catch (_: Exception) { item.surfaceStyle }, showBorder = o.optBoolean("border", item.showBorder), foregroundColorArgb = if (o.has("foreground") && !o.isNull("foreground")) o.optInt("foreground") else item.foregroundColorArgb, accentColorArgb = if (o.has("accent") && !o.isNull("accent")) o.optInt("accent") else item.accentColorArgb, surfaceOpacity = o.optDouble("surfaceOpacity", item.surfaceOpacity.toDouble()).toFloat())
     }
 
     private fun readNamedLayouts(key: String): JSONObject = try { JSONObject(layoutPrefs.getString(key, "{}") ?: "{}") } catch (_: Exception) { JSONObject() }

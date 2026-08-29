@@ -11,13 +11,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.example.data.WidgetVisualStore
 import com.example.model.*
 import com.example.ui.components.CarScreen
 import com.example.ui.components.WidgetFrame
@@ -39,10 +37,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val activeMap by viewModel.activeMap.collectAsState()
     val navigationTarget by viewModel.offroadNavigationTarget.collectAsState()
 
-    val context = LocalContext.current
-    val visualStore = remember { WidgetVisualStore(context.applicationContext) }
-    var visualVersion by remember { mutableIntStateOf(0) }
-    val visualWidgets = remember(widgets, visualVersion) { widgets.map(visualStore::decorate) }
+    val visualWidgets = widgets
 
     var showLibraryDialog by remember { mutableStateOf(false) }
     var showLayoutDialog by remember { mutableStateOf(false) }
@@ -57,17 +52,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
 
     fun restoreUndoPoint() {
         val snapshot = undoSnapshot ?: return
-        val current = visualWidgets.associateBy { it.id }
-        snapshot.forEach { previous ->
-            val now = current[previous.id] ?: return@forEach
-            if (now.style != previous.style) viewModel.updateWidgetStyle(previous.id, previous.style)
-            if (kotlin.math.abs(now.opacity - previous.opacity) > .01f) viewModel.setWidgetOpacity(previous.id, previous.opacity)
-            if (now.isLocked != previous.isLocked) viewModel.toggleWidgetLock(previous.id)
-            visualStore.setGeometry(previous.id, previous.xFraction, previous.yFraction, previous.widthFraction, previous.heightFraction)
-            visualStore.setSurface(previous.id, previous.surfaceStyle)
-            visualStore.setBorder(previous.id, previous.showBorder)
-        }
-        visualVersion++
+        viewModel.replaceWidgets(snapshot)
         undoSnapshot = null
     }
 
@@ -75,13 +60,12 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         rememberUndoPoint()
         visualWidgets.filter { it.isVisible }.forEach { item ->
             val target = backgroundFocusGeometry(item.type)
-            visualStore.setGeometry(item.id, target[0], target[1], target[2], target[3])
+            viewModel.replaceWidgetGeometry(item.id, target[0], target[1], target[2], target[3])
             val recommendedStyle = backgroundFocusStyle(item.type)
             if (item.style != recommendedStyle) viewModel.updateWidgetStyle(item.id, recommendedStyle)
-            visualStore.setSurface(item.id, WidgetItem.defaultSurfaceFor(item.type))
-            visualStore.setBorder(item.id, false)
+            viewModel.setWidgetSurface(item.id, WidgetItem.defaultSurfaceFor(item.type))
+            if (item.showBorder) viewModel.toggleWidgetBorder(item.id)
         }
-        visualVersion++
         selectedWidgetId = null
     }
 
@@ -114,31 +98,22 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     onChangeStyle = { rememberUndoPoint(); selectedWidgetId = normalized.id; editingWidgetForStyle = normalized },
                     onMoveBy = { dxPx, dyPx ->
                         selectedWidgetId = normalized.id
-                        val nx = (normalized.xFraction + dxPx / canvasWidthPx).coerceIn(0f, (1f - normalized.widthFraction).coerceAtLeast(0f))
-                        val ny = (normalized.yFraction + dyPx / canvasHeightPx).coerceIn(0f, (1f - normalized.heightFraction).coerceAtLeast(0f))
-                        visualStore.previewGeometry(normalized.id, nx, ny, normalized.widthFraction, normalized.heightFraction)
-                        visualVersion++
+                        viewModel.previewWidgetMove(normalized.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
                     },
                     onResizeBy = { dwPx, dhPx ->
                         selectedWidgetId = normalized.id
-                        val nw = (normalized.widthFraction + dwPx / canvasWidthPx).coerceIn(.07f, (1f - normalized.xFraction).coerceAtLeast(.07f))
-                        val nh = (normalized.heightFraction + dhPx / canvasHeightPx).coerceIn(.07f, (1f - normalized.yFraction).coerceAtLeast(.07f))
-                        visualStore.previewGeometry(normalized.id, normalized.xFraction, normalized.yFraction, nw, nh)
-                        visualVersion++
+                        viewModel.previewWidgetResize(normalized.id, dwPx / canvasWidthPx, dhPx / canvasHeightPx)
                     },
                     onTransformFinished = {
-                        visualStore.commitGeometry(normalized.id)
-                        visualVersion++
+                        viewModel.commitWidgetLayout()
                     },
                     onOpacityChange = { viewModel.setWidgetOpacity(normalized.id, it) },
                     onToggleLock = { rememberUndoPoint(); viewModel.toggleWidgetLock(normalized.id) },
                     onBringToFront = { viewModel.bringWidgetToFront(normalized.id) },
                     onDelete = {
                         rememberUndoPoint()
-                        visualStore.remove(normalized.id)
                         viewModel.removeWidget(normalized.id)
                         if (selectedWidgetId == normalized.id) selectedWidgetId = null
-                        visualVersion++
                     },
                     onDuplicate = {
                         rememberUndoPoint()
@@ -146,20 +121,20 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     },
                     onSetSizePreset = { preset ->
                         rememberUndoPoint()
-                        val target = WidgetItem.recommendedSize(normalized.type, preset)
-                        visualStore.setGeometry(normalized.id, normalized.xFraction, normalized.yFraction, target.first, target.second)
-                        visualVersion++
+                        viewModel.setWidgetSizePreset(normalized.id, preset)
                     },
                     onSurfaceChange = { surface ->
                         rememberUndoPoint()
-                        visualStore.setSurface(normalized.id, surface)
-                        visualVersion++
+                        viewModel.setWidgetSurface(normalized.id, surface)
                     },
                     onToggleBorder = {
                         rememberUndoPoint()
-                        visualStore.setBorder(normalized.id, !normalized.showBorder)
-                        visualVersion++
+                        viewModel.toggleWidgetBorder(normalized.id)
                     },
+                    onForegroundChange = { rememberUndoPoint(); viewModel.setWidgetForeground(normalized.id, it) },
+                    onAccentChange = { rememberUndoPoint(); viewModel.setWidgetAccent(normalized.id, it) },
+                    onSurfaceOpacityChange = { rememberUndoPoint(); viewModel.setWidgetSurfaceOpacity(normalized.id, it) },
+                    onResetWidget = { rememberUndoPoint(); viewModel.resetWidget(normalized.id) },
                     modifier = Modifier.offset(x = x, y = y).size(width = width, height = height).zIndex(normalized.zIndex.toFloat())
                 ) {
                     RenderWidgetContent(
@@ -228,9 +203,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     OutlinedButton(
                         onClick = {
                             rememberUndoPoint()
-                            visualStore.reset()
                             viewModel.resetWidgetsToDefault()
-                            visualVersion++
                             selectedWidgetId = null
                         },
                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),

@@ -41,6 +41,7 @@ fun BottomCarNavBar(
     surfaceStyle: DockSurfaceStyle = DockSurfaceStyle.GLASS,
     opacityPercent: Int = 76,
     accentColor: Color = CyanNeon,
+    highContrast: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val opacity = opacityPercent.coerceIn(30, 100) / 100f
@@ -77,6 +78,8 @@ fun BottomCarNavBar(
                         screen = screen,
                         isSelected = isSelected,
                         accentColor = accentColor,
+                        clearSurface = surfaceStyle == DockSurfaceStyle.CLEAR,
+                        highContrast = highContrast,
                         onClick = { onScreenSelected(screen) },
                         modifier = Modifier.weight(if (isSelected) 1.35f else .78f)
                     )
@@ -91,11 +94,17 @@ private fun DockButton(
     screen: CarScreen,
     isSelected: Boolean,
     accentColor: Color,
+    clearSurface: Boolean,
+    highContrast: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (isSelected) accentColor.copy(alpha = .15f) else Color.Transparent
-    val contentColor = if (isSelected) accentColor else TextSecondary
+    val bgColor = when {
+        isSelected -> accentColor.copy(alpha = if (highContrast) .24f else .15f)
+        clearSurface -> CarbonDark.copy(alpha = if (highContrast) .62f else .34f)
+        else -> Color.Transparent
+    }
+    val contentColor = if (isSelected) accentColor else if (highContrast || clearSurface) TextPrimary else TextSecondary
 
     Box(
         modifier = modifier
