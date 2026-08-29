@@ -21,11 +21,6 @@ jobs:
     name: Build and verify Saudi map
     runs-on: ubuntu-latest
     timeout-minutes: 330
-    env:
-      MAP_BUILD_WORK_ROOT: ${{ runner.temp }}/saudi-map-work
-      MAP_BUILD_OUTPUT_ROOT: ${{ github.workspace }}/map-output
-      JAVACMD_OPTIONS: -Xmx5200m
-
     steps:
       - name: Checkout map-pack branch
         uses: actions/checkout@v4
@@ -62,6 +57,10 @@ jobs:
           free -h
 
       - name: Build and verify map pack
+        env:
+          MAP_BUILD_WORK_ROOT: ${{ runner.temp }}/saudi-map-work
+          MAP_BUILD_OUTPUT_ROOT: ${{ github.workspace }}/map-output
+          JAVACMD_OPTIONS: -Xmx5200m
         run: bash map-pack/build-saudi-map.sh
 
       - name: Upload verified map pack
@@ -72,4 +71,3 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 3
-
