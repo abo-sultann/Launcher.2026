@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.*
+import com.example.model.DockSurfaceStyle
 
 enum class CarScreen(val arabicTitle: String, val icon: ImageVector, val tag: String) {
     HOME("الرئيسية", Icons.Default.Home, "nav_tab_home"),
@@ -37,17 +38,32 @@ enum class CarScreen(val arabicTitle: String, val icon: ImageVector, val tag: St
 fun BottomCarNavBar(
     currentScreen: CarScreen,
     onScreenSelected: (CarScreen) -> Unit,
+    surfaceStyle: DockSurfaceStyle = DockSurfaceStyle.GLASS,
+    opacityPercent: Int = 76,
+    accentColor: Color = CyanNeon,
     modifier: Modifier = Modifier
 ) {
+    val opacity = opacityPercent.coerceIn(30, 100) / 100f
+    val dockColor = when (surfaceStyle) {
+        DockSurfaceStyle.CLEAR -> Color.Transparent
+        DockSurfaceStyle.GLASS -> CarbonDark.copy(alpha = opacity)
+        DockSurfaceStyle.SOLID -> CarbonDark.copy(alpha = (0.72f + opacity * 0.28f).coerceAtMost(1f))
+    }
+    val dockBorder = when (surfaceStyle) {
+        DockSurfaceStyle.CLEAR -> Color.Transparent
+        DockSurfaceStyle.GLASS -> accentColor.copy(alpha = .22f)
+        DockSurfaceStyle.SOLID -> CarbonCardBorder.copy(alpha = .90f)
+    }
+
     Box(
         modifier = modifier.fillMaxWidth().height(52.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
-            color = CarbonDark.copy(alpha = .82f),
+            color = dockColor,
             shape = RoundedCornerShape(19.dp),
-            border = BorderStroke(1.dp, CarbonCardBorder.copy(alpha = .75f)),
-            shadowElevation = 5.dp,
+            border = BorderStroke(1.dp, dockBorder),
+            shadowElevation = if (surfaceStyle == DockSurfaceStyle.CLEAR) 0.dp else 4.dp,
             modifier = Modifier.fillMaxWidth(.90f).height(45.dp)
         ) {
             Row(
@@ -60,6 +76,7 @@ fun BottomCarNavBar(
                     DockButton(
                         screen = screen,
                         isSelected = isSelected,
+                        accentColor = accentColor,
                         onClick = { onScreenSelected(screen) },
                         modifier = Modifier.weight(if (isSelected) 1.35f else .78f)
                     )
@@ -73,12 +90,12 @@ fun BottomCarNavBar(
 private fun DockButton(
     screen: CarScreen,
     isSelected: Boolean,
+    accentColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (isSelected) CyanNeon.copy(alpha = .16f) else Color.Transparent
-    val contentColor = if (isSelected) CyanNeon else TextSecondary
-    val borderColor = if (isSelected) CyanNeon.copy(alpha = .45f) else Color.Transparent
+    val bgColor = if (isSelected) accentColor.copy(alpha = .15f) else Color.Transparent
+    val contentColor = if (isSelected) accentColor else TextSecondary
 
     Box(
         modifier = modifier
@@ -86,7 +103,7 @@ private fun DockButton(
             .padding(horizontal = 2.dp)
             .clip(RoundedCornerShape(13.dp))
             .background(bgColor)
-            .then(if (isSelected) Modifier.background(CyanNeon.copy(alpha = .02f), RoundedCornerShape(13.dp)) else Modifier)
+            .then(if (isSelected) Modifier.background(accentColor.copy(alpha = .025f), RoundedCornerShape(13.dp)) else Modifier)
             .clickable { onClick() }
             .testTag(screen.tag),
         contentAlignment = Alignment.Center
@@ -99,7 +116,7 @@ private fun DockButton(
                 modifier = Modifier
                     .size(if (isSelected) 29.dp else 31.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .then(if (isSelected) Modifier.background(CyanNeon.copy(alpha = .12f)) else Modifier),
+                    .then(if (isSelected) Modifier.background(accentColor.copy(alpha = .12f)) else Modifier),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -119,6 +136,18 @@ private fun DockButton(
                     maxLines = 1
                 )
             }
+        }
+
+        if (isSelected) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 1.dp)
+                    .width(22.dp)
+                    .height(2.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(accentColor)
+            )
         }
     }
 }

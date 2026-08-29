@@ -9,6 +9,21 @@ enum class BackgroundType(val arabicName: String) {
     CUSTOM_IMAGE("صورة مخصصة من الجهاز")
 }
 
+/** Visual treatment for the floating navigation dock. */
+enum class DockSurfaceStyle(val arabicName: String) {
+    CLEAR("شفاف"),
+    GLASS("زجاجي"),
+    SOLID("داكن")
+}
+
+/** Small, offline-safe accent palette that remains readable on the car display. */
+enum class InterfaceAccent(val arabicName: String, val argb: Int) {
+    CYAN("سماوي", 0xFF00E5FF.toInt()),
+    GOLD("ذهبي", 0xFFFFB84D.toInt()),
+    WHITE("أبيض", 0xFFF5F7FA.toInt()),
+    GREEN("أخضر", 0xFF37E6A1.toInt())
+}
+
 data class ScreenSaverWidgetLayout(
     val type: WidgetType,
     val xFraction: Float,
@@ -61,6 +76,9 @@ data class LauncherSettings(
     val safeModeActive: Boolean = false,
     val showTopBar: Boolean = true,
     val showBottomBar: Boolean = true,
+    val bottomDockStyle: DockSurfaceStyle = DockSurfaceStyle.GLASS,
+    val bottomDockOpacityPercent: Int = 76,
+    val interfaceAccent: InterfaceAccent = InterfaceAccent.CYAN,
     val highContrastMode: Boolean = false,
     val keepScreenOn: Boolean = true,
     val autoLogTrips: Boolean = true,

@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.MusicPlaybackState
 import com.example.model.WidgetStyle
+import com.example.ui.components.resolvedWidgetColors
 import com.example.ui.theme.*
 
 @Composable
@@ -36,6 +37,7 @@ fun MusicWidget(
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val widgetColors = resolvedWidgetColors()
     val track = playbackState.currentTrack
     val title = track?.title ?: "لا توجد موسيقى مشغلة"
     val artist = track?.artist ?: "مشغل السيارة 2026"
@@ -71,8 +73,8 @@ fun MusicWidget(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = title, style = MaterialTheme.typography.labelLarge, color = TextPrimary, maxLines = 1)
-                        Text(text = artist, style = MaterialTheme.typography.labelSmall, color = TextSecondary, maxLines = 1)
+                        Text(text = title, style = MaterialTheme.typography.labelLarge, color = widgetColors.primary, maxLines = 1)
+                        Text(text = artist, style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary, maxLines = 1)
                     }
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -82,12 +84,12 @@ fun MusicWidget(
                             Icon(
                                 imageVector = if (isPlaying) Icons.Default.PauseCircleFilled else Icons.Default.PlayCircleFilled,
                                 contentDescription = if (isPlaying) "إيقاف مؤقت" else "تشغيل",
-                                tint = CyanNeon,
+                                tint = widgetColors.accent,
                                 modifier = Modifier.size(36.dp)
                             )
                         }
                         IconButton(onClick = onNext, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "التالي في RTL", tint = TextPrimary)
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "التالي في RTL", tint = widgetColors.primary)
                         }
                     }
                 }
@@ -108,10 +110,10 @@ fun MusicWidget(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = CyanNeon, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = widgetColors.accent, modifier = Modifier.size(20.dp))
                             Column {
-                                Text(text = title, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = TextPrimary, maxLines = 1)
-                                Text(text = artist, style = MaterialTheme.typography.labelSmall, color = TextSecondary, maxLines = 1)
+                                Text(text = title, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary, maxLines = 1)
+                                Text(text = artist, style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary, maxLines = 1)
                             }
                         }
 
@@ -119,7 +121,7 @@ fun MusicWidget(
                         LinearProgressIndicator(
                             progress = { progressFraction },
                             modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                            color = CyanNeon,
+                            color = widgetColors.accent,
                             trackColor = CarbonCardBorder
                         )
 
@@ -129,18 +131,18 @@ fun MusicWidget(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = onPrevious, modifier = Modifier.size(36.dp)) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "السابق", tint = TextPrimary)
+                                Icon(Icons.Default.SkipNext, contentDescription = "السابق", tint = widgetColors.primary)
                             }
                             IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(42.dp)) {
                                 Icon(
                                     imageVector = if (isPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
                                     contentDescription = "تشغيل/إيقاف",
-                                    tint = CyanNeon,
+                                    tint = widgetColors.accent,
                                     modifier = Modifier.size(38.dp)
                                 )
                             }
                             IconButton(onClick = onNext, modifier = Modifier.size(36.dp)) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = TextPrimary)
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = widgetColors.primary)
                             }
                         }
                     }
@@ -165,7 +167,7 @@ fun MusicWidget(
                                 .size(64.dp)
                                 .clip(CircleShape)
                                 .background(Brush.radialGradient(listOf(Color(0xFF2A2E3D), Color(0xFF0F1218))))
-                                .border(2.dp, CyanNeon.copy(alpha = 0.5f), CircleShape)
+                                .border(2.dp, widgetColors.accent.copy(alpha = 0.5f), CircleShape)
                                 .rotate(if (isPlaying) rotationAngle else 0f),
                             contentAlignment = Alignment.Center
                         ) {
@@ -191,8 +193,8 @@ fun MusicWidget(
                             verticalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column {
-                                Text(text = title, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = TextPrimary, maxLines = 1)
-                                Text(text = artist, style = MaterialTheme.typography.labelSmall, color = TextSecondary, maxLines = 1)
+                                Text(text = title, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary, maxLines = 1)
+                                Text(text = artist, style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary, maxLines = 1)
                             }
 
                             Row(
@@ -200,18 +202,18 @@ fun MusicWidget(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 IconButton(onClick = onPrevious, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.SkipNext, contentDescription = "السابق", tint = TextPrimary, modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Default.SkipNext, contentDescription = "السابق", tint = widgetColors.primary, modifier = Modifier.size(20.dp))
                                 }
                                 IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(36.dp).testTag("btn_music_cover_play")) {
                                     Icon(
                                         imageVector = if (isPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
                                         contentDescription = "تشغيل/إيقاف",
-                                        tint = CyanNeon,
+                                        tint = widgetColors.accent,
                                         modifier = Modifier.size(32.dp)
                                     )
                                 }
                                 IconButton(onClick = onNext, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = TextPrimary, modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = widgetColors.primary, modifier = Modifier.size(20.dp))
                                 }
                             }
                         }
@@ -225,8 +227,8 @@ fun MusicWidget(
                     verticalArrangement = Arrangement.SpaceAround,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(text = title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = TextPrimary, maxLines = 1)
-                    Text(text = artist, style = MaterialTheme.typography.labelSmall, color = CyanNeon, maxLines = 1)
+                    Text(text = title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary, maxLines = 1)
+                    Text(text = artist, style = MaterialTheme.typography.labelSmall, color = widgetColors.accent, maxLines = 1)
 
                     Slider(
                         value = progressFraction,
@@ -235,8 +237,8 @@ fun MusicWidget(
                         },
                         modifier = Modifier.fillMaxWidth().height(20.dp),
                         colors = SliderDefaults.colors(
-                            thumbColor = CyanNeon,
-                            activeTrackColor = CyanNeon,
+                            thumbColor = widgetColors.accent,
+                            activeTrackColor = widgetColors.accent,
                             inactiveTrackColor = CarbonCardBorder
                         )
                     )
@@ -247,18 +249,18 @@ fun MusicWidget(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = onPrevious) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "السابق", tint = TextPrimary)
+                            Icon(Icons.Default.SkipNext, contentDescription = "السابق", tint = widgetColors.primary)
                         }
                         IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(44.dp)) {
                             Icon(
                                 imageVector = if (isPlaying) Icons.Default.PauseCircleFilled else Icons.Default.PlayCircleFilled,
                                 contentDescription = "تشغيل/إيقاف",
-                                tint = CyanNeon,
+                                tint = widgetColors.accent,
                                 modifier = Modifier.size(40.dp)
                             )
                         }
                         IconButton(onClick = onNext) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = TextPrimary)
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = widgetColors.primary)
                         }
                     }
                 }
@@ -268,7 +270,7 @@ fun MusicWidget(
                 Surface(
                     color = CarbonSurface,
                     shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CyanNeon.copy(alpha = 0.4f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, widgetColors.accent.copy(alpha = 0.4f)),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     Row(
@@ -278,8 +280,8 @@ fun MusicWidget(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(text = "مشغل صوت لوحة القيادة", style = MaterialTheme.typography.labelSmall, color = AmberRacing)
-                            Text(text = title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = TextPrimary, maxLines = 1)
-                            Text(text = artist, style = MaterialTheme.typography.bodySmall, color = TextSecondary, maxLines = 1)
+                            Text(text = title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary, maxLines = 1)
+                            Text(text = artist, style = MaterialTheme.typography.bodySmall, color = widgetColors.secondary, maxLines = 1)
                         }
 
                         Row(
@@ -292,12 +294,12 @@ fun MusicWidget(
                                 modifier = Modifier.size(48.dp),
                                 contentPadding = PaddingValues(0.dp)
                             ) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "السابق", tint = TextPrimary)
+                                Icon(Icons.Default.SkipNext, contentDescription = "السابق", tint = widgetColors.primary)
                             }
 
                             Button(
                                 onClick = onTogglePlayPause,
-                                colors = ButtonDefaults.buttonColors(containerColor = CyanNeon),
+                                colors = ButtonDefaults.buttonColors(containerColor = widgetColors.accent),
                                 modifier = Modifier.size(54.dp),
                                 contentPadding = PaddingValues(0.dp)
                             ) {
@@ -315,7 +317,7 @@ fun MusicWidget(
                                 modifier = Modifier.size(48.dp),
                                 contentPadding = PaddingValues(0.dp)
                             ) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = TextPrimary)
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = widgetColors.primary)
                             }
                         }
                     }
@@ -328,12 +330,12 @@ fun MusicWidget(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(text = title, style = MaterialTheme.typography.labelLarge, color = TextPrimary, maxLines = 1)
+                    Text(text = title, style = MaterialTheme.typography.labelLarge, color = widgetColors.primary, maxLines = 1)
                     IconButton(onClick = onTogglePlayPause) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "تشغيل/إيقاف",
-                            tint = CyanNeon,
+                            tint = widgetColors.accent,
                             modifier = Modifier.size(30.dp)
                         )
                     }

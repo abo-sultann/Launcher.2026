@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.GpsTelemetry
 import com.example.model.WidgetStyle
+import com.example.ui.components.resolvedWidgetColors
 import com.example.ui.theme.*
 import com.example.util.bearingToArabicDirection
 import java.util.Locale
@@ -31,6 +32,7 @@ fun GpsWidget(
     gpsTelemetry: GpsTelemetry,
     modifier: Modifier = Modifier
 ) {
+    val widgetColors = resolvedWidgetColors()
     val latStr = String.format(Locale.US, "%.4f", gpsTelemetry.latitude)
     val lngStr = String.format(Locale.US, "%.4f", gpsTelemetry.longitude)
     val altStr = "${gpsTelemetry.altitudeMeters.toInt()} م"
@@ -61,7 +63,7 @@ fun GpsWidget(
                     Text(
                         text = if (gpsTelemetry.hasGpsFix) "GPS نشط (${gpsTelemetry.satellitesCount})" else "GPS بانتظار إشارة",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = if (gpsTelemetry.hasGpsFix) EmeraldSafe else TextSecondary
+                        color = if (gpsTelemetry.hasGpsFix) EmeraldSafe else widgetColors.secondary
                     )
                 }
             }
@@ -87,7 +89,7 @@ fun GpsWidget(
                             Text(
                                 text = "مستشعر GPS والاتجاه",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = CyanNeon
+                                color = widgetColors.accent
                             )
                             Icon(
                                 imageVector = if (gpsTelemetry.hasGpsFix) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed,
@@ -102,12 +104,12 @@ fun GpsWidget(
                             horizontalArrangement = Arrangement.SpaceAround
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "الارتفاع", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                                Text(text = altStr, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = TextPrimary)
+                                Text(text = "الارتفاع", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
+                                Text(text = altStr, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary)
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "الاتجاه", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                                Text(text = directionArabic, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = AmberRacing)
+                                Text(text = "الاتجاه", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
+                                Text(text = directionArabic, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = widgetColors.accent)
                             }
                         }
 
@@ -132,17 +134,17 @@ fun GpsWidget(
                             fontSize = 36.sp,
                             fontWeight = FontWeight.Black
                         ),
-                        color = CyanNeon
+                        color = widgetColors.accent
                     )
                     Text(
                         text = directionArabic,
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = AmberRacing
+                        color = widgetColors.primary
                     )
                     Text(
                         text = "خط العرض: $latStr • خط الطول: $lngStr",
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary
+                        color = widgetColors.secondary
                     )
                 }
             }
@@ -155,18 +157,18 @@ fun GpsWidget(
                     Text(
                         text = "الإحداثيات الجغرافية",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = AmberRacing
+                        color = widgetColors.accent
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "N $latStr°",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = TextPrimary
+                        color = widgetColors.primary
                     )
                     Text(
                         text = "E $lngStr°",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = TextPrimary
+                        color = widgetColors.primary
                     )
                 }
             }
@@ -174,7 +176,7 @@ fun GpsWidget(
             WidgetStyle.GPS_ACCURACY -> {
                 Surface(
                     color = CarbonSurface,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(18.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -183,7 +185,7 @@ fun GpsWidget(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text(text = "دقة تثبيت الموقع", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(text = "دقة تثبيت الموقع", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
                         Text(
                             text = if (gpsTelemetry.hasGpsFix) "±${gpsTelemetry.accuracyMeters.toInt()} متر" else "--",
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),

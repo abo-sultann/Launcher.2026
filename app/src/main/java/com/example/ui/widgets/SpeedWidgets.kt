@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.example.model.GpsTelemetry
 import com.example.model.TripData
 import com.example.model.WidgetStyle
+import com.example.ui.components.resolvedWidgetColors
 import com.example.ui.theme.*
 
 @Composable
@@ -35,6 +36,7 @@ fun SpeedWidget(
     speedUnit: String = "كم/س",
     modifier: Modifier = Modifier
 ) {
+    val widgetColors = resolvedWidgetColors()
     val trusted = gpsTelemetry.hasGpsFix && gpsTelemetry.isSpeedReliable
     val currentSpeed = if (trusted) gpsTelemetry.speedKmH.coerceIn(0f, 180f) else 0f
     val animatedSpeed by animateFloatAsState(targetValue = currentSpeed, animationSpec = tween(300), label = "speed")
@@ -50,8 +52,8 @@ fun SpeedWidget(
         when (style) {
             WidgetStyle.SPEED_DIGITAL_LARGE -> {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text(display, fontSize = largeNumber, fontWeight = FontWeight.Black, color = CyanNeon, maxLines = 1)
-                    Text(speedUnit, fontSize = labelSize, fontWeight = FontWeight.Bold, color = TextSecondary)
+                    Text(display, fontSize = largeNumber, fontWeight = FontWeight.Black, color = widgetColors.accent, maxLines = 1)
+                    Text(speedUnit, fontSize = labelSize, fontWeight = FontWeight.Bold, color = widgetColors.secondary)
                 }
             }
 
@@ -64,11 +66,11 @@ fun SpeedWidget(
                         val arcSize = Size(diameter, diameter)
                         drawArc(CarbonCardBorder, 150f, 240f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                         val fraction = (animatedSpeed / 180f).coerceIn(0f, 1f)
-                        drawArc(Brush.sweepGradient(listOf(CyanNeon, AmberRacing, CrimsonSport), Offset(size.width / 2f, size.height / 2f)), 150f, fraction * 240f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                        drawArc(Brush.sweepGradient(listOf(widgetColors.accent, AmberRacing, CrimsonSport), Offset(size.width / 2f, size.height / 2f)), 150f, fraction * 240f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(display, fontSize = mediumNumber, fontWeight = FontWeight.Black, color = TextPrimary, maxLines = 1)
-                        Text(speedUnit, fontSize = labelSize, color = CyanNeon)
+                        Text(display, fontSize = mediumNumber, fontWeight = FontWeight.Black, color = widgetColors.primary, maxLines = 1)
+                        Text(speedUnit, fontSize = labelSize, color = widgetColors.accent)
                     }
                 }
             }
@@ -80,11 +82,11 @@ fun SpeedWidget(
                         val arcSize = Size((size.width - stroke).coerceAtLeast(1f), (size.height * 1.55f - stroke).coerceAtLeast(1f))
                         val topLeft = Offset(stroke / 2f, size.height * .12f)
                         drawArc(CarbonCardBorder, 180f, 180f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-                        drawArc(Brush.linearGradient(listOf(CyanNeon, AmberRacing)), 180f, (animatedSpeed / 180f).coerceIn(0f, 1f) * 180f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                        drawArc(Brush.linearGradient(listOf(widgetColors.accent, AmberRacing)), 180f, (animatedSpeed / 180f).coerceIn(0f, 1f) * 180f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = if (tiny) 8.dp else 14.dp)) {
                         Text(display, fontSize = mediumNumber, fontWeight = FontWeight.Black, color = AmberRacing, maxLines = 1)
-                        Text(speedUnit, fontSize = labelSize, color = TextSecondary)
+                        Text(speedUnit, fontSize = labelSize, color = widgetColors.secondary)
                     }
                 }
             }
@@ -92,8 +94,8 @@ fun SpeedWidget(
             WidgetStyle.SPEED_WITH_UNIT -> {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(display, fontSize = largeNumber, fontWeight = FontWeight.Black, color = TextPrimary, maxLines = 1)
-                        Text(speedUnit, fontSize = labelSize, color = CyanNeon, modifier = Modifier.padding(bottom = 5.dp))
+                        Text(display, fontSize = largeNumber, fontWeight = FontWeight.Black, color = widgetColors.primary, maxLines = 1)
+                        Text(speedUnit, fontSize = labelSize, color = widgetColors.accent, modifier = Modifier.padding(bottom = 5.dp))
                     }
                     if (!tiny) Text(if (trusted) "GPS ±${gpsTelemetry.accuracyMeters.toInt()}م" else "بانتظار GPS ثابت", fontSize = labelSize, color = if (trusted) EmeraldSafe else TextMuted)
                 }
@@ -101,8 +103,8 @@ fun SpeedWidget(
 
             WidgetStyle.SPEED_WITH_AVG -> {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text(display, fontSize = mediumNumber, fontWeight = FontWeight.Bold, color = CyanNeon, maxLines = 1)
-                    Text(speedUnit, fontSize = labelSize, color = TextSecondary)
+                    Text(display, fontSize = mediumNumber, fontWeight = FontWeight.Bold, color = widgetColors.accent, maxLines = 1)
+                    Text(speedUnit, fontSize = labelSize, color = widgetColors.secondary)
                     if (!tiny) Text("المتوسط ${tripData.averageSpeedKmH.toInt()}", fontSize = labelSize, fontWeight = FontWeight.SemiBold, color = AmberRacing)
                 }
             }
@@ -111,16 +113,16 @@ fun SpeedWidget(
                 Surface(color = CarbonSurface, shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxSize()) {
                     Column(Modifier.fillMaxSize().padding(if (compact) 7.dp else 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
                         if (!tiny) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("السرعة", fontSize = labelSize, fontWeight = FontWeight.Bold, color = CyanNeon)
-                            Icon(Icons.Default.Speed, null, tint = CyanNeon, modifier = Modifier.size(17.dp))
+                            Text("السرعة", fontSize = labelSize, fontWeight = FontWeight.Bold, color = widgetColors.accent)
+                            Icon(Icons.Default.Speed, null, tint = widgetColors.accent, modifier = Modifier.size(17.dp))
                         }
-                        Text(display, fontSize = mediumNumber, fontWeight = FontWeight.Black, color = TextPrimary, maxLines = 1)
-                        if (!tiny) Text("$speedUnit • أعلى ${tripData.maxSpeedKmH.toInt()}", fontSize = labelSize, color = TextSecondary, maxLines = 1)
+                        Text(display, fontSize = mediumNumber, fontWeight = FontWeight.Black, color = widgetColors.primary, maxLines = 1)
+                        if (!tiny) Text("$speedUnit • أعلى ${tripData.maxSpeedKmH.toInt()}", fontSize = labelSize, color = widgetColors.secondary, maxLines = 1)
                     }
                 }
             }
 
-            else -> Text("$display $speedUnit", fontSize = mediumNumber, fontWeight = FontWeight.Bold, color = TextPrimary)
+            else -> Text("$display $speedUnit", fontSize = mediumNumber, fontWeight = FontWeight.Bold, color = widgetColors.primary)
         }
     }
 }

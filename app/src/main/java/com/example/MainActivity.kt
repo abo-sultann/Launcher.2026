@@ -28,6 +28,7 @@ import com.example.ui.components.*
 import com.example.ui.screens.*
 import com.example.ui.theme.Launcher2026Theme
 import com.example.ui.viewmodel.MainViewModel
+import com.example.model.LauncherSettings
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -116,7 +117,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class SubOverlayScreen { NONE, SAFE_AREA_PREVIEW, DIAGNOSTICS }
+private enum class SubOverlayScreen { NONE, SAFE_AREA_PREVIEW, DIAGNOSTICS, SCREEN_SAVER_EDITOR }
 
 @Composable
 fun CarLauncherMainApp(viewModel: MainViewModel) {
@@ -179,7 +180,13 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
         LauncherBackground(settings, Modifier.fillMaxSize())
 
         val fullCanvas = activeSubOverlay == SubOverlayScreen.NONE && (currentScreen == CarScreen.HOME || currentScreen == CarScreen.MAP)
-        if (fullCanvas) {
+        if (activeSubOverlay == SubOverlayScreen.SCREEN_SAVER_EDITOR) {
+            ScreenSaverEditorScreen(
+                viewModel = viewModel,
+                onDone = { activeSubOverlay = SubOverlayScreen.NONE },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else if (fullCanvas) {
             if (currentScreen == CarScreen.MAP) {
                 // Recreate only when external actions (such as opening a saved trip) switch follow mode.
                 key(offroadMapState.followGps) {
@@ -187,8 +194,8 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                 }
                 PersistentOffroadMapOverlay(viewModel, Modifier.fillMaxSize().zIndex(220f))
             } else {
-                val topContentInset = safeArea.topDp + if (settings.showTopBar) 48 else 0
-                val bottomContentInset = safeArea.bottomDp + if (settings.showBottomBar) 56 else 0
+                val topContentInset = safeArea.topDp + if (settings.showTopBar) 40 else 0
+                val bottomContentInset = safeArea.bottomDp + if (settings.showBottomBar) 54 else 0
                 HomeScreen(
                     viewModel,
                     Modifier.fillMaxSize().padding(
@@ -208,12 +215,8 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                 safeAreaBottom = safeArea.bottomDp,
                 showTop = settings.showTopBar && showMapChrome,
                 showBottom = settings.showBottomBar && showMapChrome,
-                gpsTelemetry = gpsTelemetry,
-                playbackState = playbackState,
-                is24Hour = settings.is24HourFormat,
+                settings = settings,
                 isSafeModeActive = isSafeModeActive,
-                isDesignMode = isDesignMode,
-                onOpenSettings = { activeSubOverlay = SubOverlayScreen.NONE; viewModel.navigateTo(CarScreen.SETTINGS) },
                 onOpenDiagnostics = { activeSubOverlay = SubOverlayScreen.DIAGNOSTICS },
                 modifier = Modifier.zIndex(500f)
             )
@@ -225,13 +228,10 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                     if (settings.showTopBar) {
                         Box(Modifier.padding(top = safeArea.topDp.dp)) {
                             TopCarStatusBar(
-                                gpsTelemetry, playbackState, settings.is24HourFormat, isSafeModeActive, isDesignMode,
-                                onToggleDesignMode = { viewModel.toggleDesignMode() },
-                                onOpenSettings = { activeSubOverlay = SubOverlayScreen.NONE; viewModel.navigateTo(CarScreen.SETTINGS) },
+                                isSafeModeActive = isSafeModeActive,
                                 onOpenDiagnostics = { activeSubOverlay = SubOverlayScreen.DIAGNOSTICS },
-                                onToggleMute = { viewModel.toggleMute() },
-                                onVolumeAdjust = { viewModel.adjustVolume(it) },
-                                onActivateChildLock = { viewModel.activateChildLock() }
+                                onActivateChildLock = { viewModel.activateChildLock() },
+                                accentColor = Color(settings.interfaceAccent.argb)
                             )
                         }
                     }
@@ -239,7 +239,13 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                 bottomBar = {
                     if (settings.showBottomBar) {
                         Box(Modifier.padding(bottom = safeArea.bottomDp.dp)) {
-                            BottomCarNavBar(currentScreen = currentScreen, onScreenSelected = { screen -> activeSubOverlay = SubOverlayScreen.NONE; viewModel.navigateTo(screen) })
+                            BottomCarNavBar(
+                                currentScreen = currentScreen,
+                                onScreenSelected = { screen -> activeSubOverlay = SubOverlayScreen.NONE; viewModel.navigateTo(screen) },
+                                surfaceStyle = settings.bottomDockStyle,
+                                opacityPercent = settings.bottomDockOpacityPercent,
+                                accentColor = Color(settings.interfaceAccent.argb)
+                            )
                         }
                     }
                 }
@@ -249,13 +255,19 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                     when (activeSubOverlay) {
                         SubOverlayScreen.SAFE_AREA_PREVIEW -> SafeAreaPreviewScreen(viewModel, onBack = { activeSubOverlay = SubOverlayScreen.NONE })
                         SubOverlayScreen.DIAGNOSTICS -> DiagnosticsScreen(viewModel, onBack = { activeSubOverlay = SubOverlayScreen.NONE })
+                        SubOverlayScreen.SCREEN_SAVER_EDITOR -> Unit
                         SubOverlayScreen.NONE -> when (currentScreen) {
                             CarScreen.HOME -> HomeScreen(viewModel)
                             CarScreen.APPS -> AppDrawerScreen(viewModel)
                             CarScreen.MUSIC -> MusicPlayerScreen(viewModel)
                             CarScreen.MAP -> EnhancedOfflineMapScreen(viewModel)
                             CarScreen.TRIP -> TripComputerScreen(viewModel)
-                            CarScreen.SETTINGS -> SettingsScreen(viewModel, { activeSubOverlay = SubOverlayScreen.SAFE_AREA_PREVIEW }, { activeSubOverlay = SubOverlayScreen.DIAGNOSTICS })
+                            CarScreen.SETTINGS -> SettingsScreen(
+                                viewModel = viewModel,
+                                onOpenSafeAreaPreview = { activeSubOverlay = SubOverlayScreen.SAFE_AREA_PREVIEW },
+                                onOpenDiagnostics = { activeSubOverlay = SubOverlayScreen.DIAGNOSTICS },
+                                onOpenScreenSaverEditor = { activeSubOverlay = SubOverlayScreen.SCREEN_SAVER_EDITOR }
+                            )
                         }
                     }
                 }
@@ -296,31 +308,30 @@ private fun BoxScope.OverlayLauncherBars(
     safeAreaBottom: Int,
     showTop: Boolean,
     showBottom: Boolean,
-    gpsTelemetry: com.example.model.GpsTelemetry,
-    playbackState: com.example.model.MusicPlaybackState,
-    is24Hour: Boolean,
+    settings: LauncherSettings,
     isSafeModeActive: Boolean,
-    isDesignMode: Boolean,
-    onOpenSettings: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (showTop) {
         Box(modifier.align(Alignment.TopCenter).padding(top = safeAreaTop.dp)) {
             TopCarStatusBar(
-                gpsTelemetry, playbackState, is24Hour, isSafeModeActive, isDesignMode,
-                onToggleDesignMode = { viewModel.toggleDesignMode() },
-                onOpenSettings = onOpenSettings,
+                isSafeModeActive = isSafeModeActive,
                 onOpenDiagnostics = onOpenDiagnostics,
-                onToggleMute = { viewModel.toggleMute() },
-                onVolumeAdjust = { viewModel.adjustVolume(it) },
-                onActivateChildLock = { viewModel.activateChildLock() }
+                onActivateChildLock = { viewModel.activateChildLock() },
+                accentColor = Color(settings.interfaceAccent.argb)
             )
         }
     }
     if (showBottom) {
         Box(modifier.align(Alignment.BottomCenter).padding(bottom = safeAreaBottom.dp)) {
-            BottomCarNavBar(currentScreen = currentScreen, onScreenSelected = { screen -> viewModel.navigateTo(screen) })
+            BottomCarNavBar(
+                currentScreen = currentScreen,
+                onScreenSelected = { screen -> viewModel.navigateTo(screen) },
+                surfaceStyle = settings.bottomDockStyle,
+                opacityPercent = settings.bottomDockOpacityPercent,
+                accentColor = Color(settings.interfaceAccent.argb)
+            )
         }
     }
 }

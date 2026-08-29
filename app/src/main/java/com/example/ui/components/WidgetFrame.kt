@@ -59,15 +59,29 @@ fun WidgetFrame(
 ) {
     val context = LocalContext.current
     val visualStore = remember { WidgetVisualStore(context.applicationContext) }
-    var foregroundVersion by remember { mutableIntStateOf(0) }
-    val foregroundArgb = remember(widgetItem.id, foregroundVersion) { visualStore.getForegroundColorArgb(widgetItem.id) }
+    var appearanceVersion by remember { mutableIntStateOf(0) }
+    val foregroundArgb = remember(widgetItem.id, appearanceVersion) { visualStore.getForegroundColorArgb(widgetItem.id) }
+    val accentArgb = remember(widgetItem.id, appearanceVersion) { visualStore.getAccentColorArgb(widgetItem.id) }
+    val surfaceOpacity = remember(widgetItem.id, appearanceVersion) { visualStore.getSurfaceOpacity(widgetItem.id) }
     val foregroundColor = foregroundArgb?.let { Color(it) }
+    val accentColor = accentArgb?.let { Color(it) }
 
-    val shape = RoundedCornerShape(14.dp)
+    // A widget type keeps a recognizable silhouette even when it uses the same color palette.
+    val shape = when (widgetItem.type) {
+        WidgetType.CLOCK -> RoundedCornerShape(28.dp)
+        WidgetType.SPEEDOMETER -> RoundedCornerShape(8.dp)
+        WidgetType.DATE -> RoundedCornerShape(topStart = 24.dp, topEnd = 8.dp, bottomEnd = 24.dp, bottomStart = 8.dp)
+        WidgetType.GPS -> RoundedCornerShape(10.dp)
+        WidgetType.MUSIC -> RoundedCornerShape(24.dp)
+        WidgetType.MAP -> RoundedCornerShape(18.dp)
+        WidgetType.TRIP -> RoundedCornerShape(12.dp)
+        WidgetType.APPS -> RoundedCornerShape(22.dp)
+        WidgetType.CONTROLS -> RoundedCornerShape(20.dp)
+    }
     val normalBackground = when (widgetItem.surfaceStyle) {
         WidgetSurfaceStyle.TRANSPARENT -> Color.Transparent
-        WidgetSurfaceStyle.GLASS -> CarbonDark.copy(alpha = .46f)
-        WidgetSurfaceStyle.CARD -> CarbonCard.copy(alpha = .91f)
+        WidgetSurfaceStyle.GLASS -> CarbonDark.copy(alpha = (.18f + .46f * surfaceOpacity).coerceAtMost(.72f))
+        WidgetSurfaceStyle.CARD -> CarbonCard.copy(alpha = (.55f + .40f * surfaceOpacity).coerceAtMost(.97f))
     }
     val outlineColor = when {
         isDesignMode && isSelected -> CyanNeon
@@ -109,7 +123,10 @@ fun WidgetFrame(
                 } else Modifier
             )
     ) {
-        CompositionLocalProvider(LocalWidgetForegroundColor provides foregroundColor) {
+        CompositionLocalProvider(
+            LocalWidgetVisualTokens provides WidgetVisualTokens(foregroundColor, accentColor),
+            LocalWidgetForegroundColor provides foregroundColor
+        ) {
             content()
         }
 
@@ -133,7 +150,7 @@ fun WidgetFrame(
 
     if (isDesignMode && isSelected) {
         val density = LocalDensity.current
-        val yOffset = with(density) { (-62).dp.roundToPx() }
+        val yOffset = with(density) { (-92).dp.roundToPx() }
         Popup(
             alignment = Alignment.BottomCenter,
             offset = IntOffset(0, yOffset),
@@ -142,9 +159,19 @@ fun WidgetFrame(
             WidgetV3ControlDock(
                 widgetItem = widgetItem,
                 foregroundArgb = foregroundArgb,
+                accentArgb = accentArgb,
+                surfaceOpacity = surfaceOpacity,
                 onForeground = { argb ->
                     visualStore.setForegroundColorArgb(widgetItem.id, argb)
-                    foregroundVersion++
+                    appearanceVersion++
+                },
+                onAccent = { argb ->
+                    visualStore.setAccentColorArgb(widgetItem.id, argb)
+                    appearanceVersion++
+                },
+                onSurfaceOpacity = { opacity ->
+                    visualStore.setSurfaceOpacity(widgetItem.id, opacity)
+                    appearanceVersion++
                 },
                 onChangeStyle = onChangeStyle,
                 onOpacityChange = onOpacityChange,
@@ -171,7 +198,11 @@ fun WidgetFrame(
 private fun WidgetV3ControlDock(
     widgetItem: WidgetItem,
     foregroundArgb: Int?,
+    accentArgb: Int?,
+    surfaceOpacity: Float,
     onForeground: (Int?) -> Unit,
+    onAccent: (Int?) -> Unit,
+    onSurfaceOpacity: (Float) -> Unit,
     onChangeStyle: () -> Unit,
     onOpacityChange: (Float) -> Unit,
     onToggleLock: () -> Unit,
@@ -248,17 +279,31 @@ private fun WidgetV3ControlDock(
                 CompactEditorButton(Icons.Default.ZoomOut, "تصغير", TextSecondary, { onResizeStep(-24f, -15f) })
                 CompactEditorButton(Icons.Default.ZoomIn, "تكبير", CyanNeon, { onResizeStep(24f, 15f) })
 
-                if (widgetItem.type == WidgetType.CLOCK) {
-                    VerticalDivider(Modifier.height(22.dp), color = CarbonCardBorder)
-                    Text("لون", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                    ColorChoice(null, foregroundArgb == null, onForeground)
-                    COLOR_PRESETS.forEach { argb -> ColorChoice(argb, foregroundArgb == argb, onForeground) }
-                }
-
                 Spacer(Modifier.weight(1f))
                 CompactEditorButton(Icons.Default.Remove, "شفافية أقل", TextPrimary, { onOpacityChange(widgetItem.opacity - .10f) })
                 Text("${(widgetItem.opacity * 100).toInt()}%", color = CyanNeon, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 CompactEditorButton(Icons.Default.Add, "شفافية أكثر", TextPrimary, { onOpacityChange(widgetItem.opacity + .10f) })
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("النص", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                ColorChoice(null, foregroundArgb == null, onForeground)
+                FOREGROUND_PRESETS.forEach { argb -> ColorChoice(argb, foregroundArgb == argb, onForeground) }
+
+                VerticalDivider(Modifier.height(22.dp), color = CarbonCardBorder)
+                Text("اللون المميز", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                ColorChoice(null, accentArgb == null, onAccent)
+                ACCENT_PRESETS.forEach { argb -> ColorChoice(argb, accentArgb == argb, onAccent) }
+
+                Spacer(Modifier.weight(1f))
+                Text("خلفية", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                CompactEditorButton(Icons.Default.Remove, "خلفية أخف", TextPrimary, { onSurfaceOpacity(surfaceOpacity - .10f) })
+                Text("${(surfaceOpacity * 100).toInt()}%", color = CyanNeon, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                CompactEditorButton(Icons.Default.Add, "خلفية أوضح", TextPrimary, { onSurfaceOpacity(surfaceOpacity + .10f) })
             }
         }
     }
@@ -299,11 +344,19 @@ private fun ColorChoice(argb: Int?, selected: Boolean, onSelect: (Int?) -> Unit)
 
 private const val WHITE_ARGB: Int = -1
 private const val BLACK_ARGB: Int = -15724528 // 0xFF101010
-private val COLOR_PRESETS = listOf(
+private val FOREGROUND_PRESETS = listOf(
     WHITE_ARGB,
     BLACK_ARGB,
-    0xFF59E6F2.toInt(),
-    0xFFFFC54D.toInt(),
     0xFFB7C0CC.toInt(),
+    0xFF59E6F2.toInt(),
+    0xFFFFD166.toInt(),
     0xFFFF6B6B.toInt()
+)
+
+private val ACCENT_PRESETS = listOf(
+    0xFF00E5FF.toInt(),
+    0xFFFFB84D.toInt(),
+    0xFF37E6A1.toInt(),
+    0xFFB892FF.toInt(),
+    0xFFFF5C75.toInt()
 )

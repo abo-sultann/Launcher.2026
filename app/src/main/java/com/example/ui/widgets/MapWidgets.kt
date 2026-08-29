@@ -20,6 +20,7 @@ import com.example.model.MapItem
 import com.example.model.OffroadNavigationTarget
 import com.example.model.TripData
 import com.example.model.WidgetStyle
+import com.example.ui.components.resolvedWidgetColors
 import com.example.ui.theme.*
 import com.example.util.bearingToArabicDirection
 import java.util.Locale
@@ -36,6 +37,7 @@ fun MapWidget(
     onOpenFullMap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val widgetColors = resolvedWidgetColors()
     val hasTarget = navigationTarget != null && targetDistanceMeters != null
     val direction = if (hasTarget && targetBearing != null) bearingToArabicDirection(targetBearing) else if (gpsTelemetry.hasGpsFix) bearingToArabicDirection(gpsTelemetry.bearingDegrees) else "--"
     val distance = targetDistanceMeters?.let(::formatWidgetDistance)
@@ -51,19 +53,19 @@ fun MapWidget(
         when (style) {
             WidgetStyle.MAP_MINI -> {
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(color = CyanNeon.copy(alpha = .16f), shape = CircleShape, modifier = Modifier.size(if (tiny) 40.dp else 50.dp)) {
+                    Surface(color = widgetColors.accent.copy(alpha = .16f), shape = CircleShape, modifier = Modifier.size(if (tiny) 40.dp else 50.dp)) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.Navigation,
                                 null,
-                                tint = CyanNeon,
+                                tint = widgetColors.accent,
                                 modifier = Modifier.size(if (tiny) 24.dp else 30.dp).rotate(if (hasTarget) targetBearing ?: 0f else gpsTelemetry.bearingDegrees)
                             )
                         }
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                        Text(if (hasTarget) distance ?: "--" else direction, color = TextPrimary, fontSize = if (tiny) 16.sp else 22.sp, fontWeight = FontWeight.Black, maxLines = 1)
-                        Text(if (hasTarget) direction else if (gpsTelemetry.hasGpsFix) "اضغط لفتح الخريطة" else "بانتظار GPS", color = if (hasTarget) CyanNeon else TextSecondary, fontSize = if (tiny) 8.sp else 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (hasTarget) distance ?: "--" else direction, color = widgetColors.primary, fontSize = if (tiny) 16.sp else 22.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                        Text(if (hasTarget) direction else if (gpsTelemetry.hasGpsFix) "اضغط لفتح الخريطة" else "بانتظار GPS", color = if (hasTarget) widgetColors.accent else widgetColors.secondary, fontSize = if (tiny) 8.sp else 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -71,8 +73,8 @@ fun MapWidget(
             WidgetStyle.MAP_WITH_SPEED -> {
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (gpsTelemetry.hasGpsFix && gpsTelemetry.isSpeedReliable) gpsTelemetry.speedKmH.toInt().toString() else "--", color = CyanNeon, fontSize = if (tiny) 25.sp else 34.sp, fontWeight = FontWeight.Black)
-                        Text("كم/س", color = TextSecondary, fontSize = 8.sp)
+                        Text(if (gpsTelemetry.hasGpsFix && gpsTelemetry.isSpeedReliable) gpsTelemetry.speedKmH.toInt().toString() else "--", color = widgetColors.accent, fontSize = if (tiny) 25.sp else 34.sp, fontWeight = FontWeight.Black)
+                        Text("كم/س", color = widgetColors.secondary, fontSize = 8.sp)
                     }
                     VerticalDivider(Modifier.height(if (tiny) 36.dp else 50.dp), color = CarbonCardBorder)
                     NavigationSummary(title, distance, direction, hasTarget, tiny)
@@ -83,13 +85,13 @@ fun MapWidget(
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Icon(if (gpsTelemetry.hasGpsFix) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed, null, tint = if (gpsTelemetry.hasGpsFix) EmeraldSafe else AmberRacing, modifier = Modifier.size(20.dp))
-                        Text(if (gpsTelemetry.hasGpsFix) "GPS ±${gpsTelemetry.accuracyMeters.toInt()}م" else "بانتظار GPS", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = if (tiny) 9.sp else 11.sp)
+                        Text(if (gpsTelemetry.hasGpsFix) "GPS ±${gpsTelemetry.accuracyMeters.toInt()}م" else "بانتظار GPS", color = widgetColors.primary, fontWeight = FontWeight.Bold, fontSize = if (tiny) 9.sp else 11.sp)
                     }
                     if (!tiny && gpsTelemetry.hasGpsFix) {
                         Spacer(Modifier.height(4.dp))
-                        Text(String.format(Locale.US, "%.5f , %.5f", gpsTelemetry.latitude, gpsTelemetry.longitude), color = TextSecondary, fontSize = 9.sp, maxLines = 1)
+                        Text(String.format(Locale.US, "%.5f , %.5f", gpsTelemetry.latitude, gpsTelemetry.longitude), color = widgetColors.secondary, fontSize = 9.sp, maxLines = 1)
                     }
-                    if (hasTarget) Text("${distance ?: "--"} • $direction", color = CyanNeon, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    if (hasTarget) Text("${distance ?: "--"} • $direction", color = widgetColors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -99,8 +101,8 @@ fun MapWidget(
                     if (!tiny) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.Route, null, tint = AmberRacing, modifier = Modifier.size(19.dp))
-                            Text(String.format(Locale.US, "%.1f كم", tripData.distanceKm), color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                            Text("رحلتي", color = TextSecondary, fontSize = 8.sp)
+                            Text(String.format(Locale.US, "%.1f كم", tripData.distanceKm), color = widgetColors.primary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            Text("رحلتي", color = widgetColors.secondary, fontSize = 8.sp)
                         }
                     }
                 }
@@ -109,16 +111,16 @@ fun MapWidget(
             WidgetStyle.MAP_LARGE, WidgetStyle.MAP_MEDIUM -> {
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Map, null, tint = CyanNeon, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Map, null, tint = widgetColors.accent, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(5.dp))
-                        Text(title, color = TextPrimary, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("فتح", color = CyanNeon, fontSize = 9.sp)
+                        Text(title, color = widgetColors.primary, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("فتح", color = widgetColors.accent, fontSize = 9.sp)
                     }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround) {
                         Icon(Icons.Default.Navigation, null, tint = AmberRacing, modifier = Modifier.size(if (compact) 27.dp else 36.dp).rotate(if (hasTarget) targetBearing ?: 0f else gpsTelemetry.bearingDegrees))
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(if (hasTarget) distance ?: "--" else direction, color = TextPrimary, fontSize = if (compact) 19.sp else 25.sp, fontWeight = FontWeight.Black)
-                            Text(if (hasTarget) direction else if (gpsTelemetry.hasGpsFix) "اتجاه السيارة" else "لا توجد إشارة", color = TextSecondary, fontSize = 9.sp)
+                            Text(if (hasTarget) distance ?: "--" else direction, color = widgetColors.primary, fontSize = if (compact) 19.sp else 25.sp, fontWeight = FontWeight.Black)
+                            Text(if (hasTarget) direction else if (gpsTelemetry.hasGpsFix) "اتجاه السيارة" else "لا توجد إشارة", color = widgetColors.secondary, fontSize = 9.sp)
                         }
                     }
                     if (!tiny) Text(if (activeMap != null) "الخريطة: ${activeMap.name}" else "أضف خريطة Mapsforge للاستخدام دون إنترنت", color = TextMuted, fontSize = 8.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -132,10 +134,11 @@ fun MapWidget(
 
 @Composable
 private fun NavigationSummary(title: String, distance: String?, direction: String, hasTarget: Boolean, tiny: Boolean) {
+    val widgetColors = resolvedWidgetColors()
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text(if (hasTarget) distance ?: "--" else direction, color = CyanNeon, fontSize = if (tiny) 17.sp else 22.sp, fontWeight = FontWeight.Black, maxLines = 1)
-        Text(if (hasTarget) title else "الخريطة", color = TextPrimary, fontSize = if (tiny) 8.sp else 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (hasTarget) Text(direction, color = TextSecondary, fontSize = 8.sp, maxLines = 1)
+        Text(if (hasTarget) distance ?: "--" else direction, color = widgetColors.accent, fontSize = if (tiny) 17.sp else 22.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(if (hasTarget) title else "الخريطة", color = widgetColors.primary, fontSize = if (tiny) 8.sp else 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (hasTarget) Text(direction, color = widgetColors.secondary, fontSize = 8.sp, maxLines = 1)
     }
 }
 

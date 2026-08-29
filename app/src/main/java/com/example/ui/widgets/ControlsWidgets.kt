@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.MusicPlaybackState
 import com.example.model.WidgetStyle
+import com.example.ui.components.resolvedWidgetColors
 import com.example.ui.theme.*
 
 @Composable
@@ -33,6 +34,7 @@ fun ControlsWidget(
     onPrevious: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val widgetColors = resolvedWidgetColors()
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -51,7 +53,7 @@ fun ControlsWidget(
                     CircleControlButton(
                         icon = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         label = "تشغيل",
-                        tint = CyanNeon,
+                        tint = widgetColors.accent,
                         isPrimary = true,
                         onClick = onTogglePlayPause
                     )
@@ -69,7 +71,7 @@ fun ControlsWidget(
                     SquareControlButton(
                         icon = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         label = "الوسائط",
-                        tint = CyanNeon,
+                        tint = widgetColors.accent,
                         onClick = onTogglePlayPause
                     )
                     SquareControlButton(icon = Icons.Default.VolumeUp, label = "رفع الصوت", onClick = { onVolumeAdjust(1f) })
@@ -89,7 +91,7 @@ fun ControlsWidget(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = { onVolumeAdjust(-1f) }) {
-                            Icon(Icons.Default.VolumeDown, contentDescription = "خفض", tint = TextPrimary)
+                            Icon(Icons.Default.VolumeDown, contentDescription = "خفض", tint = widgetColors.primary)
                         }
                         IconButton(onClick = onToggleMute) {
                             Icon(Icons.Default.VolumeMute, contentDescription = "كتم", tint = AmberRacing)
@@ -98,14 +100,14 @@ fun ControlsWidget(
                             Icon(
                                 imageVector = if (playbackState.isPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
                                 contentDescription = "تشغيل",
-                                tint = CyanNeon
+                                tint = widgetColors.accent
                             )
                         }
                         IconButton(onClick = onNext) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = TextPrimary)
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = widgetColors.primary)
                         }
                         IconButton(onClick = { onVolumeAdjust(1f) }) {
-                            Icon(Icons.Default.VolumeUp, contentDescription = "رفع", tint = TextPrimary)
+                            Icon(Icons.Default.VolumeUp, contentDescription = "رفع", tint = widgetColors.primary)
                         }
                     }
                 }
@@ -122,14 +124,14 @@ fun ControlsWidget(
                         modifier = Modifier.fillMaxSize().padding(8.dp),
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(text = "لوحة التحكم السريع", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = CyanNeon)
+                        Text(text = "لوحة التحكم السريع", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = widgetColors.accent)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceAround,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = { onVolumeAdjust(-1f) }) {
-                                Icon(Icons.Default.VolumeDown, contentDescription = null, tint = TextPrimary)
+                                Icon(Icons.Default.VolumeDown, contentDescription = null, tint = widgetColors.primary)
                             }
                             IconButton(onClick = onToggleMute) {
                                 Icon(Icons.Default.VolumeOff, contentDescription = null, tint = AmberRacing)
@@ -138,12 +140,12 @@ fun ControlsWidget(
                                 Icon(
                                     imageVector = if (playbackState.isPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
                                     contentDescription = null,
-                                    tint = CyanNeon,
+                                    tint = widgetColors.accent,
                                     modifier = Modifier.size(34.dp)
                                 )
                             }
                             IconButton(onClick = { onVolumeAdjust(1f) }) {
-                                Icon(Icons.Default.VolumeUp, contentDescription = null, tint = TextPrimary)
+                                Icon(Icons.Default.VolumeUp, contentDescription = null, tint = widgetColors.primary)
                             }
                         }
                     }
@@ -163,11 +165,11 @@ fun ControlsWidget(
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Icon(Icons.Default.VolumeDown, contentDescription = "خفض", tint = TextPrimary, modifier = Modifier.size(24.dp))
+                        Icon(Icons.Default.VolumeDown, contentDescription = "خفض", tint = widgetColors.primary, modifier = Modifier.size(24.dp))
                     }
                     Button(
                         onClick = onTogglePlayPause,
-                        colors = ButtonDefaults.buttonColors(containerColor = CyanNeon),
+                        colors = ButtonDefaults.buttonColors(containerColor = widgetColors.accent),
                         modifier = Modifier.weight(1.2f).fillMaxHeight(),
                         shape = RoundedCornerShape(10.dp)
                     ) {
@@ -185,16 +187,16 @@ fun ControlsWidget(
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Icon(Icons.Default.VolumeUp, contentDescription = "رفع", tint = TextPrimary, modifier = Modifier.size(24.dp))
+                        Icon(Icons.Default.VolumeUp, contentDescription = "رفع", tint = widgetColors.primary, modifier = Modifier.size(24.dp))
                     }
                 }
             }
 
             else -> {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    IconButton(onClick = { onVolumeAdjust(-1f) }) { Icon(Icons.Default.VolumeDown, null, tint = TextPrimary) }
-                    IconButton(onClick = onTogglePlayPause) { Icon(Icons.Default.PlayArrow, null, tint = CyanNeon) }
-                    IconButton(onClick = { onVolumeAdjust(1f) }) { Icon(Icons.Default.VolumeUp, null, tint = TextPrimary) }
+                    IconButton(onClick = { onVolumeAdjust(-1f) }) { Icon(Icons.Default.VolumeDown, null, tint = widgetColors.primary) }
+                    IconButton(onClick = onTogglePlayPause) { Icon(Icons.Default.PlayArrow, null, tint = widgetColors.accent) }
+                    IconButton(onClick = { onVolumeAdjust(1f) }) { Icon(Icons.Default.VolumeUp, null, tint = widgetColors.primary) }
                 }
             }
         }
@@ -205,18 +207,19 @@ fun ControlsWidget(
 private fun CircleControlButton(
     icon: ImageVector,
     label: String,
-    tint: Color = TextPrimary,
+    tint: Color? = null,
     isPrimary: Boolean = false,
     onClick: () -> Unit
 ) {
+    val widgetColors = resolvedWidgetColors()
     Surface(
-        color = if (isPrimary) CyanNeon.copy(alpha = 0.25f) else CarbonSurface,
+        color = if (isPrimary) widgetColors.accent.copy(alpha = 0.25f) else CarbonSurface,
         shape = CircleShape,
-        border = androidx.compose.foundation.BorderStroke(1.dp, if (isPrimary) CyanNeon else CarbonCardBorder),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (isPrimary) widgetColors.accent else CarbonCardBorder),
         modifier = Modifier.size(46.dp)
     ) {
         IconButton(onClick = onClick) {
-            Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
+            Icon(imageVector = icon, contentDescription = label, tint = tint ?: widgetColors.primary, modifier = Modifier.size(22.dp))
         }
     }
 }
@@ -225,9 +228,10 @@ private fun CircleControlButton(
 private fun SquareControlButton(
     icon: ImageVector,
     label: String,
-    tint: Color = TextPrimary,
+    tint: Color? = null,
     onClick: () -> Unit
 ) {
+    val widgetColors = resolvedWidgetColors()
     Surface(
         color = CarbonSurface,
         shape = RoundedCornerShape(10.dp),
@@ -236,8 +240,8 @@ private fun SquareControlButton(
     ) {
         IconButton(onClick = onClick) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
-                Text(text = label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = TextSecondary)
+                Icon(imageVector = icon, contentDescription = label, tint = tint ?: widgetColors.primary, modifier = Modifier.size(22.dp))
+                Text(text = label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = widgetColors.secondary)
             }
         }
     }

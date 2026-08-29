@@ -77,6 +77,8 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
     val storedMapState by viewModel.offroadMapState.collectAsState()
     val searchResults by viewModel.offlineSearchResults.collectAsState()
     val transferMessage by viewModel.offroadTransferMessage.collectAsState()
+    val launcherSettings by viewModel.settings.collectAsState()
+    val interfaceAccent = Color(launcherSettings.interfaceAccent.argb)
 
     var showTools by remember { mutableStateOf(false) }
     var showPlaces by remember { mutableStateOf(false) }
@@ -174,51 +176,70 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             Surface(
                 color = CarbonDark.copy(alpha = .78f),
                 shape = CircleShape,
-                border = BorderStroke(2.dp, CyanNeon),
+                border = BorderStroke(2.dp, interfaceAccent),
                 modifier = Modifier.align(Alignment.Center).offset(y = yOffset).size(48.dp)
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Default.Navigation,
                         "موقع السيارة",
-                        tint = CyanNeon,
+                        tint = interfaceAccent,
                         modifier = Modifier.size(32.dp).rotate(if (orientationMode == MapOrientationMode.HEADING_UP) 0f else smoothBearing)
                     )
                 }
             }
         }
 
-        Row(
-            modifier = Modifier.align(Alignment.TopStart).padding(top = 56.dp, start = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        Surface(
+            modifier = Modifier.align(Alignment.TopStart).padding(top = 52.dp, start = 10.dp),
+            color = CarbonDark.copy(alpha = .88f),
+            shape = RoundedCornerShape(15.dp),
+            border = BorderStroke(1.dp, CarbonCardBorder),
+            shadowElevation = 5.dp
         ) {
-            MapActionButton(Icons.Default.BookmarkAdd, "علّم موقعي") {
-                if (gps.hasGpsFix) {
-                    saveIsCurrent = true
-                    savePoint = LatLong(gps.latitude, gps.longitude)
-                    saveName = ""
-                    saveKind = OffroadPlaceKind.FLAG
-                    showSaveCurrent = true
+            Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                MapDockButton(Icons.Default.BookmarkAdd, "علّم موقعي", interfaceAccent) {
+                    if (gps.hasGpsFix) {
+                        saveIsCurrent = true
+                        savePoint = LatLong(gps.latitude, gps.longitude)
+                        saveName = ""
+                        saveKind = OffroadPlaceKind.FLAG
+                        showSaveCurrent = true
+                    }
                 }
+                MapDockButton(Icons.Default.Place, "المواقع", interfaceAccent) { showPlaces = true }
+                MapDockButton(Icons.Default.Search, "بحث", interfaceAccent) { showSearch = true }
+                MapDockButton(Icons.Default.MoreVert, "أدوات", interfaceAccent) { showTools = true }
             }
-            MapActionButton(Icons.Default.Place, "المواقع") { showPlaces = true }
-            MapActionButton(Icons.Default.Search, "بحث") { showSearch = true }
-            MapActionButton(Icons.Default.MoreVert, "أدوات") { showTools = true }
         }
 
-        Column(
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 62.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+        Surface(
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 60.dp),
+            color = CarbonDark.copy(alpha = .88f),
+            shape = RoundedCornerShape(15.dp),
+            border = BorderStroke(1.dp, CarbonCardBorder),
+            shadowElevation = 5.dp
         ) {
-            MapActionButton(if (followGps) Icons.Default.GpsFixed else Icons.Default.MyLocation, if (followGps) "تتبع موقعي" else "العودة لموقعي") {
-                followGps = true
-                autoZoom = autoZoomForSpeedEnhanced(gps.speedKmH)
-                if (gps.hasGpsFix) viewModel.updateOffroadMapState(OffroadMapState(gps.latitude, gps.longitude, autoZoom, true, orientationMode))
-            }
-            MapActionButton(if (orientationMode == MapOrientationMode.HEADING_UP) Icons.Default.Explore else Icons.Default.North, orientationMode.arabicName) {
-                orientationMode = if (orientationMode == MapOrientationMode.NORTH_UP) MapOrientationMode.HEADING_UP else MapOrientationMode.NORTH_UP
-                viewModel.updateOffroadMapState(storedMapState.copy(followGps = followGps, orientationMode = orientationMode))
+            Column(Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                MapDockButton(
+                    if (followGps) Icons.Default.GpsFixed else Icons.Default.MyLocation,
+                    if (followGps) "تتبع موقعي" else "العودة لموقعي",
+                    interfaceAccent,
+                    selected = followGps
+                ) {
+                    followGps = true
+                    autoZoom = autoZoomForSpeedEnhanced(gps.speedKmH)
+                    if (gps.hasGpsFix) viewModel.updateOffroadMapState(OffroadMapState(gps.latitude, gps.longitude, autoZoom, true, orientationMode))
+                }
+                MapDockButton(
+                    if (orientationMode == MapOrientationMode.HEADING_UP) Icons.Default.Explore else Icons.Default.North,
+                    orientationMode.arabicName,
+                    interfaceAccent,
+                    selected = orientationMode == MapOrientationMode.HEADING_UP
+                ) {
+                    orientationMode = if (orientationMode == MapOrientationMode.NORTH_UP) MapOrientationMode.HEADING_UP else MapOrientationMode.NORTH_UP
+                    viewModel.updateOffroadMapState(storedMapState.copy(followGps = followGps, orientationMode = orientationMode))
+                }
             }
         }
 
@@ -229,7 +250,8 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             targetDistance = viewModel.offroadDistanceToTargetMeters(),
             targetBearing = viewModel.offroadBearingToTarget(),
             trackKm = viewModel.offroadTrackDistanceKm(),
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = 56.dp, end = 10.dp)
+            accentColor = interfaceAccent,
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 52.dp, end = 10.dp)
         )
 
         navTarget?.let { target ->
@@ -249,7 +271,7 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             border = BorderStroke(1.dp, CarbonCardBorder)
         ) {
             Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Box(Modifier.width(48.dp).height(3.dp).background(CyanNeon))
+                Box(Modifier.width(48.dp).height(3.dp).background(interfaceAccent))
                 Text(scaleLabel(autoZoom), color = TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
         }
@@ -406,20 +428,31 @@ private fun EnhancedTelemetryCard(
     targetDistance: Float?,
     targetBearing: Float?,
     trackKm: Double,
+    accentColor: Color,
     modifier: Modifier = Modifier
 ) {
     val statusColor = gpsStatusColor(gps)
-    Surface(modifier = modifier.widthIn(min = 132.dp), color = CarbonDark.copy(alpha = .90f), shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, statusColor)) {
-        Column(Modifier.padding(horizontal = 11.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.size(9.dp).background(statusColor, CircleShape))
-                Text("${gps.speedKmH.toInt()} كم/س", color = CyanNeon, fontWeight = FontWeight.Black, fontSize = 22.sp)
+    Surface(modifier = modifier.widthIn(min = 238.dp), color = CarbonDark.copy(alpha = .89f), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, CarbonCardBorder), shadowElevation = 5.dp) {
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(if (gps.hasGpsFix && gps.isSpeedReliable) gps.speedKmH.toInt().toString() else "--", color = accentColor, fontWeight = FontWeight.Black, fontSize = 26.sp)
+                Text("كم/س", color = TextSecondary, fontSize = 8.sp)
             }
-            Text(if (gps.hasGpsFix) bearingToArabicDirection(gps.bearingDegrees) else "الاتجاه --", color = AmberRacing, fontWeight = FontWeight.Black, fontSize = 12.sp)
-            Text("GPS ±${gps.accuracyMeters.toInt()}م • ${gps.satellitesCount} أقمار", color = TextSecondary, fontSize = 8.sp)
-            Text("رحلة ${String.format(Locale.US, "%.1f", trip.distanceKm)} • أثر ${String.format(Locale.US, "%.1f", trackKm)} كم", color = TextMuted, fontSize = 8.sp)
-            if (target != null && targetDistance != null) {
-                Text("${formatDistanceEnhanced(targetDistance)} ${targetBearing?.let(::bearingToArabicDirection) ?: ""}", color = EmeraldSafe, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+            VerticalDivider(Modifier.height(40.dp), color = CarbonCardBorder)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Box(Modifier.size(8.dp).background(statusColor, CircleShape))
+                    Text(if (gps.hasGpsFix) bearingToArabicDirection(gps.bearingDegrees) else "بانتظار GPS", color = TextPrimary, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                }
+                Text(if (gps.hasGpsFix) "±${gps.accuracyMeters.toInt()}م • ${gps.satellitesCount} أقمار" else gps.statusArabic, color = TextSecondary, fontSize = 8.sp)
+                Text("رحلة ${String.format(Locale.US, "%.1f", trip.distanceKm)} • أثر ${String.format(Locale.US, "%.1f", trackKm)} كم", color = TextMuted, fontSize = 8.sp)
+                if (target != null && targetDistance != null) {
+                    Text("${formatDistanceEnhanced(targetDistance)} ${targetBearing?.let(::bearingToArabicDirection) ?: ""}", color = EmeraldSafe, fontWeight = FontWeight.Bold, fontSize = 8.sp, maxLines = 1)
+                }
             }
         }
     }
@@ -452,9 +485,23 @@ private fun MeasurementCard(a: LatLong?, b: LatLong?, onClear: () -> Unit, modif
 }
 
 @Composable
-private fun MapActionButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
-    FloatingActionButton(onClick = onClick, containerColor = CarbonDark.copy(alpha = .94f), contentColor = CyanNeon, modifier = Modifier.size(43.dp)) {
-        Icon(icon, description, modifier = Modifier.size(21.dp))
+private fun MapDockButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    accentColor: Color,
+    selected: Boolean = false,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = if (selected) accentColor.copy(alpha = .18f) else Color.Transparent,
+        shape = RoundedCornerShape(11.dp),
+        border = if (selected) BorderStroke(1.dp, accentColor.copy(alpha = .55f)) else null,
+        modifier = Modifier.size(44.dp)
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(icon, description, tint = if (selected) accentColor else TextPrimary, modifier = Modifier.size(21.dp))
+        }
     }
 }
 

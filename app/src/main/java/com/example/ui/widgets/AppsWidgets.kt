@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AppItem
 import com.example.model.WidgetStyle
+import com.example.ui.components.resolvedWidgetColors
 import com.example.ui.theme.*
 
 @Composable
@@ -36,6 +37,7 @@ fun AppsWidget(
     onOpenAppDrawer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val widgetColors = resolvedWidgetColors()
     val displayApps = installedApps.filter { !it.isHidden }
     val favoriteApps = displayApps.filter { it.isFavorite }.ifEmpty { displayApps.take(8) }
 
@@ -59,17 +61,17 @@ fun AppsWidget(
                             modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { onOpenAppDrawer() }.padding(4.dp).testTag("btn_widget_all_apps")
                         ) {
                             Surface(
-                                color = CyanNeon.copy(alpha = 0.2f),
+                                color = widgetColors.accent.copy(alpha = 0.2f),
                                 shape = RoundedCornerShape(12.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, CyanNeon),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, widgetColors.accent),
                                 modifier = Modifier.size(46.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Apps, "كل التطبيقات", tint = CyanNeon, modifier = Modifier.size(24.dp))
+                                    Icon(Icons.Default.Apps, "كل التطبيقات", tint = widgetColors.accent, modifier = Modifier.size(24.dp))
                                 }
                             }
                             Spacer(Modifier.height(2.dp))
-                            Text("التطبيقات", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = TextPrimary)
+                            Text("التطبيقات", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = widgetColors.primary)
                         }
                     }
                 }
@@ -132,6 +134,7 @@ fun AppsWidget(
 
 @Composable
 private fun AppShortcutItem(app: AppItem, showLabel: Boolean, onClick: () -> Unit) {
+    val widgetColors = resolvedWidgetColors()
     val imageBitmap = remember(app.packageName, app.iconBitmap) { app.iconBitmap?.asImageBitmap() }
 
     Column(
@@ -148,14 +151,14 @@ private fun AppShortcutItem(app: AppItem, showLabel: Boolean, onClick: () -> Uni
                 if (imageBitmap != null) {
                     Image(bitmap = imageBitmap, contentDescription = app.label, modifier = Modifier.size(34.dp))
                 } else {
-                    Icon(Icons.Default.Android, contentDescription = app.label, tint = CyanNeon, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Default.Android, contentDescription = app.label, tint = widgetColors.accent, modifier = Modifier.size(24.dp))
                 }
             }
         }
 
         if (showLabel) {
             Spacer(Modifier.height(2.dp))
-            Text(app.label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = TextPrimary, maxLines = 1)
+            Text(app.label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = widgetColors.primary, maxLines = 1)
         }
     }
 }

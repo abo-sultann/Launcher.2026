@@ -34,6 +34,12 @@ class PreferencesManager(context: Context) {
     fun getSettings(): LauncherSettings = try {
         val bgName = prefs.getString("bg_type", BackgroundType.DARK_CARBON.name) ?: BackgroundType.DARK_CARBON.name
         val bgType = try { BackgroundType.valueOf(bgName) } catch (_: Exception) { BackgroundType.DARK_CARBON }
+        val dockStyle = try {
+            DockSurfaceStyle.valueOf(prefs.getString("bottom_dock_style", DockSurfaceStyle.GLASS.name) ?: DockSurfaceStyle.GLASS.name)
+        } catch (_: Exception) { DockSurfaceStyle.GLASS }
+        val interfaceAccent = try {
+            InterfaceAccent.valueOf(prefs.getString("interface_accent", InterfaceAccent.CYAN.name) ?: InterfaceAccent.CYAN.name)
+        } catch (_: Exception) { InterfaceAccent.CYAN }
         val screenSaverTypes = (prefs.getStringSet("screensaver_widgets", null)
             ?: setOf(WidgetType.CLOCK.name, WidgetType.SPEEDOMETER.name))
             .mapNotNull { name -> try { WidgetType.valueOf(name) } catch (_: Exception) { null } }
@@ -64,6 +70,9 @@ class PreferencesManager(context: Context) {
             safeModeActive = prefs.getBoolean("safe_mode", false),
             showTopBar = prefs.getBoolean("show_top_bar", true),
             showBottomBar = prefs.getBoolean("show_bottom_bar", true),
+            bottomDockStyle = dockStyle,
+            bottomDockOpacityPercent = prefs.getInt("bottom_dock_opacity", 76).coerceIn(30, 100),
+            interfaceAccent = interfaceAccent,
             highContrastMode = prefs.getBoolean("high_contrast", false),
             keepScreenOn = prefs.getBoolean("keep_screen_on", true),
             autoLogTrips = prefs.getBoolean("auto_log_trips", true),
@@ -103,6 +112,9 @@ class PreferencesManager(context: Context) {
                 .putBoolean("safe_mode", settings.safeModeActive)
                 .putBoolean("show_top_bar", settings.showTopBar)
                 .putBoolean("show_bottom_bar", settings.showBottomBar)
+                .putString("bottom_dock_style", settings.bottomDockStyle.name)
+                .putInt("bottom_dock_opacity", settings.bottomDockOpacityPercent.coerceIn(30, 100))
+                .putString("interface_accent", settings.interfaceAccent.name)
                 .putBoolean("high_contrast", settings.highContrastMode)
                 .putBoolean("keep_screen_on", settings.keepScreenOn)
                 .putBoolean("auto_log_trips", settings.autoLogTrips)

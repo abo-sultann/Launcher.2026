@@ -6,7 +6,8 @@ import com.example.model.WidgetSurfaceStyle
 
 /**
  * Stores the visual-only Widget V3 preferences independently from the legacy widget JSON.
- * Geometry, surface, borders and optional foreground colors can evolve without breaking old layouts.
+ * Geometry and a unified appearance (surface, border, foreground, accent and glass opacity) can
+ * evolve without breaking the legacy widget JSON.
  */
 class WidgetVisualStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("launcher_widget_v2_visuals", Context.MODE_PRIVATE)
@@ -70,8 +71,21 @@ class WidgetVisualStore(context: Context) {
         prefs.edit().putString("surface_$widgetId", surface.name).apply()
     }
 
+    fun getSurface(widgetId: String, fallback: WidgetSurfaceStyle): WidgetSurfaceStyle = try {
+        prefs.getString("surface_$widgetId", null)?.let(WidgetSurfaceStyle::valueOf) ?: fallback
+    } catch (_: Exception) { fallback }
+
     fun setBorder(widgetId: String, enabled: Boolean) {
         prefs.edit().putBoolean("border_$widgetId", enabled).apply()
+    }
+
+    fun getBorder(widgetId: String): Boolean = prefs.getBoolean("border_$widgetId", false)
+
+    fun getSurfaceOpacity(widgetId: String): Float =
+        prefs.getFloat("surface_opacity_$widgetId", 1f).coerceIn(.25f, 1f)
+
+    fun setSurfaceOpacity(widgetId: String, opacity: Float) {
+        prefs.edit().putFloat("surface_opacity_$widgetId", opacity.coerceIn(.25f, 1f)).apply()
     }
 
     fun getForegroundColorArgb(widgetId: String): Int? =
@@ -83,12 +97,23 @@ class WidgetVisualStore(context: Context) {
         edit.apply()
     }
 
+    fun getAccentColorArgb(widgetId: String): Int? =
+        if (prefs.contains("accent_$widgetId")) prefs.getInt("accent_$widgetId", 0) else null
+
+    fun setAccentColorArgb(widgetId: String, argb: Int?) {
+        val edit = prefs.edit()
+        if (argb == null) edit.remove("accent_$widgetId") else edit.putInt("accent_$widgetId", argb)
+        edit.apply()
+    }
+
     fun remove(widgetId: String) {
         previews.remove(widgetId)
         prefs.edit()
             .remove("surface_$widgetId")
             .remove("border_$widgetId")
             .remove("foreground_$widgetId")
+            .remove("accent_$widgetId")
+            .remove("surface_opacity_$widgetId")
             .remove("x_$widgetId")
             .remove("y_$widgetId")
             .remove("w_$widgetId")

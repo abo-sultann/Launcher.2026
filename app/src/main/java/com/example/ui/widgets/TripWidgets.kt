@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.TripData
 import com.example.model.WidgetStyle
+import com.example.ui.components.resolvedWidgetColors
 import com.example.ui.theme.*
 import java.util.Locale
 
@@ -28,6 +29,7 @@ fun TripWidget(
     onResetTrip: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val widgetColors = resolvedWidgetColors()
     val distanceStr = String.format(Locale.US, "%.1f", tripData.distanceKm)
     val movingMinutes = tripData.elapsedMovingTimeSec / 60
     val movingSeconds = tripData.elapsedMovingTimeSec % 60
@@ -47,13 +49,13 @@ fun TripWidget(
                     horizontalArrangement = Arrangement.SpaceAround
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "المسافة", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                        Text(text = "$distanceStr كم", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = CyanNeon)
+                        Text(text = "المسافة", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
+                        Text(text = "$distanceStr كم", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = widgetColors.accent)
                     }
                     Divider(modifier = Modifier.height(36.dp).width(1.dp), color = CarbonCardBorder)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "السرعة", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                        Text(text = "${tripData.currentSpeedKmH.toInt()} كم/س", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = TextPrimary)
+                        Text(text = "السرعة", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
+                        Text(text = "${tripData.currentSpeedKmH.toInt()} كم/س", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary)
                     }
                 }
             }
@@ -65,13 +67,13 @@ fun TripWidget(
                     horizontalArrangement = Arrangement.SpaceAround
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "مدة القيادة", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(text = "مدة القيادة", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
                         Text(text = durationStr, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = AmberRacing)
                     }
                     Divider(modifier = Modifier.height(36.dp).width(1.dp), color = CarbonCardBorder)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "السرعة الحالية", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                        Text(text = "${tripData.currentSpeedKmH.toInt()} كم/س", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = TextPrimary)
+                        Text(text = "السرعة الحالية", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
+                        Text(text = "${tripData.currentSpeedKmH.toInt()} كم/س", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary)
                     }
                 }
             }
@@ -92,7 +94,7 @@ fun TripWidget(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(text = "كمبيوتر الرحلة", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = CyanNeon)
+                            Text(text = "كمبيوتر الرحلة", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = widgetColors.accent)
                             Text(text = if (tripData.isRunning) "الرحلة قيد التسجيل" else "متوقف", style = MaterialTheme.typography.labelSmall, color = if (tripData.isRunning) EmeraldSafe else TextMuted)
                         }
 
@@ -101,16 +103,16 @@ fun TripWidget(
                             horizontalArrangement = Arrangement.SpaceAround
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "المسافة", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                                Text(text = "$distanceStr كم", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = CyanNeon)
+                                Text(text = "المسافة", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
+                                Text(text = "$distanceStr كم", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = widgetColors.accent)
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "المتوسط", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                                Text(text = "المتوسط", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
                                 Text(text = "${tripData.averageSpeedKmH.toInt()} كم/س", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = AmberRacing)
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "الزمن", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                                Text(text = durationStr, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = TextPrimary)
+                                Text(text = "الزمن", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
+                                Text(text = durationStr, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary)
                             }
                         }
                     }
@@ -131,8 +133,8 @@ fun TripWidget(
                     ) {
                         Column {
                             Text(text = "بيانات الرحلة", style = MaterialTheme.typography.labelSmall, color = AmberRacing)
-                            Text(text = "$distanceStr كم", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = TextPrimary)
-                            Text(text = "الزمن: $durationStr", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                            Text(text = "$distanceStr كم", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary)
+                            Text(text = "الزمن: $durationStr", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
                         }
 
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -143,7 +145,7 @@ fun TripWidget(
                                 Icon(
                                     imageVector = if (tripData.isRunning && !tripData.isPaused) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
                                     contentDescription = "بدء / إيقاف الرحلة",
-                                    tint = CyanNeon,
+                                    tint = widgetColors.accent,
                                     modifier = Modifier.size(34.dp)
                                 )
                             }
@@ -154,7 +156,7 @@ fun TripWidget(
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
                                     contentDescription = "إعادة ضبط",
-                                    tint = TextSecondary,
+                                    tint = widgetColors.secondary,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
@@ -172,15 +174,15 @@ fun TripWidget(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(text = "المسافة: $distanceStr كم", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = CyanNeon)
+                        Text(text = "المسافة: $distanceStr كم", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = widgetColors.accent)
                         Text(text = "الزمن: $durationStr", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = AmberRacing)
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(text = "أعلى سرعة: ${tripData.maxSpeedKmH.toInt()} كم/س", style = MaterialTheme.typography.labelSmall, color = TextPrimary)
-                        Text(text = "المتوسط: ${tripData.averageSpeedKmH.toInt()} كم/س", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(text = "أعلى سرعة: ${tripData.maxSpeedKmH.toInt()} كم/س", style = MaterialTheme.typography.labelSmall, color = widgetColors.primary)
+                        Text(text = "المتوسط: ${tripData.averageSpeedKmH.toInt()} كم/س", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
                     }
                 }
             }
