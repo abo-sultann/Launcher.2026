@@ -51,6 +51,7 @@ fun SettingsScreen(
     val maps by viewModel.mapsList.collectAsState()
     val playback by viewModel.playbackState.collectAsState()
     val gps by viewModel.gpsTelemetry.collectAsState()
+    val fileImportStatus by viewModel.fileImportStatus.collectAsState()
     var selected by remember { mutableStateOf(SettingsCategory.INTERFACE) }
     var interfaceBackgroundOpen by remember { mutableStateOf(true) }
     var interfaceBarsOpen by remember { mutableStateOf(false) }
@@ -59,7 +60,8 @@ fun SettingsScreen(
     val accent = Color(settings.interfaceAccent.argb)
 
     val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(viewModel::importMusicUri) }
-    val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(viewModel::importMapUri) }
+    // ACTION_GET_CONTENT works more consistently with the old Android 7 file manager.
+    val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { it?.let(viewModel::importMapUri) }
     // More reliable than ACTION_OPEN_DOCUMENT on Android 7 car-unit file managers.
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { it?.let(viewModel::importWallpaperUri) }
 
@@ -134,6 +136,7 @@ fun SettingsScreen(
                                     }
                                 }
                                 item { ActionButton("اختيار صورة من الجهاز", Icons.Default.Image) { viewModel.prepareForExternalPicker(); imagePicker.launch("image/*") } }
+                                fileImportStatus?.let { status -> item { StatusMetric("حالة الاستيراد", status, status.startsWith("تم")) } }
                                 item { NumberSlider("تعتيم الخلفية", settings.wallpaperDimPercent, 0, 80, "%") { viewModel.updateSettings(settings.copy(wallpaperDimPercent = it)) } }
                                 item {
                                     ChoiceCard("لون الواجهة", "يُطبّق على شريطي الحالة والتنقل وعناصر الإعدادات") {
@@ -243,7 +246,8 @@ fun SettingsScreen(
 
                                 item { SectionTitle("الخريطة دون إنترنت", Icons.Default.Map) }
                                 item { InfoCard("نسخة الاختبار 1.0.12 مهيأة لخريطة Saudi-2026.map بصيغة Mapsforge. تغطي السعودية دون إنترنت، وتعرض الأسماء العربية أولًا مع الإنجليزية احتياطيًا.") }
-                                item { ActionButton("إضافة خريطة", Icons.Default.AddLocationAlt) { mapPicker.launch(arrayOf("*/*")) } }
+                                item { ActionButton("إضافة خريطة", Icons.Default.AddLocationAlt) { viewModel.prepareForExternalPicker(); mapPicker.launch("*/*") } }
+                                fileImportStatus?.let { status -> item { StatusMetric("حالة الاستيراد", status, status.startsWith("تم")) } }
                                 if (maps.isEmpty()) item { StatusMetric("الخرائط", "لا توجد خريطة مضافة", false) }
                                 items(maps, key = { it.id }) { map ->
                                     Surface(color = if (map.isActive) accent.copy(alpha = .12f) else CarbonSurface, shape = RoundedCornerShape(11.dp), border = BorderStroke(1.dp, if (map.isActive) accent else CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
