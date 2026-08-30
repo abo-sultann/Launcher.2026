@@ -245,7 +245,7 @@ fun SettingsScreen(
                                 item { ActionButton("تصفير الرحلة الحالية", Icons.Default.Refresh) { viewModel.resetTrip() } }
 
                                 item { SectionTitle("الخريطة دون إنترنت", Icons.Default.Map) }
-                                item { InfoCard("نسخة الاختبار 1.0.12 مهيأة لخريطة Saudi-2026.map بصيغة Mapsforge. تغطي السعودية دون إنترنت، وتعرض الأسماء العربية أولًا مع الإنجليزية احتياطيًا.") }
+                                item { InfoCard("نسخة الاختبار 1.0.14 تستخدم نمط طرق ومعالم أوضح مع خريطة Saudi-2026.map دون إنترنت. إعدادات الحفظ والتوجيه والعرض متاحة مباشرة من أعلى صفحة الخريطة.") }
                                 item { ActionButton("إضافة خريطة", Icons.Default.AddLocationAlt) { viewModel.prepareForExternalPicker(); mapPicker.launch("*/*") } }
                                 fileImportStatus?.let { status -> item { StatusMetric("حالة الاستيراد", status, status.startsWith("تم")) } }
                                 if (maps.isEmpty()) item { StatusMetric("الخرائط", "لا توجد خريطة مضافة", false) }
