@@ -215,7 +215,9 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                 currentScreen = currentScreen,
                 safeAreaTop = safeArea.topDp,
                 safeAreaBottom = safeArea.bottomDp,
-                showTop = settings.showTopBar && showMapChrome,
+                // The map owns its full top edge. Keeping the launcher status strip here
+                // covered map labels and appeared as a permanent dark rectangle.
+                showTop = currentScreen != CarScreen.MAP && settings.showTopBar && showMapChrome,
                 showBottom = settings.showBottomBar && showMapChrome,
                 settings = settings,
                 isSafeModeActive = isSafeModeActive,
