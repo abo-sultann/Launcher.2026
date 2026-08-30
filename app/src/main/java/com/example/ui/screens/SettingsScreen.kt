@@ -60,7 +60,8 @@ fun SettingsScreen(
 
     val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(viewModel::importMusicUri) }
     val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(viewModel::importMapUri) }
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(viewModel::importWallpaperUri) }
+    // More reliable than ACTION_OPEN_DOCUMENT on Android 7 car-unit file managers.
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { it?.let(viewModel::importWallpaperUri) }
 
     CompositionLocalProvider(LocalSettingsAccent provides accent) {
         Row(modifier.fillMaxSize().padding(9.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -132,7 +133,7 @@ fun SettingsScreen(
                                         }
                                     }
                                 }
-                                item { ActionButton("اختيار صورة من الجهاز", Icons.Default.Image) { imagePicker.launch(arrayOf("image/*")) } }
+                                item { ActionButton("اختيار صورة من الجهاز", Icons.Default.Image) { viewModel.prepareForExternalPicker(); imagePicker.launch("image/*") } }
                                 item { NumberSlider("تعتيم الخلفية", settings.wallpaperDimPercent, 0, 80, "%") { viewModel.updateSettings(settings.copy(wallpaperDimPercent = it)) } }
                                 item {
                                     ChoiceCard("لون الواجهة", "يُطبّق على شريطي الحالة والتنقل وعناصر الإعدادات") {
@@ -241,7 +242,7 @@ fun SettingsScreen(
                                 item { ActionButton("تصفير الرحلة الحالية", Icons.Default.Refresh) { viewModel.resetTrip() } }
 
                                 item { SectionTitle("الخريطة دون إنترنت", Icons.Default.Map) }
-                                item { InfoCard("المعتمد: خريطة السعودية العربية، مع خريطة الخليج كخيار إضافي. أضف ملف Mapsforge بامتداد .map؛ تُعرض الأسماء العربية أولًا وتعمل الخريطة بالكامل دون إنترنت.") }
+                                item { InfoCard("نسخة الاختبار 1.0.12 مهيأة لخريطة Saudi-2026.map بصيغة Mapsforge. تغطي السعودية دون إنترنت، وتعرض الأسماء العربية أولًا مع الإنجليزية احتياطيًا.") }
                                 item { ActionButton("إضافة خريطة", Icons.Default.AddLocationAlt) { mapPicker.launch(arrayOf("*/*")) } }
                                 if (maps.isEmpty()) item { StatusMetric("الخرائط", "لا توجد خريطة مضافة", false) }
                                 items(maps, key = { it.id }) { map ->
