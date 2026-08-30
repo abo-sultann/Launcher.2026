@@ -59,6 +59,11 @@ jobs:
           disk-size: 2048M
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
+          emulator-boot-timeout: 300
+          pre-emulator-launch-script: |
+            sed -i '/^disk.dataPartition.size=/d' /home/runner/.android/avd/test.avd/config.ini
+            echo 'disk.dataPartition.size=2048M' >> /home/runner/.android/avd/test.avd/config.ini
+            rm -f /home/runner/.android/avd/test.avd/userdata-qemu.img
           script: |
             adb install -r app/build/outputs/apk/release/app-release.apk
             adb logcat -c
