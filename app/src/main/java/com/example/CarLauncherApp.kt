@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.data.OffroadTrackManager
@@ -28,6 +29,7 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var startedActivities = 0
     private var changingConfiguration = false
+    @Volatile private var suppressBackgroundTrackingUntil = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -68,7 +70,14 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
     override fun onActivityStopped(activity: Activity) {
         changingConfiguration = activity.isChangingConfigurations
         startedActivities = (startedActivities - 1).coerceAtLeast(0)
-        if (startedActivities == 0 && !changingConfiguration) OffroadTrackingService.start(this)
+        if (startedActivities == 0 && !changingConfiguration && SystemClock.elapsedRealtime() >= suppressBackgroundTrackingUntil) {
+            OffroadTrackingService.start(this)
+        }
+    }
+
+    /** A system picker is not a real switch away from Launcher and must not start GPS service. */
+    fun prepareForExternalPicker() {
+        suppressBackgroundTrackingUntil = SystemClock.elapsedRealtime() + 30_000L
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
@@ -116,6 +125,17 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
     private fun normalizeCrashWindow() {
         try {
             val prefs = safeModePrefs()
+            // A new build must not inherit a stale crash streak from the previous version.
+            val installedVersion = BuildConfig.VERSION_CODE
+            if (prefs.getInt("last_version_code", -1) != installedVersion) {
+                prefs.edit()
+                    .remove("crash_count")
+                    .remove("last_crash_time")
+                    .remove("last_crash_msg")
+                    .putInt("last_version_code", installedVersion)
+                    .apply()
+                return
+            }
             val lastCrash = prefs.getLong("last_crash_time", 0L)
             if (lastCrash > 0L && System.currentTimeMillis() - lastCrash > CRASH_WINDOW_MS) {
                 prefs.edit().remove("crash_count").apply()
