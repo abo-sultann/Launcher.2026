@@ -77,7 +77,7 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
 
     /** A system picker is not a real switch away from Launcher and must not start GPS service. */
     fun prepareForExternalPicker() {
-        suppressBackgroundTrackingUntil = SystemClock.elapsedRealtime() + 30_000L
+        suppressBackgroundTrackingUntil = SystemClock.elapsedRealtime() + 5 * 60_000L
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
