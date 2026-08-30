@@ -56,7 +56,8 @@ jobs:
           api-level: 25
           arch: x86
           profile: Nexus 5
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -partition-size 2048
+          disk-size: 2048M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
             adb install -r app/build/outputs/apk/release/app-release.apk
