@@ -60,7 +60,8 @@ fun SettingsScreen(
 
     val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(viewModel::importMusicUri) }
     val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(viewModel::importMapUri) }
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(viewModel::importWallpaperUri) }
+    // More reliable than ACTION_OPEN_DOCUMENT on Android 7 car-unit file managers.
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { it?.let(viewModel::importWallpaperUri) }
 
     CompositionLocalProvider(LocalSettingsAccent provides accent) {
         Row(modifier.fillMaxSize().padding(9.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -132,7 +133,7 @@ fun SettingsScreen(
                                         }
                                     }
                                 }
-                                item { ActionButton("اختيار صورة من الجهاز", Icons.Default.Image) { imagePicker.launch(arrayOf("image/*")) } }
+                                item { ActionButton("اختيار صورة من الجهاز", Icons.Default.Image) { viewModel.prepareForExternalPicker(); imagePicker.launch("image/*") } }
                                 item { NumberSlider("تعتيم الخلفية", settings.wallpaperDimPercent, 0, 80, "%") { viewModel.updateSettings(settings.copy(wallpaperDimPercent = it)) } }
                                 item {
                                     ChoiceCard("لون الواجهة", "يُطبّق على شريطي الحالة والتنقل وعناصر الإعدادات") {
