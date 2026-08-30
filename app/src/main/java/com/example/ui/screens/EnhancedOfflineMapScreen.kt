@@ -191,14 +191,14 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
         }
 
         Surface(
-            modifier = Modifier.align(Alignment.TopStart).padding(top = 52.dp, start = 10.dp),
+            modifier = Modifier.align(Alignment.TopStart).padding(top = 10.dp, start = 10.dp),
             color = CarbonDark.copy(alpha = .88f),
             shape = RoundedCornerShape(15.dp),
             border = BorderStroke(1.dp, CarbonCardBorder),
             shadowElevation = 5.dp
         ) {
-            Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                MapDockButton(Icons.Default.BookmarkAdd, "علّم موقعي", interfaceAccent) {
+            Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                MapPrimaryActionButton(Icons.Default.BookmarkAdd, "حفظ موقعي", interfaceAccent) {
                     if (gps.hasGpsFix) {
                         saveIsCurrent = true
                         savePoint = LatLong(gps.latitude, gps.longitude)
@@ -207,9 +207,9 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
                         showSaveCurrent = true
                     }
                 }
-                MapDockButton(Icons.Default.Place, "المواقع", interfaceAccent) { showPlaces = true }
-                MapDockButton(Icons.Default.Search, "بحث", interfaceAccent) { showSearch = true }
-                MapDockButton(Icons.Default.MoreVert, "أدوات", interfaceAccent) { showTools = true }
+                MapPrimaryActionButton(Icons.Default.Place, "المحفوظة", interfaceAccent) { showPlaces = true }
+                MapPrimaryActionButton(Icons.Default.Navigation, "بحث وتوجيه", interfaceAccent) { showSearch = true }
+                MapPrimaryActionButton(Icons.Default.Tune, "إعدادات", interfaceAccent) { showTools = true }
             }
         }
 
@@ -251,7 +251,7 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             targetBearing = viewModel.offroadBearingToTarget(),
             trackKm = viewModel.offroadTrackDistanceKm(),
             accentColor = interfaceAccent,
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = 52.dp, end = 10.dp)
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 10.dp)
         )
 
         navTarget?.let { target ->
@@ -260,7 +260,7 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
                 distance = viewModel.offroadDistanceToTargetMeters(),
                 bearing = viewModel.offroadBearingToTarget(),
                 onStop = viewModel::stopOffroadNavigation,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 116.dp)
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 72.dp)
             )
         }
 
@@ -506,6 +506,30 @@ private fun MapDockButton(
 }
 
 @Composable
+private fun MapPrimaryActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent,
+        shape = RoundedCornerShape(11.dp),
+        modifier = Modifier.height(44.dp)
+    ) {
+        Row(
+            Modifier.padding(horizontal = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Icon(icon, label, tint = accentColor, modifier = Modifier.size(19.dp))
+            Text(label, color = TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+    }
+}
+
+@Composable
 private fun EnhancedSavePlaceDialog(name: String, kind: OffroadPlaceKind, onName: (String) -> Unit, onKind: (OffroadPlaceKind) -> Unit, onSave: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -658,7 +682,7 @@ private fun EnhancedOffroadToolsDialog(
         Card(modifier = Modifier.fillMaxWidth(.90f).fillMaxHeight(.86f), colors = CardDefaults.cardColors(containerColor = CarbonDark), border = BorderStroke(1.dp, CyanNeon)) {
             Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("أدوات خريطة البر", color = CyanNeon, fontWeight = FontWeight.Black, fontSize = 19.sp, modifier = Modifier.weight(1f))
+                    Text("إعدادات وأدوات الخريطة", color = CyanNeon, fontWeight = FontWeight.Black, fontSize = 19.sp, modifier = Modifier.weight(1f))
                     IconButton(onClick = onClose) { Icon(Icons.Default.Close, "إغلاق", tint = TextPrimary) }
                 }
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -861,16 +885,16 @@ private fun createEnhancedMapView(
     val mapFile = MapFile(File(mapItem.filePath), MAP_LANGUAGE_ARABIC)
     val tileCache: TileCache = AndroidUtil.createTileCache(
         context,
-        "enhanced_${mapItem.id}_${if (detailedTheme) "detail" else "labels"}",
+        "launcher_car_${mapItem.id}_${if (detailedTheme) "detail" else "clear"}",
         mapView.model.displayModel.tileSize,
         MAP_TILE_CACHE_SCREEN_RATIO,
         mapView.model.frameBufferModel.overdrawFactor
     )
     val renderer = TileRendererLayer(tileCache, mapFile, mapView.model.mapViewPosition, AndroidGraphicFactory.INSTANCE).apply {
-        // Keep the complete road/place label rules in both modes. The compact mode only
-        // reduces text size; it must not hide surrounding place names while driving.
-        setXmlRenderTheme(MapsforgeThemes.DEFAULT)
-        textScale = if (detailedTheme) 1.36f else 1.20f
+        // OSMARender is the richer bundled Mapsforge theme: it exposes road hierarchy,
+        // surrounding place names and POIs without adding a second map engine.
+        setXmlRenderTheme(MapsforgeThemes.OSMARENDER)
+        textScale = if (detailedTheme) 1.48f else 1.30f
     }
     mapView.layerManager.layers.add(renderer)
 
@@ -957,10 +981,9 @@ private fun gpsStatusColor(gps: GpsTelemetry): Color = when {
 }
 
 private fun autoZoomForSpeedEnhanced(speed: Float): Int = when {
-    speed < 3f -> 17
-    speed < 15f -> 16
-    speed < 35f -> 15
-    speed < 65f -> 14
+    speed < 3f -> 16
+    speed < 20f -> 15
+    speed < 60f -> 14
     speed < 100f -> 13
     else -> 12
 }
