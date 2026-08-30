@@ -3,6 +3,8 @@ package com.example.ui.viewmodel
 import android.app.Application
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
@@ -28,6 +30,9 @@ import kotlin.math.min
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesManager = PreferencesManager(application)
+    private val startupSafeMode = application
+        .getSharedPreferences("car_launcher_safe_mode", Context.MODE_PRIVATE)
+        .getInt("crash_count", 0) >= 2
     private val legacyWidgetVisualStore = WidgetVisualStore(application)
     private val appRepository = AppRepository(application, preferencesManager)
     private val musicPlayerService = MusicPlayerService(application, preferencesManager)
@@ -42,7 +47,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val currentScreen: StateFlow<CarScreen> = _currentScreen.asStateFlow()
     private val _safeArea = MutableStateFlow(preferencesManager.getSafeArea())
     val safeArea: StateFlow<SafeAreaConfig> = _safeArea.asStateFlow()
-    private val _settings = MutableStateFlow(preferencesManager.getSettings())
+    private val _settings = MutableStateFlow(
+        preferencesManager.getSettings().let { saved ->
+            if (startupSafeMode) saved.copy(
+                backgroundType = BackgroundType.DARK_CARBON,
+                customWallpaperPath = null,
+                screenSaverEnabled = false
+            ) else saved
+        }
+    )
     val settings: StateFlow<LauncherSettings> = _settings.asStateFlow()
     private val _widgets = MutableStateFlow<List<WidgetItem>>(emptyList())
     val widgets: StateFlow<List<WidgetItem>> = _widgets.asStateFlow()
@@ -626,20 +639,81 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun importWallpaperUri(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val directory = File(app.filesDir, "wallpapers").apply { mkdirs() }
+            val target = File(directory, "launcher_wallpaper.jpg")
+            val temporary = File(directory, "launcher_wallpaper.tmp")
             try {
-                val resolver = getApplication<Application>().contentResolver
-                val originalName = queryDisplayName(uri) ?: "wallpaper.jpg"
-                val extension = originalName.substringAfterLast('.', "jpg").take(5)
-                val dir = File(getApplication<Application>().filesDir, "wallpapers").apply { mkdirs() }
-                val target = File(dir, "launcher_wallpaper.$extension")
-                resolver.openInputStream(uri)?.use { input -> FileOutputStream(target).use { output -> input.copyTo(output) } }
-                if (target.exists() && target.length() > 0) {
-                    val newSettings = _settings.value.copy(backgroundType = BackgroundType.CUSTOM_IMAGE, customWallpaperPath = target.absolutePath)
-                    _settings.value = newSettings
-                    preferencesManager.saveSettings(newSettings)
+                temporary.delete()
+                val resolver = app.contentResolver
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+                    ?: throw IllegalArgumentException("تعذر فتح الصورة")
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                    throw IllegalArgumentException("ملف الصورة غير صالح")
                 }
-            } catch (_: Exception) { }
+
+                var sampleSize = 1
+                while (bounds.outWidth / sampleSize > WALLPAPER_WIDTH * 2 ||
+                    bounds.outHeight / sampleSize > WALLPAPER_HEIGHT * 2
+                ) sampleSize *= 2
+
+                val options = BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.RGB_565
+                    inDither = true
+                }
+                val decoded = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+                    ?: throw IllegalArgumentException("تعذر قراءة الصورة")
+                val prepared = centerCropWallpaper(decoded)
+                if (prepared !== decoded) decoded.recycle()
+
+                FileOutputStream(temporary).use { output ->
+                    if (!prepared.compress(Bitmap.CompressFormat.JPEG, 88, output)) {
+                        throw IllegalStateException("تعذر حفظ الخلفية")
+                    }
+                    output.fd.sync()
+                }
+                prepared.recycle()
+                if (temporary.length() <= 0L) throw IllegalStateException("الخلفية فارغة")
+
+                if (target.exists() && !target.delete()) throw IllegalStateException("تعذر استبدال الخلفية")
+                if (!temporary.renameTo(target)) throw IllegalStateException("تعذر تثبيت الخلفية")
+                directory.listFiles()?.filter { it != target }?.forEach { old ->
+                    if (old.name.startsWith("launcher_wallpaper.")) old.delete()
+                }
+
+                val newSettings = _settings.value.copy(
+                    backgroundType = BackgroundType.CUSTOM_IMAGE,
+                    customWallpaperPath = target.absolutePath
+                )
+                _settings.value = newSettings
+                preferencesManager.saveSettings(newSettings)
+            } catch (_: OutOfMemoryError) {
+                temporary.delete()
+            } catch (_: Exception) {
+                temporary.delete()
+            }
         }
+    }
+
+    fun prepareForExternalPicker() {
+        (getApplication<Application>() as? com.example.CarLauncherApp)?.prepareForExternalPicker()
+    }
+
+    private fun centerCropWallpaper(source: Bitmap): Bitmap {
+        val scale = maxOf(
+            WALLPAPER_WIDTH.toFloat() / source.width.coerceAtLeast(1),
+            WALLPAPER_HEIGHT.toFloat() / source.height.coerceAtLeast(1)
+        )
+        val scaledWidth = (source.width * scale).toInt().coerceAtLeast(WALLPAPER_WIDTH)
+        val scaledHeight = (source.height * scale).toInt().coerceAtLeast(WALLPAPER_HEIGHT)
+        val scaled = Bitmap.createScaledBitmap(source, scaledWidth, scaledHeight, true)
+        val left = ((scaled.width - WALLPAPER_WIDTH) / 2).coerceAtLeast(0)
+        val top = ((scaled.height - WALLPAPER_HEIGHT) / 2).coerceAtLeast(0)
+        val cropped = Bitmap.createBitmap(scaled, left, top, WALLPAPER_WIDTH, WALLPAPER_HEIGHT)
+        if (scaled !== source && scaled !== cropped) scaled.recycle()
+        return cropped
     }
 
     fun loadApps() { _installedApps.value = appRepository.getInstalledApps() }
@@ -783,5 +857,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val SNAP_TOLERANCE = 0.014f
         private const val HOME_LAYOUTS_KEY = "saved_home_layouts_json"
         private const val SAVER_LAYOUTS_KEY = "saved_saver_layouts_json"
+        private const val WALLPAPER_WIDTH = 1024
+        private const val WALLPAPER_HEIGHT = 600
     }
 }
