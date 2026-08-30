@@ -40,15 +40,17 @@ class MainActivity : ComponentActivity() {
         applyLauncherFullscreen()
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
         setContent { Launcher2026Theme { CarLauncherMainApp(mainViewModel) } }
-        window.decorView.postDelayed({ requestPermissionsIfNeeded() }, 700L)
+        window.decorView.postDelayed({ if (!isFinishing) requestPermissionsIfNeeded() }, 2_500L)
     }
 
     override fun onResume() {
         super.onResume()
         applyLauncherFullscreen()
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        ) mainViewModel.restartGps()
+        window.decorView.postDelayed({
+            if (!isFinishing && (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+            ) mainViewModel.restartGps()
+        }, 1_800L)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -85,7 +87,7 @@ class MainActivity : ComponentActivity() {
         }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) required += Manifest.permission.ACCESS_FINE_LOCATION
         if (required.isNotEmpty()) ActivityCompat.requestPermissions(this, required.toTypedArray(), permissionRequestCode)
-        else mainViewModel.restartGps()
+        // GPS is started from onResume after the first frame is stable.
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
