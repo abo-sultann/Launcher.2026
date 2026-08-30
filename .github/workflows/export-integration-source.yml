@@ -1,0 +1,32 @@
+name: Export clean integration source
+
+on:
+  push:
+    branches:
+      - map-integration-1.0.11
+    paths:
+      - ".github/workflows/export-integration-source.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+
+      - name: Upload clean source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: Launcher-1.0.10-clean-source
+          path: |
+            .
+            !.git/**
+            !.github/**
+            !ci/launcher-stable.jks.b64
+          include-hidden-files: false
+          compression-level: 6
+          retention-days: 1
