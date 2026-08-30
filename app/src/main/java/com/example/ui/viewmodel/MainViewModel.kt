@@ -9,6 +9,7 @@ import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.StatFs
 import android.provider.MediaStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,6 +17,7 @@ import com.example.data.*
 import com.example.model.*
 import com.example.ui.components.CarScreen
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -76,6 +78,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val offlineSearchResults: StateFlow<List<OfflineMapSearchResult>> = _offlineSearchResults.asStateFlow()
     private val _offroadTransferMessage = MutableStateFlow<String?>(null)
     val offroadTransferMessage: StateFlow<String?> = _offroadTransferMessage.asStateFlow()
+    private val _fileImportStatus = MutableStateFlow<String?>(null)
+    val fileImportStatus: StateFlow<String?> = _fileImportStatus.asStateFlow()
 
     private val layoutPrefs = application.getSharedPreferences("launcher_layout_presets_2026", Context.MODE_PRIVATE)
     private val _savedHomeLayouts = MutableStateFlow(loadNamedLayoutNames(HOME_LAYOUTS_KEY))
@@ -97,12 +101,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         checkSafeMode()
-        loadWidgets()
-        loadScreenSaverLayouts()
-        viewModelScope.launch(Dispatchers.IO) { loadApps() }
-        viewModelScope.launch(Dispatchers.IO) { musicPlayerService.initialize() }
-        viewModelScope.launch(Dispatchers.IO) { offlineMapEngine.initialize() }
-        viewModelScope.launch(Dispatchers.Main) { gpsTelemetryManager.startGpsUpdates() }
+        if (startupSafeMode) {
+            _widgets.value = WidgetItem.createDefaultList()
+            _screenSaverLayouts.value = emptyList()
+        } else {
+            runCatching { loadWidgets() }.onFailure { _widgets.value = WidgetItem.createDefaultList() }
+            runCatching { loadScreenSaverLayouts() }.onFailure { _screenSaverLayouts.value = emptyList() }
+            // Stagger I/O and hardware initialization. The Android 7 head unit is unstable when
+            // app discovery, audio scan, map validation and GPS all start in the first frame.
+            viewModelScope.launch(Dispatchers.IO) { delay(450L); runCatching { loadApps() } }
+            viewModelScope.launch(Dispatchers.IO) { delay(1_100L); runCatching { musicPlayerService.initialize() } }
+            viewModelScope.launch(Dispatchers.IO) { delay(1_800L); runCatching { offlineMapEngine.initialize() } }
+            viewModelScope.launch(Dispatchers.Main) { delay(2_500L); runCatching { gpsTelemetryManager.startGpsUpdates() } }
+        }
         viewModelScope.launch {
             gpsTelemetry.collect { telemetry ->
                 tripComputer.updateTelemetry(telemetry, _settings.value.autoLogTrips)
@@ -119,7 +130,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun navigateTo(screen: CarScreen) { if (_currentScreen.value != screen) _currentScreen.value = screen }
-    fun restartGps() = gpsTelemetryManager.restartGpsUpdates()
+    fun restartGps() {
+        if (!startupSafeMode) runCatching { gpsTelemetryManager.restartGpsUpdates() }
+    }
 
     private fun loadWidgets() {
         val migrated = preferencesManager.getWidgets().map(legacyWidgetVisualStore::decorate)
@@ -643,14 +656,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val directory = File(app.filesDir, "wallpapers").apply { mkdirs() }
             val target = File(directory, "launcher_wallpaper.jpg")
             val temporary = File(directory, "launcher_wallpaper.tmp")
+            val source = File(directory, "launcher_wallpaper.source")
             try {
+                _fileImportStatus.value = "جارٍ تجهيز الخلفية..."
                 temporary.delete()
+                source.delete()
                 val resolver = app.contentResolver
+                resolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(source).use { output -> input.copyTo(output, 256 * 1024) }
+                } ?: throw IllegalArgumentException("تعذر فتح الصورة")
+                if (source.length() <= 0L) throw IllegalArgumentException("ملف الصورة فارغ")
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-                    ?: throw IllegalArgumentException("تعذر فتح الصورة")
+                BitmapFactory.decodeFile(source.absolutePath, bounds)
                 if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
-                    throw IllegalArgumentException("ملف الصورة غير صالح")
+                    throw IllegalArgumentException("صيغة الصورة غير مدعومة؛ استخدم JPG أو PNG")
                 }
 
                 var sampleSize = 1
@@ -663,7 +682,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     inPreferredConfig = Bitmap.Config.RGB_565
                     inDither = true
                 }
-                val decoded = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+                val decoded = BitmapFactory.decodeFile(source.absolutePath, options)
                     ?: throw IllegalArgumentException("تعذر قراءة الصورة")
                 val prepared = centerCropWallpaper(decoded)
                 if (prepared !== decoded) decoded.recycle()
@@ -689,10 +708,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 _settings.value = newSettings
                 preferencesManager.saveSettings(newSettings)
+                source.delete()
+                _fileImportStatus.value = "تمت إضافة الخلفية"
             } catch (_: OutOfMemoryError) {
                 temporary.delete()
-            } catch (_: Exception) {
+                source.delete()
+                _fileImportStatus.value = "الصورة كبيرة جدًا لهذه الشاشة"
+            } catch (e: Exception) {
                 temporary.delete()
+                source.delete()
+                _fileImportStatus.value = e.message ?: "تعذر إضافة الخلفية"
             }
         }
     }
@@ -773,16 +798,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun importMapFile(file: File, name: String? = null) = offlineMapEngine.importMapFile(file, name)
     fun importMapUri(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
+            var temporary: File? = null
             try {
+                _fileImportStatus.value = "جارٍ فحص ملف الخريطة..."
                 val resolver = getApplication<Application>().contentResolver
-                val name = queryDisplayName(uri) ?: "map_${System.currentTimeMillis()}.mbtiles"
+                val name = queryDisplayName(uri) ?: uri.lastPathSegment?.substringAfterLast('/') ?: "Saudi-2026.map"
+                val extension = name.substringAfterLast('.', "").lowercase()
+                if (extension == "zip") throw IllegalArgumentException("فك ضغط ZIP ثم اختر ملف Saudi-2026.map")
+                if (extension != "map") throw IllegalArgumentException("اختر ملف خريطة بامتداد .map")
                 val dir = File(getApplication<Application>().filesDir, "maps").apply { mkdirs() }
+                val declaredSize = resolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+                val available = StatFs(dir.absolutePath).availableBytes
+                if (declaredSize > 0L && available < declaredSize + MAP_IMPORT_FREE_SPACE_MARGIN) {
+                    throw IllegalStateException("المساحة غير كافية؛ يلزم ${(declaredSize + MAP_IMPORT_FREE_SPACE_MARGIN) / (1024 * 1024)} ميجابايت تقريبًا")
+                }
                 val target = File(dir, name)
-                resolver.openInputStream(uri)?.use { input -> FileOutputStream(target).use { output -> input.copyTo(output) } }
-                if (target.exists() && target.length() > 0) { offlineMapEngine.importMapFile(target, target.nameWithoutExtension); offlineMapSearchEngine.clear() }
-            } catch (_: Exception) { }
+                val part = File(dir, "$name.part").also { it.delete() }
+                temporary = part
+                _fileImportStatus.value = "جارٍ نسخ الخريطة؛ لا تغلق التطبيق..."
+                resolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(part).use { output -> input.copyTo(output, 1024 * 1024); output.fd.sync() }
+                } ?: throw IllegalArgumentException("تعذر فتح ملف الخريطة")
+                if (part.length() <= 0L) throw IllegalArgumentException("ملف الخريطة فارغ")
+                if (target.exists() && !target.delete()) throw IllegalStateException("تعذر استبدال الخريطة السابقة")
+                if (!part.renameTo(target)) throw IllegalStateException("تعذر تثبيت ملف الخريطة")
+                if (!offlineMapEngine.importMapFile(target, target.nameWithoutExtension)) {
+                    target.delete()
+                    throw IllegalArgumentException(offlineMapEngine.mapError.value ?: "ملف الخريطة غير صالح")
+                }
+                offlineMapSearchEngine.clear()
+                _fileImportStatus.value = "تمت إضافة الخريطة وتفعيلها"
+            } catch (e: Exception) {
+                temporary?.delete()
+                _fileImportStatus.value = e.message ?: "تعذر إضافة الخريطة"
+            }
         }
     }
+    fun clearFileImportStatus() { _fileImportStatus.value = null }
     fun setActiveMap(mapId: String) { offlineMapEngine.setActiveMap(mapId); offlineMapSearchEngine.clear() }
     fun renameMap(mapId: String, newName: String) = offlineMapEngine.renameMap(mapId, newName)
     fun deleteMap(mapId: String) { offlineMapEngine.deleteMap(mapId); offlineMapSearchEngine.clear() }
@@ -859,5 +911,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val SAVER_LAYOUTS_KEY = "saved_saver_layouts_json"
         private const val WALLPAPER_WIDTH = 1024
         private const val WALLPAPER_HEIGHT = 600
+        private const val MAP_IMPORT_FREE_SPACE_MARGIN = 64L * 1024L * 1024L
     }
 }
