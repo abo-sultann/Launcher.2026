@@ -188,7 +188,7 @@ poi_version="$(sqlite3 "${POI_FILE}" "SELECT value FROM metadata WHERE name='ver
 poi_count="$(sqlite3 "${POI_FILE}" 'SELECT COUNT(*) FROM poi_data;')"
 poi_arabic_samples="$(sqlite3 "${POI_FILE}" "SELECT COUNT(*) FROM poi_data WHERE data LIKE '%الرياض%' OR data LIKE '%جدة%' OR data LIKE '%مكة%' OR data LIKE '%المدينة%' OR data LIKE '%الدمام%';")"
 poi_normalized="$(sqlite3 "${POI_FILE}" "SELECT COUNT(*) FROM poi_data WHERE data LIKE '%normalized_name=%';")"
-poi_fts_riyadh="$(sqlite3 "${POI_FILE}" "SELECT COUNT(*) FROM poi_data_fts WHERE poi_data_fts MATCH 'الرياض';")"
+poi_fts_riyadh="$(sqlite3 "${POI_FILE}" "SELECT COUNT(*) FROM poi_data_fts WHERE data LIKE '%الرياض%';")"
 
 if [[ "${poi_integrity}" != "ok" || "${poi_version}" != "4" ]]; then
   echo "POI database integrity/version check failed" >&2
