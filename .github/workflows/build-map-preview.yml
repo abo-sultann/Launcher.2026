@@ -55,8 +55,8 @@ jobs:
         with:
           api-level: 25
           arch: x86
-          profile: pixel_2
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          profile: Nexus 5
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -partition-size 2048
           disable-animations: true
           script: |
             adb install -r app/build/outputs/apk/release/app-release.apk
@@ -74,6 +74,7 @@ jobs:
             ! grep -q "com.aistudio.carlauncher.lzrk26" api25-crash.log
 
       - name: Upload map preview APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Launcher-2026-1.0.11-Map-Preview
