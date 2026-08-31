@@ -96,6 +96,12 @@ class MainActivity : ComponentActivity() {
             val locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
                 ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             if (locationGranted) mainViewModel.restartGps()
+            val audioGranted = if (Build.VERSION.SDK_INT >= 33) {
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
+            } else {
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+            }
+            if (audioGranted) mainViewModel.refreshMusicLibrary()
         }
     }
 

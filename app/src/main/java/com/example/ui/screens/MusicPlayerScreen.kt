@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +35,13 @@ fun MusicPlayerScreen(
     val playbackState by viewModel.playbackState.collectAsState()
     val track = playbackState.currentTrack
     val isPlaying = playbackState.isPlaying
+    val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let(viewModel::importMusicUri)
+    }
+    val addMusic = {
+        viewModel.prepareForExternalPicker()
+        musicPicker.launch("audio/*")
+    }
 
     val currentMin = (playbackState.currentPositionMs / 1000) / 60
     val currentSec = (playbackState.currentPositionMs / 1000) % 60
@@ -67,7 +76,12 @@ fun MusicPlayerScreen(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = CyanNeon
                     )
-                    Icon(Icons.Default.QueueMusic, contentDescription = null, tint = CyanNeon)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = addMusic, modifier = Modifier.size(34.dp)) {
+                            Icon(Icons.Default.Add, contentDescription = "إضافة ملف صوتي", tint = AmberRacing)
+                        }
+                        Icon(Icons.Default.QueueMusic, contentDescription = null, tint = CyanNeon)
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -76,6 +90,22 @@ fun MusicPlayerScreen(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    if (playbackState.playlist.isEmpty()) {
+                        item {
+                            Column(
+                                modifier = Modifier.fillParentMaxSize(),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(Icons.Default.LibraryMusic, null, tint = TextMuted, modifier = Modifier.size(48.dp))
+                                Spacer(Modifier.height(8.dp))
+                                Text("لا توجد ملفات صوتية", color = TextPrimary, fontWeight = FontWeight.Bold)
+                                Text("أضف ملفًا حقيقيًا من ذاكرة الجهاز", color = TextSecondary, fontSize = 10.sp)
+                                Spacer(Modifier.height(10.dp))
+                                Button(onClick = addMusic) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(5.dp)); Text("إضافة ملف") }
+                            }
+                        }
+                    }
                     items(playbackState.playlist, key = { it.id }) { item ->
                         val isCurrent = item.dataPath == track?.dataPath
                         Surface(

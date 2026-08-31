@@ -74,9 +74,12 @@ class MusicPlayerService(
                     if (lastPath != null) {
                         val matched = tracks.find { it.dataPath == lastPath } ?: tracks.firstOrNull()
                         if (matched != null) {
+                            val safePosition = if (matched.dataPath == lastPath) {
+                                lastPos.coerceIn(0L, matched.durationMs.coerceAtLeast(0L))
+                            } else 0L
                             _playbackState.value = _playbackState.value.copy(
                                 currentTrack = matched,
-                                currentPositionMs = lastPos,
+                                currentPositionMs = safePosition,
                                 durationMs = matched.durationMs
                             )
                         }
@@ -150,36 +153,8 @@ class MusicPlayerService(
             Log.e(TAG, "Error scanning MediaStore for audio", e)
         }
 
-        if (tracks.isEmpty()) tracks.addAll(getBuiltInFallbackTracks())
         return tracks
     }
-
-    private fun getBuiltInFallbackTracks(): List<MusicTrack> = listOf(
-        MusicTrack(
-            id = 1L,
-            title = "محطة الرحلة — هدوء الطريق السريع",
-            artist = "راديو السيارة 2026",
-            album = "موسيقى القيادة الهادئة",
-            durationMs = 240000L,
-            dataPath = "demo://track1"
-        ),
-        MusicTrack(
-            id = 2L,
-            title = "ألحان الصحراء والليل",
-            artist = "نغمات خليجية",
-            album = "طريق السفر",
-            durationMs = 310000L,
-            dataPath = "demo://track2"
-        ),
-        MusicTrack(
-            id = 3L,
-            title = "إيقاع رياضي فاخر — Turbo Drive",
-            artist = "Automotive Sound",
-            album = "Sports Cockpit",
-            durationMs = 195000L,
-            dataPath = "demo://track3"
-        )
-    )
 
     @Suppress("DEPRECATION")
     private fun requestAudioFocus() {
@@ -198,20 +173,6 @@ class MusicPlayerService(
         try {
             requestAudioFocus()
             stopCurrentPlayer()
-            if (track.dataPath.startsWith("demo://")) {
-                _playbackState.value = _playbackState.value.copy(
-                    currentTrack = track,
-                    isPlaying = true,
-                    currentPositionMs = startPositionMs,
-                    durationMs = track.durationMs,
-                    errorMessage = null
-                )
-                startProgressTracker()
-                saveResumeState(track.dataPath, startPositionMs)
-                updateMediaSessionState()
-                return
-            }
-
             val file = File(track.dataPath)
             if (!file.exists()) {
                 _playbackState.value = _playbackState.value.copy(errorMessage = "الملف غير موجود في الذاكرة")
@@ -282,13 +243,6 @@ class MusicPlayerService(
             return
         }
         requestAudioFocus()
-        if (track.dataPath.startsWith("demo://")) {
-            _playbackState.value = _playbackState.value.copy(isPlaying = true)
-            startProgressTracker()
-            updateMediaSessionState()
-            return
-        }
-
         try {
             if (mediaPlayer == null) {
                 playTrack(track, _playbackState.value.currentPositionMs)
@@ -389,15 +343,7 @@ class MusicPlayerService(
                 delay(1000L)
                 val currentTrack = _playbackState.value.currentTrack
                 if (currentTrack != null) {
-                    val pos = if (mediaPlayer != null && mediaPlayer?.isPlaying == true) {
-                        mediaPlayer?.currentPosition?.toLong() ?: _playbackState.value.currentPositionMs
-                    } else {
-                        val simulated = _playbackState.value.currentPositionMs + 1000L
-                        if (simulated >= _playbackState.value.durationMs) {
-                            playNext()
-                            0L
-                        } else simulated
-                    }
+                    val pos = mediaPlayer?.currentPosition?.toLong() ?: _playbackState.value.currentPositionMs
                     _playbackState.value = _playbackState.value.copy(currentPositionMs = pos)
                     saveResumeState(currentTrack.dataPath, pos)
                     updateMediaSessionState()

@@ -146,7 +146,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadWidgets() {
         val migrated = preferencesManager.getWidgets()
             .map(legacyWidgetVisualStore::decorate)
-            .map { item -> item.copy(style = modernWidgetStyle(item.style)) }
+            .map { item ->
+                val tone = WidgetTone.fromArgb(item.foregroundColorArgb)
+                item.copy(
+                    style = modernWidgetStyle(item.style),
+                    foregroundColorArgb = tone.argb,
+                    accentColorArgb = tone.argb
+                )
+            }
         _widgets.value = migrated
         preferencesManager.saveWidgets(migrated)
         migrated.forEach { legacyWidgetVisualStore.remove(it.id) }
@@ -460,7 +467,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } catch (_: Exception) { }
         val orderedTypes = WidgetType.values().filter { it in _settings.value.screenSaverWidgetTypes && it in SCREEN_SAVER_DISPLAY_WIDGET_TYPES }.take(4)
         _screenSaverLayouts.value = orderedTypes.mapIndexed { index, type ->
-            legacyWidgetVisualStore.decorate(saved.firstOrNull { it.type == type } ?: ScreenSaverWidgetLayout.defaultFor(type, index))
+            val decorated = legacyWidgetVisualStore.decorate(
+                saved.firstOrNull { it.type == type } ?: ScreenSaverWidgetLayout.defaultFor(type, index)
+            )
+            val tone = WidgetTone.fromArgb(decorated.foregroundColorArgb)
+            decorated.copy(
+                foregroundColorArgb = tone.argb,
+                accentColorArgb = tone.argb
+            )
         }
         saveScreenSaverLayouts()
         orderedTypes.forEach { legacyWidgetVisualStore.remove("screensaver_${it.name.lowercase()}") }
@@ -653,7 +667,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun applySavedHome(item: WidgetItem, o: JSONObject): WidgetItem {
         val style = try { WidgetStyle.valueOf(o.optString("style", item.style.name)).takeIf { it.type == item.type } ?: item.style } catch (_: Exception) { item.style }
-        return item.copy(style = style, xFraction = o.optDouble("x", item.xFraction.toDouble()).toFloat(), yFraction = o.optDouble("y", item.yFraction.toDouble()).toFloat(), widthFraction = o.optDouble("w", item.widthFraction.toDouble()).toFloat(), heightFraction = o.optDouble("h", item.heightFraction.toDouble()).toFloat(), opacity = o.optDouble("opacity", item.opacity.toDouble()).toFloat(), isLocked = o.optBoolean("locked", item.isLocked), zIndex = o.optInt("z", item.zIndex), surfaceStyle = try { WidgetSurfaceStyle.valueOf(o.optString("surface", item.surfaceStyle.name)) } catch (_: Exception) { item.surfaceStyle }, showBorder = o.optBoolean("border", item.showBorder), foregroundColorArgb = if (o.has("foreground") && !o.isNull("foreground")) o.optInt("foreground") else item.foregroundColorArgb, accentColorArgb = if (o.has("accent") && !o.isNull("accent")) o.optInt("accent") else item.accentColorArgb, surfaceOpacity = o.optDouble("surfaceOpacity", item.surfaceOpacity.toDouble()).toFloat())
+        val tone = WidgetTone.fromArgb(if (o.has("foreground") && !o.isNull("foreground")) o.optInt("foreground") else item.foregroundColorArgb)
+        return item.copy(style = modernWidgetStyle(style), xFraction = o.optDouble("x", item.xFraction.toDouble()).toFloat(), yFraction = o.optDouble("y", item.yFraction.toDouble()).toFloat(), widthFraction = o.optDouble("w", item.widthFraction.toDouble()).toFloat(), heightFraction = o.optDouble("h", item.heightFraction.toDouble()).toFloat(), opacity = o.optDouble("opacity", item.opacity.toDouble()).toFloat(), isLocked = o.optBoolean("locked", item.isLocked), zIndex = o.optInt("z", item.zIndex), surfaceStyle = try { WidgetSurfaceStyle.valueOf(o.optString("surface", item.surfaceStyle.name)) } catch (_: Exception) { item.surfaceStyle }, showBorder = o.optBoolean("border", item.showBorder), foregroundColorArgb = tone.argb, accentColorArgb = tone.argb, surfaceOpacity = o.optDouble("surfaceOpacity", item.surfaceOpacity.toDouble()).toFloat())
     }
 
     private fun serializeSaverLayout(items: List<ScreenSaverWidgetLayout>): JSONArray = JSONArray().apply {
@@ -662,7 +677,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun applySavedSaver(item: ScreenSaverWidgetLayout, o: JSONObject): ScreenSaverWidgetLayout {
         val style = try { o.optString("style", "").takeIf { it.isNotBlank() }?.let { WidgetStyle.valueOf(it) }?.takeIf { it.type == item.type } ?: item.style } catch (_: Exception) { item.style }
-        return item.copy(xFraction = o.optDouble("x", item.xFraction.toDouble()).toFloat(), yFraction = o.optDouble("y", item.yFraction.toDouble()).toFloat(), widthFraction = o.optDouble("w", item.widthFraction.toDouble()).toFloat(), heightFraction = o.optDouble("h", item.heightFraction.toDouble()).toFloat(), opacity = o.optDouble("opacity", item.opacity.toDouble()).toFloat(), zIndex = o.optInt("z", item.zIndex), style = style, surfaceStyle = try { WidgetSurfaceStyle.valueOf(o.optString("surface", item.surfaceStyle.name)) } catch (_: Exception) { item.surfaceStyle }, showBorder = o.optBoolean("border", item.showBorder), foregroundColorArgb = if (o.has("foreground") && !o.isNull("foreground")) o.optInt("foreground") else item.foregroundColorArgb, accentColorArgb = if (o.has("accent") && !o.isNull("accent")) o.optInt("accent") else item.accentColorArgb, surfaceOpacity = o.optDouble("surfaceOpacity", item.surfaceOpacity.toDouble()).toFloat())
+        val modernStyle = style?.let(::modernWidgetStyle)?.takeIf { it in screenSaverStylesFor(item.type) } ?: screenSaverStylesFor(item.type).firstOrNull()
+        val tone = WidgetTone.fromArgb(if (o.has("foreground") && !o.isNull("foreground")) o.optInt("foreground") else item.foregroundColorArgb)
+        return item.copy(xFraction = o.optDouble("x", item.xFraction.toDouble()).toFloat(), yFraction = o.optDouble("y", item.yFraction.toDouble()).toFloat(), widthFraction = o.optDouble("w", item.widthFraction.toDouble()).toFloat(), heightFraction = o.optDouble("h", item.heightFraction.toDouble()).toFloat(), opacity = o.optDouble("opacity", item.opacity.toDouble()).toFloat(), zIndex = o.optInt("z", item.zIndex), style = modernStyle, surfaceStyle = try { WidgetSurfaceStyle.valueOf(o.optString("surface", item.surfaceStyle.name)) } catch (_: Exception) { item.surfaceStyle }, showBorder = o.optBoolean("border", item.showBorder), foregroundColorArgb = tone.argb, accentColorArgb = tone.argb, surfaceOpacity = o.optDouble("surfaceOpacity", item.surfaceOpacity.toDouble()).toFloat())
     }
 
     private fun readNamedLayouts(key: String): JSONObject = try { JSONObject(layoutPrefs.getString(key, "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
@@ -780,6 +797,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun adjustVolume(delta: Float) = musicPlayerService.setVolume(delta)
     fun toggleMute() = musicPlayerService.toggleMute()
     fun playTrack(track: MusicTrack) = musicPlayerService.playTrack(track)
+    fun refreshMusicLibrary() = musicPlayerService.initialize()
 
     fun importMusicUri(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -840,15 +858,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (declaredSize > 0L && available < declaredSize + MAP_IMPORT_FREE_SPACE_MARGIN) {
                     throw IllegalStateException("المساحة غير كافية؛ يلزم ${(declaredSize + MAP_IMPORT_FREE_SPACE_MARGIN) / (1024 * 1024)} ميجابايت تقريبًا")
                 }
-                val target = File(dir, name)
-                val part = File(dir, "$name.part").also { it.delete() }
+                // Never overwrite a working map before the replacement has been copied and
+                // validated. Re-importing the same filename gets a numbered destination.
+                val target = uniqueMapDestination(dir, name)
+                val part = File(dir, "${target.name}.part").also { it.delete() }
                 temporary = part
                 _fileImportStatus.value = "جارٍ نسخ الخريطة؛ لا تغلق التطبيق..."
                 resolver.openInputStream(uri)?.use { input ->
                     FileOutputStream(part).use { output -> input.copyTo(output, 1024 * 1024); output.fd.sync() }
                 } ?: throw IllegalArgumentException("تعذر فتح ملف الخريطة")
                 if (part.length() <= 0L) throw IllegalArgumentException("ملف الخريطة فارغ")
-                if (target.exists() && !target.delete()) throw IllegalStateException("تعذر استبدال الخريطة السابقة")
                 if (!part.renameTo(target)) throw IllegalStateException("تعذر تثبيت ملف الخريطة")
                 if (!offlineMapEngine.importMapFile(target, target.nameWithoutExtension)) {
                     target.delete()
@@ -866,6 +885,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    private fun uniqueMapDestination(directory: File, fileName: String): File {
+        val direct = File(directory, fileName)
+        if (!direct.exists()) return direct
+        val extension = fileName.substringAfterLast('.', "")
+        val base = if (extension.isBlank()) fileName else fileName.removeSuffix(".$extension")
+        for (index in 2..999) {
+            val candidate = File(directory, if (extension.isBlank()) "$base-$index" else "$base-$index.$extension")
+            if (!candidate.exists()) return candidate
+        }
+        return File(directory, if (extension.isBlank()) "$base-${System.currentTimeMillis()}" else "$base-${System.currentTimeMillis()}.$extension")
+    }
+
     fun clearFileImportStatus() { _fileImportStatus.value = null }
     fun setActiveMap(mapId: String) { offlineMapEngine.setActiveMap(mapId); offlineMapSearchEngine.clear() }
     fun renameMap(mapId: String, newName: String) = offlineMapEngine.renameMap(mapId, newName)

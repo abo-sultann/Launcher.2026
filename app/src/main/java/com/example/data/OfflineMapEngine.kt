@@ -153,11 +153,12 @@ class OfflineMapEngine(
     private fun validateMbTiles(file: File): String? {
         var db: SQLiteDatabase? = null
         return try {
-            db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
-            db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='tiles'", null).use { cursor ->
+            val opened = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+            db = opened
+            opened.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='tiles'", null).use { cursor ->
                 if (!cursor.moveToFirst()) throw IllegalArgumentException("tiles table missing")
             }
-            val format = db.rawQuery("SELECT value FROM metadata WHERE name='format' LIMIT 1", null).use { cursor ->
+            val format = opened.rawQuery("SELECT value FROM metadata WHERE name='format' LIMIT 1", null).use { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(0)?.lowercase(Locale.US) else null
             }
             if (format !in SUPPORTED_MBTILES_FORMATS) "اختر MBTiles صوريًا بصيغة PNG أو JPG" else null
