@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Context
 import android.location.Location
+import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -37,8 +38,11 @@ import org.mapsforge.core.graphics.Style
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.core.model.Rotation
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
+import org.mapsforge.map.android.mbtiles.MBTilesFile
+import org.mapsforge.map.android.mbtiles.TileMBTilesLayer
 import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
+import org.mapsforge.map.layer.cache.InMemoryTileCache
 import org.mapsforge.map.layer.cache.TileCache
 import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
@@ -116,11 +120,15 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
         }
     }
 
-    val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(viewModel::importMapUri) }
+    val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let(viewModel::importMapUri) }
     val gpxImport = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(viewModel::importGpxUri) }
     val gpxExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri -> uri?.let(viewModel::exportGpxUri) }
     val backupImport = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(viewModel::importOffroadBackupUri) }
     val backupExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(viewModel::exportOffroadBackupUri) }
+    val launchMapPicker = {
+        viewModel.prepareForExternalPicker()
+        mapPicker.launch("*/*")
+    }
 
     val allPlaces = remember(legacyPlaces, extraPlaces, placeKinds) {
         legacyPlaces.map { p ->
@@ -135,8 +143,8 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
 
     Box(modifier.fillMaxSize().background(Color(0xFF10151C))) {
         when {
-            activeMap == null -> EnhancedEmptyMapState { mapPicker.launch(arrayOf("application/*", "*/*")) }
-            activeMap!!.filePath.endsWith(".map", true) -> {
+            activeMap == null -> EnhancedEmptyMapState(launchMapPicker)
+            activeMap!!.filePath.isSupportedOfflineMap() -> {
                 EnhancedMapsforgeMap(
                     mapItem = activeMap!!,
                     gps = gps,
@@ -161,17 +169,18 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
                         longPressPoint = point
                         showLongPressActions = true
                     },
+                    onRenderError = viewModel::reportMapError,
                     modifier = Modifier.fillMaxSize()
                 )
             }
-            else -> EnhancedUnsupportedMapState { mapPicker.launch(arrayOf("application/*", "*/*")) }
+            else -> EnhancedUnsupportedMapState(launchMapPicker)
         }
 
         if (mapUi.nightMap) {
             Box(Modifier.fillMaxSize().background(Color(0x66020A12)))
         }
 
-        if (gps.hasGpsFix && activeMap?.filePath?.endsWith(".map", true) == true && followGps) {
+        if (gps.hasGpsFix && activeMap?.filePath?.isSupportedOfflineMap() == true && followGps) {
             val yOffset = if (mapUi.drivingView) 86.dp else 0.dp
             Surface(
                 color = CarbonDark.copy(alpha = .78f),
@@ -389,7 +398,7 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
         if (showMaps) {
             EnhancedMapManagerDialog(
                 maps = maps,
-                onAdd = { showMaps = false; mapPicker.launch(arrayOf("application/*", "*/*")) },
+                onAdd = { showMaps = false; launchMapPicker() },
                 onActivate = viewModel::setActiveMap,
                 onDelete = viewModel::deleteMap,
                 onClose = { showMaps = false }
@@ -404,9 +413,17 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
                 nearestDistance = nearestTrack?.second,
                 onUiChange = mapStore::updateUi,
                 onMaps = { showTools = false; showMaps = true },
-                onImportGpx = { showTools = false; gpxImport.launch(arrayOf("application/gpx+xml", "text/xml", "application/xml", "*/*")) },
+                onImportGpx = {
+                    showTools = false
+                    viewModel.prepareForExternalPicker()
+                    gpxImport.launch(arrayOf("application/gpx+xml", "text/xml", "application/xml", "*/*"))
+                },
                 onExportGpx = { gpxExport.launch("Launcher-2026-track.gpx") },
-                onImportBackup = { showTools = false; backupImport.launch(arrayOf("application/json", "text/plain", "*/*")) },
+                onImportBackup = {
+                    showTools = false
+                    viewModel.prepareForExternalPicker()
+                    backupImport.launch(arrayOf("application/json", "text/plain", "*/*"))
+                },
                 onExportBackup = { backupExport.launch("Launcher-2026-offroad-backup.json") },
                 onNavigateStart = { viewModel.navigateToTrackStart(); showTools = false },
                 onNearestTrack = {
@@ -698,7 +715,7 @@ private fun EnhancedOffroadToolsDialog(
                             }
                         }
                     }
-                    item { MapToolRow(Icons.Default.Map, "إدارة الخرائط", "إضافة أو تفعيل أو حذف ملف Mapsforge") { onMaps() } }
+                    item { MapToolRow(Icons.Default.Map, "إدارة الخرائط", "إضافة أو تفعيل Mapsforge وMBTiles") { onMaps() } }
                     if (hasTrack) {
                         item { MapToolRow(Icons.Default.Flag, "العودة لبداية المسار", "توجيه مباشر لأول نقطة في الأثر") { onNavigateStart() } }
                         item { MapToolRow(Icons.Default.Route, "ارجع لأقرب نقطة من المسار", nearestDistance?.let { "تبعد ${formatDistanceEnhanced(it)}" } ?: "يتطلب إشارة GPS") { onNearestTrack() } }
@@ -789,17 +806,29 @@ private fun EnhancedMapsforgeMap(
     drivingView: Boolean,
     onManualInteraction: (Double, Double, Int) -> Unit,
     onLongPress: (LatLong) -> Unit,
+    onRenderError: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var holderRef by remember(mapItem.id, detailedTheme, trackWidth) { mutableStateOf<EnhancedMapHolder?>(null) }
     val latestManual by rememberUpdatedState(onManualInteraction)
     val latestLongPress by rememberUpdatedState(onLongPress)
+    val latestRenderError by rememberUpdatedState(onRenderError)
 
     key("${mapItem.id}:$detailedTheme:${trackWidth.toInt()}") {
         AndroidView(
             modifier = modifier,
             factory = { ctx ->
-                createEnhancedMapView(ctx, mapItem, gps, autoZoom, initialState, trackPoints, trackVisible, trackWidth, navigationTarget, measureA, measureB, detailedTheme, drivingView).also { holder ->
+                val holder = try {
+                    createEnhancedMapView(ctx, mapItem, gps, autoZoom, initialState, trackPoints, trackVisible, trackWidth, navigationTarget, measureA, measureB, detailedTheme, drivingView).also {
+                        it.mapView.post { latestRenderError(null) }
+                    }
+                } catch (t: Throwable) {
+                    Log.e(MAP_LOG_TAG, "Offline map renderer failed", t)
+                    createEmptyMapHolder(ctx).also {
+                        it.mapView.post { latestRenderError("تعذر عرض الخريطة؛ جرّب ملفًا آخر من إدارة الخرائط") }
+                    }
+                }
+                holder.also {
                     holderRef = holder
                     holder.mapView.addInputListener(object : InputListener {
                         private fun notifyGesture() {
@@ -824,7 +853,12 @@ private fun EnhancedMapsforgeMap(
                 mapView.setMapViewCenterY(if (followGps && drivingView) .65f else .50f)
                 if (gps.hasGpsFix && followGps) {
                     mapView.setCenter(LatLong(gps.latitude, gps.longitude))
-                    if (mapView.model.mapViewPosition.zoomLevel.toInt() != autoZoom) mapView.setZoomLevel(autoZoom.coerceIn(3, 20).toByte())
+                    val minZoom = holderRef?.zoomMin ?: 3
+                    val maxZoom = holderRef?.zoomMax ?: 20
+                    val requestedZoom = autoZoom.coerceIn(minZoom, maxZoom)
+                    if (mapView.model.mapViewPosition.zoomLevel.toInt() != requestedZoom) {
+                        mapView.setZoomLevel(requestedZoom.toByte())
+                    }
                 }
                 val rotation = if (orientationMode == MapOrientationMode.HEADING_UP && gps.hasGpsFix) -smoothedBearing else 0f
                 val rotationDelta = shortestAngleDelta(holderRef?.appliedRotation ?: 0f, rotation)
@@ -849,12 +883,41 @@ private fun EnhancedMapsforgeMap(
     }
 }
 
+private fun createEmptyMapHolder(context: Context): EnhancedMapHolder {
+    AndroidGraphicFactory.createInstance(context.applicationContext)
+    val mapView = MapView(context).apply {
+        setBuiltInZoomControls(false)
+        isClickable = true
+        model.frameBufferModel.setOverdrawFactor(MAP_FRAMEBUFFER_OVERDRAW)
+        setCenter(LatLong(DEFAULT_MAP_LATITUDE, DEFAULT_MAP_LONGITUDE))
+        setZoomLevel(8.toByte())
+    }
+    fun overlay(color: Int, width: Float) = Polyline(
+        AndroidGraphicFactory.INSTANCE.createPaint().apply {
+            this.color = color
+            strokeWidth = width
+            setStyle(Style.STROKE)
+        },
+        AndroidGraphicFactory.INSTANCE
+    ).also { mapView.layerManager.layers.add(it) }
+
+    return EnhancedMapHolder(
+        mapView = mapView,
+        mapFile = null,
+        trackLayer = overlay(AndroidGraphicFactory.INSTANCE.createColor(255, 255, 70, 155), 6f),
+        navigationLayer = overlay(AndroidGraphicFactory.INSTANCE.createColor(240, 255, 184, 0), 5f),
+        measureLayer = overlay(AndroidGraphicFactory.INSTANCE.createColor(230, 0, 220, 255), 4f)
+    )
+}
+
 private data class EnhancedMapHolder(
     val mapView: MapView,
-    val mapFile: MapFile,
+    val mapFile: MapFile?,
     val trackLayer: Polyline,
     val navigationLayer: Polyline,
     val measureLayer: Polyline,
+    val zoomMin: Int = 3,
+    val zoomMax: Int = 20,
     var appliedRotation: Float = 0f
 )
 
@@ -882,21 +945,50 @@ private fun createEnhancedMapView(
         // Without it, older GPUs can expose dark/empty rectangles around rendered tiles.
         model.frameBufferModel.setOverdrawFactor(MAP_FRAMEBUFFER_OVERDRAW)
     }
-    val mapFile = MapFile(File(mapItem.filePath), MAP_LANGUAGE_ARABIC)
-    val tileCache: TileCache = AndroidUtil.createTileCache(
-        context,
-        "launcher_car_${mapItem.id}_${if (detailedTheme) "detail" else "clear"}",
-        mapView.model.displayModel.tileSize,
-        MAP_TILE_CACHE_SCREEN_RATIO,
-        mapView.model.frameBufferModel.overdrawFactor
-    )
-    val renderer = TileRendererLayer(tileCache, mapFile, mapView.model.mapViewPosition, AndroidGraphicFactory.INSTANCE).apply {
-        // OSMARender is the richer bundled Mapsforge theme: it exposes road hierarchy,
-        // surrounding place names and POIs without adding a second map engine.
-        setXmlRenderTheme(MapsforgeThemes.OSMARENDER)
-        textScale = if (detailedTheme) 1.48f else 1.30f
+    var mapFile: MapFile? = null
+    var sourceCenter: LatLong? = null
+    var sourceZoomMin = 3
+    var sourceZoomMax = 20
+
+    when {
+        mapItem.filePath.endsWith(".map", true) -> {
+            val vectorMap = MapFile(File(mapItem.filePath), MAP_LANGUAGE_ARABIC)
+            mapFile = vectorMap
+            val tileCache: TileCache = AndroidUtil.createTileCache(
+                context,
+                "launcher_car_${mapItem.id}_${if (detailedTheme) "detail" else "clear"}",
+                mapView.model.displayModel.tileSize,
+                MAP_TILE_CACHE_SCREEN_RATIO,
+                mapView.model.frameBufferModel.overdrawFactor
+            )
+            val renderer = TileRendererLayer(tileCache, vectorMap, mapView.model.mapViewPosition, AndroidGraphicFactory.INSTANCE).apply {
+                // OSMARender exposes road hierarchy, surrounding names and POIs. The
+                // larger scale is deliberate for a 1024x600 dashboard viewed at distance.
+                setXmlRenderTheme(MapsforgeThemes.OSMARENDER)
+                textScale = if (detailedTheme) 1.62f else 1.34f
+            }
+            mapView.layerManager.layers.add(renderer)
+            sourceCenter = vectorMap.startPosition()
+        }
+        mapItem.filePath.endsWith(".mbtiles", true) -> {
+            val mbTiles = MBTilesFile(File(mapItem.filePath))
+            sourceZoomMin = mbTiles.zoomLevelMin.coerceIn(0, 20)
+            sourceZoomMax = mbTiles.zoomLevelMax.coerceIn(sourceZoomMin, 22)
+            sourceCenter = mbTiles.boundingBox?.centerPoint
+            mapView.model.mapViewPosition.setZoomLevelMin(sourceZoomMin.toByte())
+            mapView.model.mapViewPosition.setZoomLevelMax(sourceZoomMax.toByte())
+            mapView.layerManager.layers.add(
+                TileMBTilesLayer(
+                    InMemoryTileCache(MBTILES_MEMORY_CACHE_TILES),
+                    mapView.model.mapViewPosition,
+                    false,
+                    mbTiles,
+                    AndroidGraphicFactory.INSTANCE
+                )
+            )
+        }
+        else -> throw IllegalArgumentException("Unsupported offline map format")
     }
-    mapView.layerManager.layers.add(renderer)
 
     val pink = AndroidGraphicFactory.INSTANCE.createPaint().apply {
         color = AndroidGraphicFactory.INSTANCE.createColor(255, 255, 70, 155)
@@ -933,11 +1025,15 @@ private fun createEnhancedMapView(
         gps.hasGpsFix && initialState.followGps -> LatLong(gps.latitude, gps.longitude)
         stored != null -> stored
         trackPoints.lastOrNull() != null -> trackPoints.last().let { LatLong(it.latitude, it.longitude) }
-        else -> mapFile.startPosition()
+        else -> sourceCenter
     }
     if (start != null) mapView.setCenter(start)
-    mapView.setZoomLevel((if (gps.hasGpsFix && initialState.followGps) autoZoom else initialState.zoomLevel).coerceIn(3, 20).toByte())
-    return EnhancedMapHolder(mapView, mapFile, track, nav, measure)
+    mapView.setZoomLevel(
+        (if (gps.hasGpsFix && initialState.followGps) autoZoom else initialState.zoomLevel)
+            .coerceIn(sourceZoomMin, sourceZoomMax)
+            .toByte()
+    )
+    return EnhancedMapHolder(mapView, mapFile, track, nav, measure, sourceZoomMin, sourceZoomMax)
 }
 
 @Composable
@@ -946,7 +1042,8 @@ private fun EnhancedEmptyMapState(onAdd: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Default.Map, null, tint = TextMuted, modifier = Modifier.size(58.dp))
             Text("لا توجد خريطة مفعلة", color = TextPrimary, fontWeight = FontWeight.Bold)
-            Button(onClick = onAdd) { Text("إضافة خريطة .map") }
+            Text("Mapsforge للأسماء والبحث • MBTiles للعرض الصوري", color = TextSecondary, fontSize = 10.sp)
+            Button(onClick = onAdd) { Text("إضافة خريطة") }
         }
     }
 }
@@ -956,8 +1053,8 @@ private fun EnhancedUnsupportedMapState(onAdd: () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Surface(color = CarbonDark.copy(alpha = .95f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, AmberRacing)) {
             Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("هذه الصيغة محفوظة لكن العرض المباشر يحتاج Mapsforge (.map)", color = TextPrimary, fontWeight = FontWeight.Bold)
-                Button(onClick = onAdd) { Text("اختيار خريطة .map") }
+                Text("الصيغة غير مدعومة؛ اختر Mapsforge (.map) أو MBTiles صورية", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Button(onClick = onAdd) { Text("اختيار خريطة") }
             }
         }
     }
@@ -985,7 +1082,7 @@ private fun autoZoomForSpeedEnhanced(speed: Float): Int = when {
     speed < 20f -> 15
     speed < 60f -> 14
     speed < 100f -> 13
-    else -> 12
+    else -> 13
 }
 
 private fun scaleLabel(zoom: Int): String = when {
@@ -1032,6 +1129,13 @@ private fun distanceMetersEnhanced(lat1: Double, lon1: Double, lat2: Double, lon
 private fun formatDistanceEnhanced(meters: Float): String = if (meters < 1000f) "${meters.toInt()} م" else String.format(Locale.US, "%.1f كم", meters / 1000f)
 
 private const val MAP_LANGUAGE_ARABIC = "ar"
-private const val MAP_FRAMEBUFFER_OVERDRAW = 1.5
+private const val MAP_LOG_TAG = "LauncherOfflineMap"
+private const val MAP_FRAMEBUFFER_OVERDRAW = 1.7
 private const val MAP_TILE_CACHE_SCREEN_RATIO = 2f
-private const val MAP_ROTATION_STEP_DEGREES = 2f
+private const val MAP_ROTATION_STEP_DEGREES = 4.5f
+private const val MBTILES_MEMORY_CACHE_TILES = 48
+private const val DEFAULT_MAP_LATITUDE = 24.7136
+private const val DEFAULT_MAP_LONGITUDE = 46.6753
+
+private fun String.isSupportedOfflineMap(): Boolean =
+    endsWith(".map", true) || endsWith(".mbtiles", true)

@@ -10,6 +10,10 @@ import org.json.JSONObject
 class PreferencesManager(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("car_launcher_preferences_2026", Context.MODE_PRIVATE)
 
+    init {
+        LauncherDataMigrator(prefs).migrateIfNeeded()
+    }
+
     fun getSafeArea(): SafeAreaConfig = try {
         SafeAreaConfig(
             topDp = prefs.getInt("safe_top", 0),
@@ -78,9 +82,7 @@ class PreferencesManager(context: Context) {
             screenSaverEnabled = prefs.getBoolean("screensaver_enabled", false),
             screenSaverTimeoutSeconds = prefs.getInt("screensaver_timeout", 120).coerceIn(30, 1800),
             screenSaverUseWallpaper = prefs.getBoolean("screensaver_wallpaper", true),
-            screenSaverWidgetTypes = screenSaverTypes,
-            screenSaverNightMode = prefs.getBoolean("screensaver_night_mode", false),
-            screenSaverNightBrightnessPercent = prefs.getInt("screensaver_night_brightness", 14).coerceIn(5, 40)
+            screenSaverWidgetTypes = screenSaverTypes
         )
     } catch (e: Exception) {
         Log.e(TAG, "Error reading settings", e)
@@ -95,7 +97,6 @@ class PreferencesManager(context: Context) {
                 .putString("custom_wallpaper_path", settings.customWallpaperPath)
                 .putInt("wallpaper_dim", settings.wallpaperDimPercent.coerceIn(0, 80))
                 .putInt("icon_size", settings.iconSizeDp.coerceIn(40, 110))
-                .putBoolean("show_app_names", settings.showAppLabels)
                 .putBoolean("show_app_labels", settings.showAppLabels)
                 .putInt("app_columns", settings.appDrawerColumns.coerceIn(2, 8))
                 .putInt("home_columns", settings.homeGridColumns.coerceIn(2, 6))
@@ -121,8 +122,6 @@ class PreferencesManager(context: Context) {
                 .putInt("screensaver_timeout", settings.screenSaverTimeoutSeconds.coerceIn(30, 1800))
                 .putBoolean("screensaver_wallpaper", settings.screenSaverUseWallpaper)
                 .putStringSet("screensaver_widgets", settings.screenSaverWidgetTypes.map { it.name }.toSet())
-                .putBoolean("screensaver_night_mode", settings.screenSaverNightMode)
-                .putInt("screensaver_night_brightness", settings.screenSaverNightBrightnessPercent.coerceIn(5, 40))
                 .apply()
         } catch (e: Exception) { Log.e(TAG, "Error saving settings", e) }
     }

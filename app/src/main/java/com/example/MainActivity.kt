@@ -196,7 +196,8 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                 }
                 PersistentOffroadMapOverlay(viewModel, Modifier.fillMaxSize().zIndex(220f))
             } else {
-                val topContentInset = safeArea.topDp + if (settings.showTopBar) 40 else 0
+                // Wi-Fi is a floating status control, not a bar that should consume wallpaper.
+                val topContentInset = safeArea.topDp
                 val bottomContentInset = safeArea.bottomDp + if (settings.showBottomBar) 54 else 0
                 HomeScreen(
                     viewModel,
@@ -293,7 +294,6 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
                 settings = settings,
                 widgets = widgets,
                 layouts = screenSaverLayouts,
-                apps = installedApps,
                 playbackState = playbackState,
                 gpsTelemetry = gpsTelemetry,
                 tripData = tripData,

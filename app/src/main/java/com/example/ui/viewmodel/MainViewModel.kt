@@ -13,6 +13,9 @@ import android.os.StatFs
 import android.provider.MediaStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.core.LauncherRuntime
+import com.example.core.startup.LauncherStartupCoordinator
+import com.example.core.startup.StartupStage
 import com.example.data.*
 import com.example.model.*
 import com.example.ui.components.CarScreen
@@ -31,19 +34,21 @@ import kotlin.math.ceil
 import kotlin.math.min
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-    private val preferencesManager = PreferencesManager(application)
+    private val runtime = LauncherRuntime(application)
+    private val startupCoordinator = LauncherStartupCoordinator()
+    private val preferencesManager = runtime.preferences
     private val startupSafeMode = application
         .getSharedPreferences("car_launcher_safe_mode", Context.MODE_PRIVATE)
-        .getInt("crash_count", 0) >= 2
+        .getInt("crash_count", 0) >= SAFE_MODE_CRASH_THRESHOLD
     private val legacyWidgetVisualStore = WidgetVisualStore(application)
-    private val appRepository = AppRepository(application, preferencesManager)
-    private val musicPlayerService = MusicPlayerService(application, preferencesManager)
-    private val gpsTelemetryManager = GpsTelemetryManager(application)
-    private val tripComputer = TripComputer(preferencesManager)
-    private val offlineMapEngine = OfflineMapEngine(application, preferencesManager)
-    private val diagnosticManager = DiagnosticManager(application, preferencesManager)
-    private val offroadTrackManager = (application as com.example.CarLauncherApp).offroadTrackManager
-    private val offlineMapSearchEngine = OfflineMapSearchEngine()
+    private val appRepository = runtime.apps
+    private val musicPlayerService = runtime.music
+    private val gpsTelemetryManager = runtime.gps
+    private val tripComputer = runtime.trip
+    private val offlineMapEngine = runtime.maps
+    private val diagnosticManager = runtime.diagnostics
+    private val offroadTrackManager = runtime.offroad
+    private val offlineMapSearchEngine = runtime.mapSearch
 
     private val _currentScreen = MutableStateFlow(CarScreen.HOME)
     val currentScreen: StateFlow<CarScreen> = _currentScreen.asStateFlow()
@@ -98,6 +103,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val savedOffroadPlaces: StateFlow<List<SavedOffroadPlace>> = offroadTrackManager.savedPlaces
     val offroadNavigationTarget: StateFlow<OffroadNavigationTarget?> = offroadTrackManager.navigationTarget
     val offroadMapState: StateFlow<OffroadMapState> = offroadTrackManager.mapState
+    val startupStage: StateFlow<StartupStage> = startupCoordinator.stage
+    val startupIssues: StateFlow<List<String>> = startupCoordinator.issues
 
     init {
         checkSafeMode()
@@ -107,13 +114,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             runCatching { loadWidgets() }.onFailure { _widgets.value = WidgetItem.createDefaultList() }
             runCatching { loadScreenSaverLayouts() }.onFailure { _screenSaverLayouts.value = emptyList() }
-            // Stagger I/O and hardware initialization. The Android 7 head unit is unstable when
-            // app discovery, audio scan, map validation and GPS all start in the first frame.
-            viewModelScope.launch(Dispatchers.IO) { delay(450L); runCatching { loadApps() } }
-            viewModelScope.launch(Dispatchers.IO) { delay(1_100L); runCatching { musicPlayerService.initialize() } }
-            viewModelScope.launch(Dispatchers.IO) { delay(1_800L); runCatching { offlineMapEngine.initialize() } }
-            viewModelScope.launch(Dispatchers.Main) { delay(2_500L); runCatching { gpsTelemetryManager.startGpsUpdates() } }
         }
+        startupCoordinator.start(
+            scope = viewModelScope,
+            safeMode = startupSafeMode,
+            loadApps = { loadApps() },
+            initializeMusic = { musicPlayerService.initialize() },
+            initializeMap = { offlineMapEngine.initialize() },
+            initializeGps = { gpsTelemetryManager.startGpsUpdates() }
+        )
         viewModelScope.launch {
             gpsTelemetry.collect { telemetry ->
                 tripComputer.updateTelemetry(telemetry, _settings.value.autoLogTrips)
@@ -126,7 +135,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun checkSafeMode() {
         val p = getApplication<Application>().getSharedPreferences("car_launcher_safe_mode", Context.MODE_PRIVATE)
-        _isSafeModeActive.value = p.getInt("crash_count", 0) >= 2
+        _isSafeModeActive.value = p.getInt("crash_count", 0) >= SAFE_MODE_CRASH_THRESHOLD
     }
 
     fun navigateTo(screen: CarScreen) { if (_currentScreen.value != screen) _currentScreen.value = screen }
@@ -135,7 +144,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun loadWidgets() {
-        val migrated = preferencesManager.getWidgets().map(legacyWidgetVisualStore::decorate)
+        val migrated = preferencesManager.getWidgets()
+            .map(legacyWidgetVisualStore::decorate)
+            .map { item -> item.copy(style = modernWidgetStyle(item.style)) }
         _widgets.value = migrated
         preferencesManager.saveWidgets(migrated)
         migrated.forEach { legacyWidgetVisualStore.remove(it.id) }
@@ -210,6 +221,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleWidgetBorder(widgetId: String) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(showBorder = !it.showBorder) else it }
     fun setWidgetForeground(widgetId: String, argb: Int?) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(foregroundColorArgb = argb) else it }
     fun setWidgetAccent(widgetId: String, argb: Int?) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(accentColorArgb = argb) else it }
+    fun setWidgetTone(widgetId: String, tone: WidgetTone) = updateAndSaveWidgets { item ->
+        if (item.id == widgetId) item.copy(foregroundColorArgb = tone.argb, accentColorArgb = tone.argb) else item
+    }
     fun setWidgetSurfaceOpacity(widgetId: String, opacity: Float) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(surfaceOpacity = opacity.coerceIn(.25f, 1f)) else it }
     fun toggleWidgetLock(widgetId: String) = updateAndSaveWidgets { if (it.id == widgetId) it.copy(isLocked = !it.isLocked) else it }
 
@@ -255,8 +269,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 isLocked = false,
                 surfaceStyle = WidgetItem.defaultSurfaceFor(item.type),
                 showBorder = false,
-                foregroundColorArgb = null,
-                accentColorArgb = null,
+                foregroundColorArgb = WidgetTone.WHITE.argb,
+                accentColorArgb = WidgetTone.WHITE.argb,
                 surfaceOpacity = 1f
             )
         }
@@ -418,7 +432,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 for (i in 0 until array.length()) {
                     val o = array.getJSONObject(i)
                     val type = try { WidgetType.valueOf(o.getString("type")) } catch (_: Exception) { continue }
-                    val style = try { o.optString("style", "").takeIf { it.isNotBlank() }?.let { WidgetStyle.valueOf(it) }?.takeIf { it.type == type } } catch (_: Exception) { null }
+                    val style = try {
+                        o.optString("style", "")
+                            .takeIf { it.isNotBlank() }
+                            ?.let { WidgetStyle.valueOf(it) }
+                            ?.takeIf { it.type == type }
+                            ?.let(::modernWidgetStyle)
+                            ?.takeIf { it in screenSaverStylesFor(type) }
+                    } catch (_: Exception) { null }
                     saved += ScreenSaverWidgetLayout(
                         type = type,
                         xFraction = o.optDouble("x", 0.05).toFloat(),
@@ -485,6 +506,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleScreenSaverBorder(type: WidgetType) = updateScreenSaverAppearance(type) { it.copy(showBorder = !it.showBorder) }
     fun setScreenSaverForeground(type: WidgetType, argb: Int?) = updateScreenSaverAppearance(type) { it.copy(foregroundColorArgb = argb) }
     fun setScreenSaverAccent(type: WidgetType, argb: Int?) = updateScreenSaverAppearance(type) { it.copy(accentColorArgb = argb) }
+    fun setScreenSaverTone(type: WidgetType, tone: WidgetTone) = updateScreenSaverAppearance(type) {
+        it.copy(foregroundColorArgb = tone.argb, accentColorArgb = tone.argb)
+    }
     fun setScreenSaverSurfaceOpacity(type: WidgetType, opacity: Float) = updateScreenSaverAppearance(type) { it.copy(surfaceOpacity = opacity.coerceIn(.25f, 1f)) }
 
     private fun updateScreenSaverAppearance(type: WidgetType, transform: (ScreenSaverWidgetLayout) -> ScreenSaverWidgetLayout) {
@@ -802,10 +826,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 _fileImportStatus.value = "جارٍ فحص ملف الخريطة..."
                 val resolver = getApplication<Application>().contentResolver
-                val name = queryDisplayName(uri) ?: uri.lastPathSegment?.substringAfterLast('/') ?: "Saudi-2026.map"
+                val name = (queryDisplayName(uri) ?: uri.lastPathSegment?.substringAfterLast('/') ?: "Saudi-2026.map")
+                    .substringAfterLast('/')
+                    .replace(Regex("[^A-Za-z0-9._() -]"), "_")
                 val extension = name.substringAfterLast('.', "").lowercase()
-                if (extension == "zip") throw IllegalArgumentException("فك ضغط ZIP ثم اختر ملف Saudi-2026.map")
-                if (extension != "map") throw IllegalArgumentException("اختر ملف خريطة بامتداد .map")
+                if (extension == "zip") throw IllegalArgumentException("فك ضغط ZIP ثم اختر ملف .map أو .mbtiles")
+                if (extension !in SUPPORTED_MAP_EXTENSIONS) {
+                    throw IllegalArgumentException("اختر خريطة Mapsforge (.map) أو MBTiles صورية")
+                }
                 val dir = File(getApplication<Application>().filesDir, "maps").apply { mkdirs() }
                 val declaredSize = resolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
                 val available = StatFs(dir.absolutePath).availableBytes
@@ -827,7 +855,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     throw IllegalArgumentException(offlineMapEngine.mapError.value ?: "ملف الخريطة غير صالح")
                 }
                 offlineMapSearchEngine.clear()
-                _fileImportStatus.value = "تمت إضافة الخريطة وتفعيلها"
+                _fileImportStatus.value = if (extension == "map") {
+                    "تمت إضافة الخريطة المتجهة وتفعيل البحث بالأسماء"
+                } else {
+                    "تمت إضافة خريطة MBTiles وتفعيل عرضها"
+                }
             } catch (e: Exception) {
                 temporary?.delete()
                 _fileImportStatus.value = e.message ?: "تعذر إضافة الخريطة"
@@ -838,6 +870,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setActiveMap(mapId: String) { offlineMapEngine.setActiveMap(mapId); offlineMapSearchEngine.clear() }
     fun renameMap(mapId: String, newName: String) = offlineMapEngine.renameMap(mapId, newName)
     fun deleteMap(mapId: String) { offlineMapEngine.deleteMap(mapId); offlineMapSearchEngine.clear() }
+    fun reportMapError(message: String?) = offlineMapEngine.setMapError(message)
 
     fun saveCurrentOffroadPlace(name: String? = null): SavedOffroadPlace? {
         val saved = offroadTrackManager.saveCurrentPlace(gpsTelemetry.value, name)
@@ -912,5 +945,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val WALLPAPER_WIDTH = 1024
         private const val WALLPAPER_HEIGHT = 600
         private const val MAP_IMPORT_FREE_SPACE_MARGIN = 64L * 1024L * 1024L
+        private const val SAFE_MODE_CRASH_THRESHOLD = 1
+        private val SUPPORTED_MAP_EXTENSIONS = setOf("map", "mbtiles")
     }
 }

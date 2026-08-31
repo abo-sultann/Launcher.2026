@@ -64,7 +64,7 @@ fun TopCarStatusBar(
             onClick = { openWifiSettings(context) },
             onLongClick = onActivateChildLock,
             // Layout is RTL, therefore End maps to the physical left/driver side.
-            modifier = Modifier.align(Alignment.CenterEnd).padding(horizontal = 9.dp)
+            modifier = Modifier.align(Alignment.CenterEnd).padding(horizontal = 12.dp, vertical = 4.dp)
         )
 
         if (isSafeModeActive) {
@@ -109,12 +109,12 @@ private fun WifiStatusButton(
     }
 
     Surface(
-        color = CarbonDark.copy(alpha = .64f),
-        shape = RoundedCornerShape(13.dp),
-        border = BorderStroke(1.dp, if (connected) accentColor.copy(alpha = .42f) else CarbonCardBorder.copy(alpha = .60f)),
+        color = CarbonDark.copy(alpha = .38f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, if (connected) accentColor.copy(alpha = .30f) else CarbonCardBorder.copy(alpha = .40f)),
         modifier = modifier
-            .size(48.dp, 36.dp)
-            .clip(RoundedCornerShape(13.dp))
+            .size(42.dp, 32.dp)
+            .clip(RoundedCornerShape(12.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -122,13 +122,13 @@ private fun WifiStatusButton(
                 imageVector = if (state == WifiVisualState.OFF) Icons.Default.WifiOff else Icons.Default.Wifi,
                 contentDescription = description,
                 tint = tint,
-                modifier = Modifier.size(21.dp)
+                modifier = Modifier.size(19.dp)
             )
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 7.dp, bottom = 5.dp)
-                    .size(5.dp)
+                    .padding(end = 6.dp, bottom = 4.dp)
+                    .size(4.dp)
                     .clip(CircleShape)
                     .background(if (connected) accentColor else TextMuted, CircleShape)
             )

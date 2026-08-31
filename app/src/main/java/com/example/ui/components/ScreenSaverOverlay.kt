@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import android.app.Activity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,9 +13,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,6 +25,8 @@ import com.example.model.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.widgets.*
+import com.example.util.bearingToArabicDirection
+import java.util.Locale
 
 @Composable
 fun ScreenSaverOverlay(
@@ -33,7 +34,6 @@ fun ScreenSaverOverlay(
     settings: LauncherSettings,
     widgets: List<WidgetItem>,
     layouts: List<ScreenSaverWidgetLayout>,
-    apps: List<AppItem>,
     playbackState: MusicPlaybackState,
     gpsTelemetry: GpsTelemetry,
     tripData: TripData,
@@ -41,35 +41,14 @@ fun ScreenSaverOverlay(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-
-    DisposableEffect(settings.screenSaverNightMode, settings.screenSaverNightBrightnessPercent) {
-        val activity = context as? Activity
-        val oldBrightness = activity?.window?.attributes?.screenBrightness ?: -1f
-        if (activity != null && settings.screenSaverNightMode) {
-            val attrs = activity.window.attributes
-            attrs.screenBrightness = settings.screenSaverNightBrightnessPercent.coerceIn(5, 40) / 100f
-            activity.window.attributes = attrs
-        }
-        onDispose {
-            if (activity != null) {
-                val attrs = activity.window.attributes
-                attrs.screenBrightness = oldBrightness
-                activity.window.attributes = attrs
-            }
-        }
-    }
-
     Box(modifier.fillMaxSize().background(Color.Black)) {
         if (settings.screenSaverUseWallpaper) LauncherBackground(settings)
-        if (settings.screenSaverNightMode) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .34f)).zIndex(2f))
 
         ScreenSaverCanvas(
             viewModel = viewModel,
             settings = settings,
             widgets = widgets,
             layouts = layouts,
-            apps = apps,
             playbackState = playbackState,
             gpsTelemetry = gpsTelemetry,
             tripData = tripData,
@@ -91,7 +70,6 @@ fun ScreenSaverEditorScreen(
     val settings by viewModel.settings.collectAsState()
     val widgets by viewModel.widgets.collectAsState()
     val layouts by viewModel.screenSaverLayouts.collectAsState()
-    val apps by viewModel.installedApps.collectAsState()
     val playback by viewModel.playbackState.collectAsState()
     val gps by viewModel.gpsTelemetry.collectAsState()
     val trip by viewModel.tripData.collectAsState()
@@ -102,7 +80,7 @@ fun ScreenSaverEditorScreen(
         if (settings.screenSaverUseWallpaper) LauncherBackground(settings)
 
         ScreenSaverCanvas(
-            viewModel, settings, widgets, layouts, apps, playback, gps, trip, activeMap, true, Modifier.fillMaxSize()
+            viewModel, settings, widgets, layouts, playback, gps, trip, activeMap, true, Modifier.fillMaxSize()
         )
 
         Surface(
@@ -116,7 +94,7 @@ fun ScreenSaverEditorScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text("تحكم كامل", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("محرر شاشة التوقف", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 FilledTonalButton(onClick = { showLayoutDialog = true }, modifier = Modifier.height(34.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 3.dp)) {
                     Icon(Icons.Default.ViewQuilt, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(3.dp))
@@ -145,7 +123,6 @@ private fun ScreenSaverCanvas(
     settings: LauncherSettings,
     widgets: List<WidgetItem>,
     layouts: List<ScreenSaverWidgetLayout>,
-    apps: List<AppItem>,
     playbackState: MusicPlaybackState,
     gpsTelemetry: GpsTelemetry,
     tripData: TripData,
@@ -181,19 +158,28 @@ private fun ScreenSaverCanvas(
                 val surfaceStyle = layout.surfaceStyle
                 val showBorder = layout.showBorder
                 val surfaceOpacity = layout.surfaceOpacity
-                val foreground = layout.foregroundColorArgb?.let(::Color)
-                val accent = layout.accentColorArgb?.let(::Color)
+                val tone = WidgetTone.fromArgb(layout.foregroundColorArgb)
+                val foreground = Color(tone.argb)
+                val accent = Color(tone.argb)
                 val isSelected = editMode && selectedType == type
                 val shape = screenSaverShape(type)
                 val background = when (surfaceStyle) {
                     WidgetSurfaceStyle.TRANSPARENT -> Color.Transparent
-                    WidgetSurfaceStyle.GLASS -> CarbonDark.copy(alpha = (.18f + .46f * surfaceOpacity).coerceAtMost(.72f))
-                    WidgetSurfaceStyle.CARD -> CarbonCard.copy(alpha = (.55f + .40f * surfaceOpacity).coerceAtMost(.97f))
+                    WidgetSurfaceStyle.GLASS -> if (tone == WidgetTone.BLACK) {
+                        Color.White.copy(alpha = (.26f + .46f * surfaceOpacity).coerceAtMost(.74f))
+                    } else {
+                        Color.Black.copy(alpha = (.20f + .48f * surfaceOpacity).coerceAtMost(.76f))
+                    }
+                    WidgetSurfaceStyle.CARD -> if (tone == WidgetTone.BLACK) {
+                        Color.White.copy(alpha = (.66f + .32f * surfaceOpacity).coerceAtMost(.98f))
+                    } else {
+                        Color.Black.copy(alpha = (.64f + .33f * surfaceOpacity).coerceAtMost(.97f))
+                    }
                 }
                 val borderColor = when {
                     isSelected -> interfaceAccent
                     editMode -> AmberRacing.copy(alpha = .28f)
-                    showBorder -> CarbonCardBorder.copy(alpha = .88f)
+                        showBorder -> foreground.copy(alpha = .72f)
                     else -> Color.Transparent
                 }
                 val borderWidth = if (isSelected) 2.dp else if (editMode || showBorder) 1.dp else 0.dp
@@ -214,7 +200,7 @@ private fun ScreenSaverCanvas(
                         LocalWidgetForegroundColor provides foreground
                     ) {
                         Box(Modifier.fillMaxSize()) {
-                            RenderScreenSaverWidget(type, style, viewModel, settings, apps, playbackState, gpsTelemetry, tripData, activeMap)
+                            RenderScreenSaverWidget(type, style, settings, playbackState, gpsTelemetry, tripData, activeMap)
 
                             if (isSelected) {
                                 Surface(
@@ -272,8 +258,7 @@ private fun ScreenSaverCanvas(
                     layout = layout,
                     onSurface = { viewModel.setScreenSaverSurface(type, it) },
                     onBorder = { viewModel.toggleScreenSaverBorder(type) },
-                    onForeground = { viewModel.setScreenSaverForeground(type, it) },
-                    onAccent = { viewModel.setScreenSaverAccent(type, it) },
+                    onTone = { viewModel.setScreenSaverTone(type, it) },
                     onSurfaceOpacity = { viewModel.setScreenSaverSurfaceOpacity(type, it) },
                     onCycleStyle = { viewModel.cycleScreenSaverStyle(type) },
                     onOpacityChange = { viewModel.setScreenSaverOpacity(type, it) },
@@ -293,8 +278,7 @@ private fun ScreenSaverAppearanceDock(
     layout: ScreenSaverWidgetLayout,
     onSurface: (WidgetSurfaceStyle) -> Unit,
     onBorder: () -> Unit,
-    onForeground: (Int?) -> Unit,
-    onAccent: (Int?) -> Unit,
+    onTone: (WidgetTone) -> Unit,
     onSurfaceOpacity: (Float) -> Unit,
     onCycleStyle: () -> Unit,
     onOpacityChange: (Float) -> Unit,
@@ -303,8 +287,7 @@ private fun ScreenSaverAppearanceDock(
 ) {
     val surface = layout.surfaceStyle
     val border = layout.showBorder
-    val foreground = layout.foregroundColorArgb
-    val widgetAccent = layout.accentColorArgb
+    val tone = WidgetTone.fromArgb(layout.foregroundColorArgb)
     val backgroundOpacity = layout.surfaceOpacity
 
     Surface(
@@ -372,46 +355,33 @@ private fun ScreenSaverAppearanceDock(
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text("لون النص", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                ScreenSaverColorChoice(null, foreground == null, accentColor) {
-                    onForeground(it)
+                Text("لون الودجت", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                WidgetTone.values().forEach { option ->
+                    ScreenSaverToneChoice(option, tone == option, accentColor) { onTone(option) }
                 }
-                SCREEN_SAVER_TEXT_COLORS.forEach { color ->
-                    ScreenSaverColorChoice(color, foreground == color, accentColor) {
-                        onForeground(it)
-                    }
-                }
-
-                VerticalDivider(Modifier.height(22.dp), color = CarbonCardBorder)
-                Text("اللون المميّز", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                ScreenSaverColorChoice(null, widgetAccent == null, accentColor) {
-                    onAccent(it)
-                }
-                SCREEN_SAVER_ACCENT_COLORS.forEach { color ->
-                    ScreenSaverColorChoice(color, widgetAccent == color, accentColor) {
-                        onAccent(it)
-                    }
-                }
+                Text("الأبيض والأسود فقط؛ شكل الخلفية يصنع الفرق بين بسيط، فاخر وزجاجي.", color = TextMuted, fontSize = 8.sp)
             }
         }
     }
 }
 
 @Composable
-private fun ScreenSaverColorChoice(argb: Int?, selected: Boolean, selectionColor: Color, onSelect: (Int?) -> Unit) {
-    val color = argb?.let(::Color) ?: CarbonSurface
+private fun ScreenSaverToneChoice(tone: WidgetTone, selected: Boolean, selectionColor: Color, onSelect: () -> Unit) {
+    val color = Color(tone.argb)
     Surface(
-        onClick = { onSelect(argb) },
+        onClick = onSelect,
         color = color,
         shape = RoundedCornerShape(7.dp),
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) selectionColor else CarbonCardBorder),
-        modifier = Modifier.size(21.dp)
+        modifier = Modifier.size(width = 54.dp, height = 25.dp)
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (argb == null) Text("A", color = TextPrimary, fontSize = 8.sp, fontWeight = FontWeight.Black)
-            else if (selected) Icon(Icons.Default.Check, null, tint = if (argb == SCREEN_SAVER_DARK_TEXT) Color.White else Color.Black, modifier = Modifier.size(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                if (selected) Icon(Icons.Default.Check, null, tint = if (tone == WidgetTone.BLACK) Color.White else Color.Black, modifier = Modifier.size(11.dp))
+                Text(tone.arabicName, color = if (tone == WidgetTone.BLACK) Color.White else Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Black)
+            }
         }
     }
 }
@@ -428,29 +398,11 @@ private fun screenSaverShape(type: WidgetType) = when (type) {
     WidgetType.CONTROLS -> RoundedCornerShape(20.dp)
 }
 
-private const val SCREEN_SAVER_DARK_TEXT = -15724528 // 0xFF101010
-private val SCREEN_SAVER_TEXT_COLORS = listOf(
-    0xFFFFFFFF.toInt(),
-    SCREEN_SAVER_DARK_TEXT,
-    0xFFB7C0CC.toInt(),
-    0xFF59E6F2.toInt(),
-    0xFFFFD166.toInt()
-)
-private val SCREEN_SAVER_ACCENT_COLORS = listOf(
-    0xFF00E5FF.toInt(),
-    0xFFFFB84D.toInt(),
-    0xFF37E6A1.toInt(),
-    0xFFB892FF.toInt(),
-    0xFFFF5C75.toInt()
-)
-
 @Composable
 private fun RenderScreenSaverWidget(
     type: WidgetType,
     style: WidgetStyle,
-    vm: MainViewModel,
     settings: LauncherSettings,
-    apps: List<AppItem>,
     playback: MusicPlaybackState,
     gps: GpsTelemetry,
     trip: TripData,
@@ -461,11 +413,98 @@ private fun RenderScreenSaverWidget(
         WidgetType.SPEEDOMETER -> SpeedWidget(style, gps, trip, settings.speedUnit)
         WidgetType.DATE -> DateWidget(style)
         WidgetType.GPS -> GpsWidget(style, gps)
-        WidgetType.MUSIC -> MusicWidget(style, playback, {}, {}, {}, {})
-        WidgetType.MAP -> MapWidget(style, gps, trip, map, onOpenFullMap = {})
-        WidgetType.TRIP -> TripWidget(style, trip, {}, {}, {})
-        WidgetType.APPS -> AppsWidget(style, apps, onOpenAppDrawer = {}, onLaunchApp = {})
-        WidgetType.CONTROLS -> ControlsWidget(style, playback, {}, {}, {}, {}, {})
+        WidgetType.MUSIC -> ScreenSaverMusicSummary(style, playback)
+        WidgetType.MAP -> ScreenSaverMapSummary(style, gps, trip, map)
+        WidgetType.TRIP -> ScreenSaverTripSummary(style, trip)
+        WidgetType.APPS, WidgetType.CONTROLS -> Unit
+    }
+}
+
+@Composable
+private fun ScreenSaverMusicSummary(style: WidgetStyle, playback: MusicPlaybackState) {
+    val colors = resolvedWidgetColors()
+    val title = playback.currentTrack?.title ?: "لا توجد موسيقى"
+    val artist = playback.currentTrack?.artist ?: ""
+    val progress = if (playback.durationMs > 0L) {
+        (playback.currentPositionMs.toFloat() / playback.durationMs).coerceIn(0f, 1f)
+    } else 0f
+    Row(
+        Modifier.fillMaxSize().padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (style != WidgetStyle.MUSIC_MINIMAL) {
+            Icon(Icons.Default.MusicNote, null, tint = colors.accent, modifier = Modifier.size(30.dp))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Text(title, color = colors.primary, fontWeight = FontWeight.Black, maxLines = 1)
+            if (artist.isNotBlank()) Text(artist, color = colors.secondary, fontSize = 10.sp, maxLines = 1)
+            if (style == WidgetStyle.MUSIC_COMPACT) {
+                Spacer(Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = { progress },
+                    color = colors.accent,
+                    trackColor = colors.secondary.copy(alpha = .22f),
+                    modifier = Modifier.fillMaxWidth().height(3.dp)
+                )
+            }
+        }
+        Text(if (playback.isPlaying) "قيد التشغيل" else "متوقف", color = colors.secondary, fontSize = 9.sp)
+    }
+}
+
+@Composable
+private fun ScreenSaverTripSummary(style: WidgetStyle, trip: TripData) {
+    val colors = resolvedWidgetColors()
+    val minutes = trip.elapsedMovingTimeSec / 60
+    val seconds = trip.elapsedMovingTimeSec % 60
+    Row(
+        Modifier.fillMaxSize().padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        ScreenSaverMetric("المسافة", String.format(Locale.US, "%.1f كم", trip.distanceKm), colors.primary)
+        ScreenSaverMetric("المدة", String.format(Locale.US, "%02d:%02d", minutes, seconds), colors.accent)
+        if (style != WidgetStyle.TRIP_SPEED_DISTANCE) {
+            ScreenSaverMetric("المتوسط", "${trip.averageSpeedKmH.toInt()} كم/س", colors.secondary)
+        }
+    }
+}
+
+@Composable
+private fun ScreenSaverMapSummary(style: WidgetStyle, gps: GpsTelemetry, trip: TripData, map: MapItem?) {
+    val colors = resolvedWidgetColors()
+    Row(
+        Modifier.fillMaxSize().padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            if (gps.hasGpsFix) Icons.Default.Navigation else Icons.Default.GpsNotFixed,
+            null,
+            tint = colors.accent,
+            modifier = Modifier.size(32.dp).rotate(if (gps.hasGpsFix) gps.bearingDegrees else 0f)
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Text(map?.name ?: "لا توجد خريطة", color = colors.primary, fontWeight = FontWeight.Black, maxLines = 1)
+            Text(
+                if (gps.hasGpsFix) "${bearingToArabicDirection(gps.bearingDegrees)} • دقة ±${gps.accuracyMeters.toInt()}م" else "بانتظار GPS",
+                color = colors.secondary,
+                fontSize = 9.sp,
+                maxLines = 1
+            )
+            if (style == WidgetStyle.MAP_LARGE) {
+                Text(String.format(Locale.US, "رحلة %.1f كم", trip.distanceKm), color = colors.accent, fontSize = 9.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScreenSaverMetric(label: String, value: String, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = color, fontWeight = FontWeight.Black, fontSize = 17.sp, maxLines = 1)
+        Text(label, color = resolvedWidgetColors().secondary, fontSize = 8.sp)
     }
 }
 
@@ -475,7 +514,7 @@ private fun defaultScreenSaverStyle(type: WidgetType): WidgetStyle = when (type)
     WidgetType.DATE -> WidgetStyle.DATE_DAY_DATE
     WidgetType.GPS -> WidgetStyle.GPS_CARD
     WidgetType.MUSIC -> WidgetStyle.MUSIC_COMPACT
-    WidgetType.MAP -> WidgetStyle.MAP_MEDIUM
+    WidgetType.MAP -> WidgetStyle.MAP_WITH_GPS
     WidgetType.TRIP -> WidgetStyle.TRIP_CARD
     WidgetType.APPS -> WidgetStyle.APPS_ICONS_ONLY
     WidgetType.CONTROLS -> WidgetStyle.CONTROLS_HORIZONTAL_BAR

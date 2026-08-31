@@ -84,7 +84,7 @@ fun MapWidget(
             WidgetStyle.MAP_WITH_GPS -> {
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(if (gpsTelemetry.hasGpsFix) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed, null, tint = if (gpsTelemetry.hasGpsFix) EmeraldSafe else AmberRacing, modifier = Modifier.size(20.dp))
+                        Icon(if (gpsTelemetry.hasGpsFix) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed, null, tint = if (gpsTelemetry.hasGpsFix) widgetColors.accent else widgetColors.secondary, modifier = Modifier.size(20.dp))
                         Text(if (gpsTelemetry.hasGpsFix) "GPS ±${gpsTelemetry.accuracyMeters.toInt()}م" else "بانتظار GPS", color = widgetColors.primary, fontWeight = FontWeight.Bold, fontSize = if (tiny) 9.sp else 11.sp)
                     }
                     if (!tiny && gpsTelemetry.hasGpsFix) {
@@ -100,7 +100,7 @@ fun MapWidget(
                     NavigationSummary(title, distance, direction, hasTarget, tiny)
                     if (!tiny) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Route, null, tint = AmberRacing, modifier = Modifier.size(19.dp))
+                            Icon(Icons.Default.Route, null, tint = widgetColors.secondary, modifier = Modifier.size(19.dp))
                             Text(String.format(Locale.US, "%.1f كم", tripData.distanceKm), color = widgetColors.primary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                             Text("رحلتي", color = widgetColors.secondary, fontSize = 8.sp)
                         }
@@ -117,7 +117,7 @@ fun MapWidget(
                         Text("فتح", color = widgetColors.accent, fontSize = 9.sp)
                     }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround) {
-                        Icon(Icons.Default.Navigation, null, tint = AmberRacing, modifier = Modifier.size(if (compact) 27.dp else 36.dp).rotate(if (hasTarget) targetBearing ?: 0f else gpsTelemetry.bearingDegrees))
+                        Icon(Icons.Default.Navigation, null, tint = widgetColors.accent, modifier = Modifier.size(if (compact) 27.dp else 36.dp).rotate(if (hasTarget) targetBearing ?: 0f else gpsTelemetry.bearingDegrees))
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(if (hasTarget) distance ?: "--" else direction, color = widgetColors.primary, fontSize = if (compact) 19.sp else 25.sp, fontWeight = FontWeight.Black)
                             Text(if (hasTarget) direction else if (gpsTelemetry.hasGpsFix) "اتجاه السيارة" else "لا توجد إشارة", color = widgetColors.secondary, fontSize = 9.sp)

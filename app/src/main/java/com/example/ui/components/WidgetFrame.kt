@@ -27,6 +27,7 @@ import androidx.compose.ui.window.PopupProperties
 import com.example.model.WidgetItem
 import com.example.model.WidgetSizePreset
 import com.example.model.WidgetSurfaceStyle
+import com.example.model.WidgetTone
 import com.example.model.WidgetType
 import com.example.ui.theme.*
 
@@ -52,18 +53,16 @@ fun WidgetFrame(
     onSetSizePreset: (WidgetSizePreset) -> Unit,
     onSurfaceChange: (WidgetSurfaceStyle) -> Unit,
     onToggleBorder: () -> Unit,
-    onForegroundChange: (Int?) -> Unit,
-    onAccentChange: (Int?) -> Unit,
+    onToneChange: (WidgetTone) -> Unit,
     onSurfaceOpacityChange: (Float) -> Unit,
     onResetWidget: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val foregroundArgb = widgetItem.foregroundColorArgb
-    val accentArgb = widgetItem.accentColorArgb
+    val tone = WidgetTone.fromArgb(widgetItem.foregroundColorArgb)
     val surfaceOpacity = widgetItem.surfaceOpacity
-    val foregroundColor = foregroundArgb?.let { Color(it) }
-    val accentColor = accentArgb?.let { Color(it) }
+    val foregroundColor = Color(tone.argb)
+    val accentColor = Color(tone.argb)
 
     // A widget type keeps a recognizable silhouette even when it uses the same color palette.
     val shape = when (widgetItem.type) {
@@ -79,13 +78,21 @@ fun WidgetFrame(
     }
     val normalBackground = when (widgetItem.surfaceStyle) {
         WidgetSurfaceStyle.TRANSPARENT -> Color.Transparent
-        WidgetSurfaceStyle.GLASS -> CarbonDark.copy(alpha = (.18f + .46f * surfaceOpacity).coerceAtMost(.72f))
-        WidgetSurfaceStyle.CARD -> CarbonCard.copy(alpha = (.55f + .40f * surfaceOpacity).coerceAtMost(.97f))
+        WidgetSurfaceStyle.GLASS -> if (tone == WidgetTone.BLACK) {
+            Color.White.copy(alpha = (.26f + .46f * surfaceOpacity).coerceAtMost(.74f))
+        } else {
+            Color.Black.copy(alpha = (.20f + .48f * surfaceOpacity).coerceAtMost(.76f))
+        }
+        WidgetSurfaceStyle.CARD -> if (tone == WidgetTone.BLACK) {
+            Color.White.copy(alpha = (.66f + .32f * surfaceOpacity).coerceAtMost(.98f))
+        } else {
+            Color.Black.copy(alpha = (.64f + .33f * surfaceOpacity).coerceAtMost(.97f))
+        }
     }
     val outlineColor = when {
         isDesignMode && isSelected -> CyanNeon
         isDesignMode -> AmberRacing.copy(alpha = .18f)
-        widgetItem.showBorder -> CarbonCardBorder.copy(alpha = .85f)
+        widgetItem.showBorder -> foregroundColor.copy(alpha = .75f)
         else -> Color.Transparent
     }
     val outlineWidth = if (isDesignMode && isSelected) 2.dp else if (isDesignMode || widgetItem.showBorder) 1.dp else 0.dp
@@ -149,11 +156,9 @@ fun WidgetFrame(
         ) {
             WidgetV3ControlDock(
                 widgetItem = widgetItem,
-                foregroundArgb = foregroundArgb,
-                accentArgb = accentArgb,
+                tone = tone,
                 surfaceOpacity = surfaceOpacity,
-                onForeground = onForegroundChange,
-                onAccent = onAccentChange,
+                onTone = onToneChange,
                 onSurfaceOpacity = onSurfaceOpacityChange,
                 onChangeStyle = onChangeStyle,
                 onOpacityChange = onOpacityChange,
@@ -180,11 +185,9 @@ fun WidgetFrame(
 @Composable
 private fun WidgetV3ControlDock(
     widgetItem: WidgetItem,
-    foregroundArgb: Int?,
-    accentArgb: Int?,
+    tone: WidgetTone,
     surfaceOpacity: Float,
-    onForeground: (Int?) -> Unit,
-    onAccent: (Int?) -> Unit,
+    onTone: (WidgetTone) -> Unit,
     onSurfaceOpacity: (Float) -> Unit,
     onChangeStyle: () -> Unit,
     onOpacityChange: (Float) -> Unit,
@@ -259,14 +262,10 @@ private fun WidgetV3ControlDock(
                 }
                 CompactEditorButton(Icons.Default.BorderStyle, "الإطار", if (widgetItem.showBorder) AmberRacing else TextSecondary, onToggleBorder)
                 VerticalDivider(Modifier.height(22.dp), color = CarbonCardBorder)
-                Text("النص", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                ColorChoice(null, foregroundArgb == null, onForeground)
-                FOREGROUND_PRESETS.forEach { argb -> ColorChoice(argb, foregroundArgb == argb, onForeground) }
-
-                VerticalDivider(Modifier.height(22.dp), color = CarbonCardBorder)
-                Text("اللون المميز", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                ColorChoice(null, accentArgb == null, onAccent)
-                ACCENT_PRESETS.forEach { argb -> ColorChoice(argb, accentArgb == argb, onAccent) }
+                Text("اللون", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                WidgetTone.values().forEach { option ->
+                    ToneChoice(option, tone == option) { onTone(option) }
+                }
 
                 Spacer(Modifier.weight(1f))
                 Text("خلفية", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
@@ -299,37 +298,20 @@ private fun CompactEditorButton(
 }
 
 @Composable
-private fun ColorChoice(argb: Int?, selected: Boolean, onSelect: (Int?) -> Unit) {
-    val color = argb?.let { Color(it) } ?: Color.Transparent
+private fun ToneChoice(tone: WidgetTone, selected: Boolean, onSelect: () -> Unit) {
+    val color = Color(tone.argb)
     Surface(
-        onClick = { onSelect(argb) },
-        color = if (argb == null) CarbonSurface else color,
-        shape = CircleShape,
+        onClick = onSelect,
+        color = color,
+        shape = RoundedCornerShape(7.dp),
         border = androidx.compose.foundation.BorderStroke(if (selected) 2.dp else 1.dp, if (selected) CyanNeon else CarbonCardBorder),
-        modifier = Modifier.size(21.dp)
+        modifier = Modifier.size(width = 49.dp, height = 24.dp)
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (argb == null) Text("A", color = TextPrimary, fontSize = 8.sp, fontWeight = FontWeight.Black)
-            else if (selected) Icon(Icons.Default.Check, null, tint = if (argb == BLACK_ARGB) Color.White else Color.Black, modifier = Modifier.size(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                if (selected) Icon(Icons.Default.Check, null, tint = if (tone == WidgetTone.BLACK) Color.White else Color.Black, modifier = Modifier.size(11.dp))
+                Text(tone.arabicName, color = if (tone == WidgetTone.BLACK) Color.White else Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Black)
+            }
         }
     }
 }
-
-private const val WHITE_ARGB: Int = -1
-private const val BLACK_ARGB: Int = -15724528 // 0xFF101010
-private val FOREGROUND_PRESETS = listOf(
-    WHITE_ARGB,
-    BLACK_ARGB,
-    0xFFB7C0CC.toInt(),
-    0xFF59E6F2.toInt(),
-    0xFFFFD166.toInt(),
-    0xFFFF6B6B.toInt()
-)
-
-private val ACCENT_PRESETS = listOf(
-    0xFF00E5FF.toInt(),
-    0xFFFFB84D.toInt(),
-    0xFF37E6A1.toInt(),
-    0xFFB892FF.toInt(),
-    0xFFFF5C75.toInt()
-)

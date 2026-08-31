@@ -176,7 +176,7 @@ fun MusicWidget(
                                 modifier = Modifier
                                     .size(20.dp)
                                     .clip(CircleShape)
-                                    .background(AmberRacing),
+                                    .background(widgetColors.accent),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Box(
@@ -280,7 +280,7 @@ fun MusicWidget(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(text = "مشغل صوت لوحة القيادة", style = MaterialTheme.typography.labelSmall, color = AmberRacing)
+                            Text(text = "مشغل صوت لوحة القيادة", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
                             Text(text = title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary, maxLines = 1)
                             Text(text = artist, style = MaterialTheme.typography.bodySmall, color = widgetColors.secondary, maxLines = 1)
                         }

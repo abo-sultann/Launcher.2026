@@ -50,7 +50,7 @@ fun ControlsWidget(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     CircleControlButton(icon = Icons.Default.VolumeDown, label = "خفض", onClick = { onVolumeAdjust(-1f) })
-                    CircleControlButton(icon = Icons.Default.VolumeOff, label = "كتم", tint = AmberRacing, onClick = onToggleMute)
+                    CircleControlButton(icon = Icons.Default.VolumeOff, label = "كتم", tint = widgetColors.secondary, onClick = onToggleMute)
                     CircleControlButton(
                         icon = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         label = "تشغيل",
@@ -95,7 +95,7 @@ fun ControlsWidget(
                             Icon(Icons.Default.VolumeDown, contentDescription = "خفض", tint = widgetColors.primary)
                         }
                         IconButton(onClick = onToggleMute) {
-                            Icon(Icons.Default.VolumeMute, contentDescription = "كتم", tint = AmberRacing)
+                            Icon(Icons.Default.VolumeMute, contentDescription = "كتم", tint = widgetColors.secondary)
                         }
                         IconButton(onClick = onTogglePlayPause) {
                             Icon(
@@ -135,7 +135,7 @@ fun ControlsWidget(
                                 Icon(Icons.Default.VolumeDown, contentDescription = null, tint = widgetColors.primary)
                             }
                             IconButton(onClick = onToggleMute) {
-                                Icon(Icons.Default.VolumeOff, contentDescription = null, tint = AmberRacing)
+                                Icon(Icons.Default.VolumeOff, contentDescription = null, tint = widgetColors.secondary)
                             }
                             IconButton(onClick = onTogglePlayPause) {
                                 Icon(

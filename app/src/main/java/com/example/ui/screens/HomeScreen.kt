@@ -131,8 +131,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         rememberUndoPoint()
                         viewModel.toggleWidgetBorder(normalized.id)
                     },
-                    onForegroundChange = { rememberUndoPoint(); viewModel.setWidgetForeground(normalized.id, it) },
-                    onAccentChange = { rememberUndoPoint(); viewModel.setWidgetAccent(normalized.id, it) },
+                    onToneChange = { rememberUndoPoint(); viewModel.setWidgetTone(normalized.id, it) },
                     onSurfaceOpacityChange = { rememberUndoPoint(); viewModel.setWidgetSurfaceOpacity(normalized.id, it) },
                     onResetWidget = { rememberUndoPoint(); viewModel.resetWidget(normalized.id) },
                     modifier = Modifier.offset(x = x, y = y).size(width = width, height = height).zIndex(normalized.zIndex.toFloat())
@@ -166,7 +165,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(Icons.Default.Widgets, null, tint = CyanNeon, modifier = Modifier.size(17.dp))
-                    Text("تصميم V2", color = CyanNeon, fontWeight = FontWeight.Black)
+                    Text("تصميم الودجت", color = CyanNeon, fontWeight = FontWeight.Black)
                     FilledTonalButton(
                         onClick = { applyBackgroundFocusLayout() },
                         contentPadding = PaddingValues(horizontal = 7.dp, vertical = 2.dp),
@@ -224,7 +223,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     shape = RoundedCornerShape(9.dp),
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 5.dp).zIndex(10000f)
                 ) {
-                    Text("اختر أي ودجت: اسحب من كامل مساحته • ثم اختر شفاف أو زجاجي أو بطاقة", color = TextSecondary, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                    Text("اختر الودجت ثم حدّد: أبيض أو أسود • شفاف أو زجاجي أو بطاقة", color = TextSecondary, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
                 }
             }
 

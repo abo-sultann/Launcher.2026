@@ -3,7 +3,6 @@ package com.example.ui.components
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
@@ -32,7 +31,7 @@ fun resolvedWidgetColors(): ResolvedWidgetColors {
     return ResolvedWidgetColors(
         primary = tokens.primaryOr(TextPrimary),
         secondary = tokens.secondaryOr(TextSecondary),
-        accent = tokens.accentOr(CyanNeon)
+        accent = tokens.accentOr(TextPrimary)
     )
 }
 

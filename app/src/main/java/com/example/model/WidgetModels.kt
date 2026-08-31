@@ -18,6 +18,22 @@ enum class WidgetSurfaceStyle(val arabicName: String) {
     CARD("بطاقة")
 }
 
+/**
+ * Launcher 2.0 deliberately keeps widget colour decisions simple.
+ *
+ * The old editor exposed a collection of unrelated accent colours which made otherwise
+ * different widgets look like variations of the same neon card. White and black are the two
+ * useful choices on a car wallpaper; surface style is what creates the third, glass family.
+ */
+enum class WidgetTone(val arabicName: String, val argb: Int) {
+    WHITE("أبيض", 0xFFF7F7F7.toInt()),
+    BLACK("أسود", 0xFF101010.toInt());
+
+    companion object {
+        fun fromArgb(argb: Int?): WidgetTone = if (argb == BLACK.argb) BLACK else WHITE
+    }
+}
+
 enum class WidgetSizePreset(val arabicName: String) {
     CONTENT("على المحتوى"),
     SMALL("صغير"),
@@ -87,6 +103,110 @@ enum class WidgetStyle(val type: WidgetType, val arabicName: String, val descrip
     CONTROLS_HORIZONTAL_BAR(WidgetType.CONTROLS, "شريط تحكم", "شريط أفقي مدمج"),
     CONTROLS_CARD(WidgetType.CONTROLS, "بطاقة التحكم", "الصوت والوسائط في بطاقة"),
     CONTROLS_LARGE_AUTOMOTIVE(WidgetType.CONTROLS, "تحكم كبير", "أزرار لمس كبيرة أثناء القيادة")
+}
+
+/**
+ * The complete enum stays readable for old saved layouts, but the rebuilt library offers only
+ * three genuinely different constructions per widget instead of a long list of near-duplicates.
+ */
+fun preferredWidgetStylesFor(type: WidgetType): List<WidgetStyle> = when (type) {
+    WidgetType.CLOCK -> listOf(
+        WidgetStyle.CLOCK_MINIMAL,
+        WidgetStyle.CLOCK_WITH_DATE,
+        WidgetStyle.CLOCK_AUTOMOTIVE_LARGE
+    )
+    WidgetType.SPEEDOMETER -> listOf(
+        WidgetStyle.SPEED_DIGITAL_LARGE,
+        WidgetStyle.SPEED_GAUGE_CIRCULAR,
+        WidgetStyle.SPEED_DASHBOARD
+    )
+    WidgetType.DATE -> listOf(
+        WidgetStyle.DATE_ONLY,
+        WidgetStyle.DATE_DAY_DATE,
+        WidgetStyle.DATE_HIJRI_GREGORIAN
+    )
+    WidgetType.GPS -> listOf(
+        WidgetStyle.GPS_INDICATOR_MINI,
+        WidgetStyle.GPS_COORDINATES,
+        WidgetStyle.GPS_CARD
+    )
+    WidgetType.MUSIC -> listOf(
+        WidgetStyle.MUSIC_MINIMAL,
+        WidgetStyle.MUSIC_COMPACT,
+        WidgetStyle.MUSIC_COVER
+    )
+    WidgetType.MAP -> listOf(
+        WidgetStyle.MAP_MINI,
+        WidgetStyle.MAP_WITH_GPS,
+        WidgetStyle.MAP_LARGE
+    )
+    WidgetType.TRIP -> listOf(
+        WidgetStyle.TRIP_SPEED_DISTANCE,
+        WidgetStyle.TRIP_CARD,
+        WidgetStyle.TRIP_DASHBOARD
+    )
+    WidgetType.APPS -> listOf(
+        WidgetStyle.APPS_ICONS_ONLY,
+        WidgetStyle.APPS_HORIZONTAL_DOCK,
+        WidgetStyle.APPS_GRID_2X2
+    )
+    WidgetType.CONTROLS -> listOf(
+        WidgetStyle.CONTROLS_CIRCULAR,
+        WidgetStyle.CONTROLS_HORIZONTAL_BAR,
+        WidgetStyle.CONTROLS_LARGE_AUTOMOTIVE
+    )
+}
+
+/** Maps every 1.x near-duplicate to the closest rebuilt construction. */
+fun modernWidgetStyle(style: WidgetStyle): WidgetStyle {
+    if (style in preferredWidgetStylesFor(style.type)) return style
+    return when (style.type) {
+        WidgetType.CLOCK -> when (style) {
+            WidgetStyle.CLOCK_AUTOMOTIVE_LARGE -> WidgetStyle.CLOCK_AUTOMOTIVE_LARGE
+            WidgetStyle.CLOCK_DIGITAL_LARGE, WidgetStyle.CLOCK_MINIMAL -> WidgetStyle.CLOCK_MINIMAL
+            else -> WidgetStyle.CLOCK_WITH_DATE
+        }
+        WidgetType.SPEEDOMETER -> when (style) {
+            WidgetStyle.SPEED_DIGITAL_LARGE, WidgetStyle.SPEED_WITH_UNIT -> WidgetStyle.SPEED_DIGITAL_LARGE
+            WidgetStyle.SPEED_WITH_AVG, WidgetStyle.SPEED_DASHBOARD -> WidgetStyle.SPEED_DASHBOARD
+            else -> WidgetStyle.SPEED_GAUGE_CIRCULAR
+        }
+        WidgetType.DATE -> when (style) {
+            WidgetStyle.DATE_ONLY, WidgetStyle.DATE_MINIMAL -> WidgetStyle.DATE_ONLY
+            WidgetStyle.DATE_HIJRI_GREGORIAN -> WidgetStyle.DATE_HIJRI_GREGORIAN
+            else -> WidgetStyle.DATE_DAY_DATE
+        }
+        WidgetType.GPS -> when (style) {
+            WidgetStyle.GPS_INDICATOR_MINI -> WidgetStyle.GPS_INDICATOR_MINI
+            WidgetStyle.GPS_COORDINATES -> WidgetStyle.GPS_COORDINATES
+            else -> WidgetStyle.GPS_CARD
+        }
+        WidgetType.MUSIC -> when (style) {
+            WidgetStyle.MUSIC_MINI, WidgetStyle.MUSIC_MINIMAL -> WidgetStyle.MUSIC_MINIMAL
+            WidgetStyle.MUSIC_COVER, WidgetStyle.MUSIC_LARGE_AUTOMOTIVE -> WidgetStyle.MUSIC_COVER
+            else -> WidgetStyle.MUSIC_COMPACT
+        }
+        WidgetType.MAP -> when (style) {
+            WidgetStyle.MAP_MINI -> WidgetStyle.MAP_MINI
+            WidgetStyle.MAP_LARGE, WidgetStyle.MAP_WITH_TRIP -> WidgetStyle.MAP_LARGE
+            else -> WidgetStyle.MAP_WITH_GPS
+        }
+        WidgetType.TRIP -> when (style) {
+            WidgetStyle.TRIP_SPEED_DISTANCE, WidgetStyle.TRIP_SPEED_DURATION -> WidgetStyle.TRIP_SPEED_DISTANCE
+            WidgetStyle.TRIP_DASHBOARD, WidgetStyle.TRIP_FULL_METRICS -> WidgetStyle.TRIP_DASHBOARD
+            else -> WidgetStyle.TRIP_CARD
+        }
+        WidgetType.APPS -> when (style) {
+            WidgetStyle.APPS_GRID_2X2, WidgetStyle.APPS_GRID_3X2, WidgetStyle.APPS_GRID_4X2 -> WidgetStyle.APPS_GRID_2X2
+            WidgetStyle.APPS_HORIZONTAL_DOCK -> WidgetStyle.APPS_HORIZONTAL_DOCK
+            else -> WidgetStyle.APPS_ICONS_ONLY
+        }
+        WidgetType.CONTROLS -> when (style) {
+            WidgetStyle.CONTROLS_CIRCULAR -> WidgetStyle.CONTROLS_CIRCULAR
+            WidgetStyle.CONTROLS_LARGE_AUTOMOTIVE, WidgetStyle.CONTROLS_SQUARE -> WidgetStyle.CONTROLS_LARGE_AUTOMOTIVE
+            else -> WidgetStyle.CONTROLS_HORIZONTAL_BAR
+        }
+    }
 }
 
 data class WidgetItem(
@@ -189,42 +309,48 @@ data class WidgetItem(
                 zIndex = order,
                 surfaceStyle = defaultSurfaceFor(type),
                 showBorder = false,
-                foregroundColorArgb = null,
-                accentColorArgb = null,
+                foregroundColorArgb = WidgetTone.WHITE.argb,
+                accentColorArgb = WidgetTone.WHITE.argb,
                 surfaceOpacity = 1f
             )
         }
 
         fun createDefaultList(): List<WidgetItem> = listOf(
             WidgetItem(
-                id = "widget_speed", type = WidgetType.SPEEDOMETER, style = WidgetStyle.SPEED_GAUGE_SEMI,
+                id = "widget_speed", type = WidgetType.SPEEDOMETER, style = WidgetStyle.SPEED_GAUGE_CIRCULAR,
                 order = 0, xFraction = .025f, yFraction = .05f, widthFraction = .17f, heightFraction = .24f,
-                zIndex = 0, surfaceStyle = WidgetSurfaceStyle.TRANSPARENT
+                zIndex = 0, surfaceStyle = WidgetSurfaceStyle.TRANSPARENT,
+                foregroundColorArgb = WidgetTone.WHITE.argb, accentColorArgb = WidgetTone.WHITE.argb
             ),
             WidgetItem(
                 id = "widget_clock", type = WidgetType.CLOCK, style = WidgetStyle.CLOCK_MINIMAL,
                 order = 1, xFraction = .38f, yFraction = .015f, widthFraction = .24f, heightFraction = .13f,
-                zIndex = 1, surfaceStyle = WidgetSurfaceStyle.TRANSPARENT
+                zIndex = 1, surfaceStyle = WidgetSurfaceStyle.TRANSPARENT,
+                foregroundColorArgb = WidgetTone.WHITE.argb, accentColorArgb = WidgetTone.WHITE.argb
             ),
             WidgetItem(
                 id = "widget_music", type = WidgetType.MUSIC, style = WidgetStyle.MUSIC_MINIMAL,
                 order = 2, xFraction = .70f, yFraction = .035f, widthFraction = .27f, heightFraction = .16f,
-                zIndex = 2, surfaceStyle = WidgetSurfaceStyle.GLASS
+                zIndex = 2, surfaceStyle = WidgetSurfaceStyle.GLASS,
+                foregroundColorArgb = WidgetTone.WHITE.argb, accentColorArgb = WidgetTone.WHITE.argb
             ),
             WidgetItem(
                 id = "widget_trip", type = WidgetType.TRIP, style = WidgetStyle.TRIP_CARD,
                 order = 3, xFraction = .79f, yFraction = .36f, widthFraction = .19f, heightFraction = .27f,
-                zIndex = 3, surfaceStyle = WidgetSurfaceStyle.GLASS
+                zIndex = 3, surfaceStyle = WidgetSurfaceStyle.GLASS,
+                foregroundColorArgb = WidgetTone.WHITE.argb, accentColorArgb = WidgetTone.WHITE.argb
             ),
             WidgetItem(
                 id = "widget_map", type = WidgetType.MAP, style = WidgetStyle.MAP_MINI,
                 order = 4, xFraction = .025f, yFraction = .40f, widthFraction = .22f, heightFraction = .24f,
-                zIndex = 4, surfaceStyle = WidgetSurfaceStyle.GLASS
+                zIndex = 4, surfaceStyle = WidgetSurfaceStyle.GLASS,
+                foregroundColorArgb = WidgetTone.WHITE.argb, accentColorArgb = WidgetTone.WHITE.argb
             ),
             WidgetItem(
                 id = "widget_apps", type = WidgetType.APPS, style = WidgetStyle.APPS_HORIZONTAL_DOCK,
                 order = 5, xFraction = .31f, yFraction = .79f, widthFraction = .38f, heightFraction = .17f,
-                zIndex = 5, surfaceStyle = WidgetSurfaceStyle.GLASS
+                zIndex = 5, surfaceStyle = WidgetSurfaceStyle.GLASS,
+                foregroundColorArgb = WidgetTone.WHITE.argb, accentColorArgb = WidgetTone.WHITE.argb
             )
         )
     }

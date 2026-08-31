@@ -59,7 +59,7 @@ fun SettingsScreen(
     var interfaceSafeAreaOpen by remember { mutableStateOf(false) }
     val accent = Color(settings.interfaceAccent.argb)
 
-    val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(viewModel::importMusicUri) }
+    val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { it?.let(viewModel::importMusicUri) }
     // ACTION_GET_CONTENT works more consistently with the old Android 7 file manager.
     val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { it?.let(viewModel::importMapUri) }
     // More reliable than ACTION_OPEN_DOCUMENT on Android 7 car-unit file managers.
@@ -189,8 +189,8 @@ fun SettingsScreen(
 
                             SettingsCategory.WIDGETS -> {
                                 item { SwitchRow("وضع تصميم الشاشة", "اختر أي ودجت ثم حرّكه أو غيّر حجمه ومظهره", isDesignMode) { viewModel.toggleDesignMode() } }
-                                item { InfoCard("كل الودجت الآن تستخدم نفس محرر المظهر: لون النص، اللون المميّز، خلفية شفافة أو زجاجية أو بطاقة، شفافية الخلفية، الإطار، المقاس والقفل.") }
-                                item { InfoCard("اختلاف الشكل ليس لونًا فقط: اختر «الشكل» داخل محرر الودجت للتبديل بين بناء رقمي، عدّاد، بطاقة، شريط، شبكة أو تخطيط مختصر بحسب نوع الودجت.") }
+                                item { InfoCard("اللون أصبح واضحًا ومختصرًا: أبيض أو أسود فقط. ويمكن اختيار سطح شفاف أو زجاجي أو بطاقة بما يناسب الخلفية.") }
+                                item { InfoCard("لكل نوع ثلاثة أشكال مختلفة فعليًا: بسيط، معلوماتي، وشكل لوحة قيادة؛ تم إخفاء الأشكال المتشابهة القديمة مع بقاء توافق الترتيبات المحفوظة.") }
                                 item { ActionButton("إعادة فحص التطبيقات", Icons.Default.Refresh) { viewModel.loadApps() } }
                                 item { ActionButton("إرجاع ودجت الرئيسية للوضع الافتراضي", Icons.Default.RestartAlt) { viewModel.resetWidgetsToDefault() } }
                             }
@@ -199,10 +199,6 @@ fun SettingsScreen(
                                 item { SwitchRow("تفعيل شاشة التوقف", "تظهر عند السكون ولا تقاطع شاشة الخريطة", settings.screenSaverEnabled) { viewModel.updateSettings(settings.copy(screenSaverEnabled = it)) } }
                                 item { NumberSlider("وقت الانتظار", settings.screenSaverTimeoutSeconds, 30, 1800, "ث") { viewModel.updateSettings(settings.copy(screenSaverTimeoutSeconds = it)) } }
                                 item { SwitchRow("استخدام الخلفية الحالية", "إظهار الخلفية خلف ودجت شاشة التوقف", settings.screenSaverUseWallpaper) { viewModel.updateSettings(settings.copy(screenSaverUseWallpaper = it)) } }
-                                item { SwitchRow("الوضع الليلي", "يخفض سطوع النافذة ويعتّم الخلفية أثناء القيادة ليلًا", settings.screenSaverNightMode) { viewModel.updateSettings(settings.copy(screenSaverNightMode = it)) } }
-                                if (settings.screenSaverNightMode) {
-                                    item { NumberSlider("سطوع الوضع الليلي", settings.screenSaverNightBrightnessPercent, 5, 40, "%") { viewModel.updateSettings(settings.copy(screenSaverNightBrightnessPercent = it)) } }
-                                }
                                 item { SectionTitle("ودجت شاشة التوقف — حتى 4", Icons.Default.Widgets) }
                                 item {
                                     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -216,12 +212,12 @@ fun SettingsScreen(
                                     }
                                 }
                                 item { ActionButton("فتح محرر شاشة التوقف", Icons.Default.Edit, onOpenScreenSaverEditor) }
-                                item { InfoCard("داخل المحرر: اضغط الودجت المطلوب، ثم استخدم الشريط السفلي لتغيير الشكل والألوان والخلفية والإطار والشفافية. التحريك والتحجيم يظهران للودجت المختار فقط.") }
+                                item { InfoCard("شاشة التوقف للعرض فقط ولا تحتوي أزرار تطبيقات أو تحكم. الترتيب الوحيد موجود هنا داخل الإعدادات، مع الأبيض والأسود والأسطح الثلاثة.") }
                             }
 
                             SettingsCategory.MEDIA -> {
                                 item { SwitchRow("حفظ آخر موضع", "عند التشغيل لاحقًا يبدأ من نفس المقطع والموضع دون تشغيل تلقائي", settings.resumeMusicPlayback) { viewModel.updateSettings(settings.copy(resumeMusicPlayback = it)) } }
-                                item { ActionButton("إضافة ملف صوت", Icons.Default.LibraryMusic) { musicPicker.launch(arrayOf("audio/*")) } }
+                                item { ActionButton("إضافة ملف صوت", Icons.Default.LibraryMusic) { viewModel.prepareForExternalPicker(); musicPicker.launch("audio/*") } }
                                 item { StatusMetric("المقطع الحالي", playback.currentTrack?.title ?: "لا يوجد", playback.currentTrack != null) }
                                 item { StatusMetric("المقاطع المكتشفة", playback.playlist.size.toString(), playback.playlist.isNotEmpty()) }
                             }
@@ -245,7 +241,7 @@ fun SettingsScreen(
                                 item { ActionButton("تصفير الرحلة الحالية", Icons.Default.Refresh) { viewModel.resetTrip() } }
 
                                 item { SectionTitle("الخريطة دون إنترنت", Icons.Default.Map) }
-                                item { InfoCard("نسخة الاختبار 1.0.14 تستخدم نمط طرق ومعالم أوضح مع خريطة Saudi-2026.map دون إنترنت. إعدادات الحفظ والتوجيه والعرض متاحة مباشرة من أعلى صفحة الخريطة.") }
+                                item { InfoCard("Mapsforge (.map) هو الخيار المفضل: أسماء طرق ومواقع قابلة للبحث مع حفظ المواقع والتوجيه المباشر. وتدعم الخريطة أيضًا MBTiles الصورية إذا كانت الأسماء مرسومة داخلها.") }
                                 item { ActionButton("إضافة خريطة", Icons.Default.AddLocationAlt) { viewModel.prepareForExternalPicker(); mapPicker.launch("*/*") } }
                                 fileImportStatus?.let { status -> item { StatusMetric("حالة الاستيراد", status, status.startsWith("تم")) } }
                                 if (maps.isEmpty()) item { StatusMetric("الخرائط", "لا توجد خريطة مضافة", false) }

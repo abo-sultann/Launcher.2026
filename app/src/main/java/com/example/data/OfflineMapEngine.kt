@@ -34,7 +34,7 @@ class OfflineMapEngine(
                 .filter { File(it.filePath).exists() }
                 .toMutableList()
 
-            val normalized = if (saved.count { it.isActive } > 1) {
+            var normalized = if (saved.count { it.isActive } > 1) {
                 var activeFound = false
                 saved.map { item ->
                     if (item.isActive && !activeFound) {
@@ -44,10 +44,14 @@ class OfflineMapEngine(
                 }
             } else saved
 
+            val activeCandidate = normalized.find { it.isActive }
+            val activeError = activeCandidate?.let { validateMapFile(File(it.filePath)) }
+            if (activeError != null) normalized = normalized.map { it.copy(isActive = false) }
+
             _mapsList.value = normalized
             _activeMap.value = normalized.find { it.isActive }
             preferencesManager.saveMaps(normalized)
-            _mapError.value = null
+            _mapError.value = activeError
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing MapEngine", e)
             _mapError.value = "تعذر تحميل قائمة الخرائط"
@@ -61,36 +65,10 @@ class OfflineMapEngine(
                 return false
             }
 
-            val extension = file.extension.lowercase(Locale.US)
-            when (extension) {
-                "mbtiles" -> {
-                    try {
-                        val db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
-                        db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='tiles'", null).use { cursor ->
-                            if (!cursor.moveToFirst()) throw IllegalArgumentException("tiles table missing")
-                        }
-                        db.close()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Not a valid SQLite MBTiles file", e)
-                        _mapError.value = "ملف MBTiles تالف أو غير صالح"
-                        return false
-                    }
-                }
-                "map" -> {
-                    try {
-                        val mapFile = MapFile(file, MAP_LANGUAGE_ARABIC)
-                        mapFile.boundingBox()
-                        mapFile.close()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Not a valid Mapsforge map file", e)
-                        _mapError.value = "ملف Mapsforge غير صالح"
-                        return false
-                    }
-                }
-                else -> {
-                    _mapError.value = "اختر ملف MBTiles أو Mapsforge (.map)"
-                    return false
-                }
+            val validationError = validateMapFile(file)
+            if (validationError != null) {
+                _mapError.value = validationError
+                return false
             }
 
             val sizeMb = file.length() / (1024 * 1024)
@@ -120,6 +98,12 @@ class OfflineMapEngine(
     }
 
     fun setActiveMap(mapId: String) {
+        val requested = _mapsList.value.firstOrNull { it.id == mapId } ?: return
+        val validationError = validateMapFile(File(requested.filePath))
+        if (validationError != null) {
+            _mapError.value = validationError
+            return
+        }
         val updated = _mapsList.value.map { item -> item.copy(isActive = item.id == mapId) }
         _mapsList.value = updated
         _activeMap.value = updated.find { it.isActive }
@@ -157,8 +141,51 @@ class OfflineMapEngine(
         _mapError.value = message
     }
 
+    private fun validateMapFile(file: File): String? {
+        if (!file.exists() || file.length() <= 0L) return "ملف الخريطة غير موجود أو فارغ"
+        return when (file.extension.lowercase(Locale.US)) {
+            "mbtiles" -> validateMbTiles(file)
+            "map" -> validateMapsforge(file)
+            else -> "اختر ملف MBTiles أو Mapsforge (.map)"
+        }
+    }
+
+    private fun validateMbTiles(file: File): String? {
+        var db: SQLiteDatabase? = null
+        return try {
+            db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+            db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='tiles'", null).use { cursor ->
+                if (!cursor.moveToFirst()) throw IllegalArgumentException("tiles table missing")
+            }
+            val format = db.rawQuery("SELECT value FROM metadata WHERE name='format' LIMIT 1", null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0)?.lowercase(Locale.US) else null
+            }
+            if (format !in SUPPORTED_MBTILES_FORMATS) "اختر MBTiles صوريًا بصيغة PNG أو JPG" else null
+        } catch (e: Exception) {
+            Log.w(TAG, "Not a valid SQLite MBTiles file", e)
+            "ملف MBTiles تالف أو غير صالح"
+        } finally {
+            try { db?.close() } catch (_: Exception) { }
+        }
+    }
+
+    private fun validateMapsforge(file: File): String? {
+        var mapFile: MapFile? = null
+        return try {
+            mapFile = MapFile(file, MAP_LANGUAGE_ARABIC)
+            mapFile.boundingBox()
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "Not a valid Mapsforge map file", e)
+            "ملف Mapsforge غير صالح"
+        } finally {
+            try { mapFile?.close() } catch (_: Exception) { }
+        }
+    }
+
     companion object {
         private const val TAG = "OfflineMapEngine"
         private const val MAP_LANGUAGE_ARABIC = "ar"
+        private val SUPPORTED_MBTILES_FORMATS = setOf("png", "jpg", "jpeg")
     }
 }

@@ -52,8 +52,10 @@ data class ScreenSaverWidgetLayout(
                 heightFraction = 0.34f,
                 opacity = 0.90f,
                 zIndex = slot,
-                style = null,
-                surfaceStyle = WidgetItem.defaultSurfaceFor(type)
+                style = screenSaverStylesFor(type).firstOrNull(),
+                surfaceStyle = WidgetItem.defaultSurfaceFor(type),
+                foregroundColorArgb = WidgetTone.WHITE.argb,
+                accentColorArgb = WidgetTone.WHITE.argb
             )
         }
     }
@@ -89,9 +91,7 @@ data class LauncherSettings(
     val screenSaverEnabled: Boolean = false,
     val screenSaverTimeoutSeconds: Int = 120,
     val screenSaverUseWallpaper: Boolean = true,
-    val screenSaverWidgetTypes: Set<WidgetType> = setOf(WidgetType.CLOCK, WidgetType.SPEEDOMETER),
-    val screenSaverNightMode: Boolean = false,
-    val screenSaverNightBrightnessPercent: Int = 14
+    val screenSaverWidgetTypes: Set<WidgetType> = setOf(WidgetType.CLOCK, WidgetType.SPEEDOMETER)
 )
 
 /** Screen saver widgets are informative only: no launchers or touch controls. */
@@ -105,14 +105,6 @@ val SCREEN_SAVER_DISPLAY_WIDGET_TYPES: Set<WidgetType> = linkedSetOf(
     WidgetType.TRIP
 )
 
-fun screenSaverStylesFor(type: WidgetType): List<WidgetStyle> = WidgetStyle.values().filter { style ->
-    style.type == type && when (style) {
-        WidgetStyle.MUSIC_MINI,
-        WidgetStyle.MUSIC_COMPACT,
-        WidgetStyle.MUSIC_COVER,
-        WidgetStyle.MUSIC_CONTROLS,
-        WidgetStyle.MUSIC_LARGE_AUTOMOTIVE,
-        WidgetStyle.TRIP_FULL_METRICS -> false
-        else -> true
-    }
+fun screenSaverStylesFor(type: WidgetType): List<WidgetStyle> = preferredWidgetStylesFor(type).filterNot { style ->
+    style == WidgetStyle.MUSIC_COVER || style == WidgetStyle.TRIP_DASHBOARD
 }

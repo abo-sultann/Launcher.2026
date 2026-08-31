@@ -69,7 +69,7 @@ fun TripWidget(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(text = "مدة القيادة", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
-                        Text(text = durationStr, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = AmberRacing)
+                        Text(text = durationStr, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = widgetColors.accent)
                     }
                     Divider(modifier = Modifier.height(36.dp).width(1.dp), color = CarbonCardBorder)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -109,7 +109,7 @@ fun TripWidget(
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = "المتوسط", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
-                                Text(text = "${tripData.averageSpeedKmH.toInt()} كم/س", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = AmberRacing)
+                                Text(text = "${tripData.averageSpeedKmH.toInt()} كم/س", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = widgetColors.secondary)
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(text = "الزمن", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
@@ -133,7 +133,7 @@ fun TripWidget(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text(text = "بيانات الرحلة", style = MaterialTheme.typography.labelSmall, color = AmberRacing)
+                            Text(text = "بيانات الرحلة", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
                             Text(text = "$distanceStr كم", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary)
                             Text(text = "الزمن: $durationStr", style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary)
                         }
@@ -176,7 +176,7 @@ fun TripWidget(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(text = "المسافة: $distanceStr كم", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = widgetColors.accent)
-                        Text(text = "الزمن: $durationStr", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = AmberRacing)
+                        Text(text = "الزمن: $durationStr", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = widgetColors.secondary)
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),

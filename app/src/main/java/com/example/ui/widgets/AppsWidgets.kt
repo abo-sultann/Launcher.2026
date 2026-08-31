@@ -116,7 +116,7 @@ fun AppsWidget(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                        Text("المفضلة السريعة", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = AmberRacing)
+                        Text("المفضلة السريعة", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = widgetColors.secondary)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                             favoriteApps.take(4).forEach { app -> AppShortcutItem(app, true) { onLaunchApp(app.packageName) } }
                         }
