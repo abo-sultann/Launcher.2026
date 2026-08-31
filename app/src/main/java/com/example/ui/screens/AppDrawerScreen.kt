@@ -76,7 +76,8 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 item(key = "__android_system_settings__") {
                     AndroidSettingsCard(
                         launch = viewModel::launchAndroidSettings,
-                        showLabel = settings.showAppLabels
+                        showLabel = settings.showAppLabels,
+                        iconSizeDp = settings.iconSizeDp
                     )
                 }
             }
@@ -87,7 +88,8 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     launch = { viewModel.launchApp(app.packageName) },
                     favorite = { viewModel.toggleAppFavorite(app.packageName) },
                     hide = { viewModel.toggleAppHidden(app.packageName) },
-                    showLabel = settings.showAppLabels
+                    showLabel = settings.showAppLabels,
+                    iconSizeDp = settings.iconSizeDp
                 )
             }
         }
@@ -95,11 +97,13 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun AndroidSettingsCard(launch: () -> Unit, showLabel: Boolean) {
+private fun AndroidSettingsCard(launch: () -> Unit, showLabel: Boolean, iconSizeDp: Int) {
+    val iconSize = iconSizeDp.coerceIn(40, 110)
+    val cardHeight = (iconSize + if (showLabel) 50 else 30).coerceIn(92, 160)
     Card(
         Modifier
             .fillMaxWidth()
-            .height(115.dp)
+            .height(cardHeight.dp)
             .border(1.dp, CyanNeon.copy(alpha = .65f), RoundedCornerShape(10.dp))
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = launch)
@@ -111,7 +115,7 @@ private fun AndroidSettingsCard(launch: () -> Unit, showLabel: Boolean) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(Icons.Default.Settings, "إعدادات أندرويد", tint = CyanNeon, modifier = Modifier.size(44.dp))
+            Icon(Icons.Default.Settings, "إعدادات أندرويد", tint = CyanNeon, modifier = Modifier.size(iconSize.dp))
             if (showLabel) {
                 Spacer(Modifier.height(4.dp))
                 Text("إعدادات أندرويد", color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -126,14 +130,17 @@ private fun AppDrawerCard(
     launch: () -> Unit,
     favorite: () -> Unit,
     hide: () -> Unit,
-    showLabel: Boolean
+    showLabel: Boolean,
+    iconSizeDp: Int
 ) {
     val imageBitmap = remember(app.packageName, app.iconBitmap) { app.iconBitmap?.asImageBitmap() }
+    val iconSize = iconSizeDp.coerceIn(40, 110)
+    val cardHeight = (iconSize + if (showLabel) 50 else 30).coerceIn(92, 160)
 
     Card(
         Modifier
             .fillMaxWidth()
-            .height(115.dp)
+            .height(cardHeight.dp)
             .border(1.dp, if (app.isFavorite) AmberRacing else CarbonCardBorder, RoundedCornerShape(10.dp))
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = launch)
@@ -161,9 +168,9 @@ private fun AppDrawerCard(
                 verticalArrangement = Arrangement.Center
             ) {
                 if (imageBitmap != null) {
-                    Image(bitmap = imageBitmap, contentDescription = app.label, modifier = Modifier.size(44.dp))
+                    Image(bitmap = imageBitmap, contentDescription = app.label, modifier = Modifier.size(iconSize.dp))
                 } else {
-                    Icon(Icons.Default.Android, app.label, tint = CyanNeon, modifier = Modifier.size(40.dp))
+                    Icon(Icons.Default.Android, app.label, tint = CyanNeon, modifier = Modifier.size((iconSize - 4).coerceAtLeast(36).dp))
                 }
                 if (showLabel) {
                     Spacer(Modifier.height(4.dp))
