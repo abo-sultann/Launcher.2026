@@ -42,6 +42,14 @@ jobs:
       - name: Grant execute permission
         run: chmod +x ./gradlew
 
+      - name: Test Android 7 startup and rebuilt models
+        run: >-
+          ./gradlew :app:testDebugUnitTest
+          --tests com.example.LauncherApi25SmokeTest
+          --tests com.example.WidgetModelsTest
+          --tests com.example.ExampleRobolectricTest
+          --stacktrace --no-daemon
+
       - name: Build signed Stable APK
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/app/launcher-stable.jks
