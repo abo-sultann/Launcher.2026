@@ -2,6 +2,7 @@ package com.example
 
 import android.os.Looper
 import androidx.lifecycle.ViewModelProvider
+import com.example.data.RecommendedMapStatus
 import com.example.ui.components.CarScreen
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,6 +28,7 @@ class LauncherApi25SmokeTest {
         assertFalse(activity.isFinishing)
         val viewModel = ViewModelProvider(activity)[com.example.ui.viewmodel.MainViewModel::class.java]
         assertEquals(CarScreen.HOME, viewModel.currentScreen.value)
+        assertEquals(RecommendedMapStatus.IDLE, viewModel.recommendedMapDownloadState.value.status)
 
         controller.pause().stop().destroy()
     }

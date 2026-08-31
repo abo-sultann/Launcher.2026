@@ -7,6 +7,7 @@ import com.example.data.DiagnosticManager
 import com.example.data.GpsTelemetryManager
 import com.example.data.MusicPlayerService
 import com.example.data.OfflineMapEngine
+import com.example.data.RecommendedMapInstaller
 import com.example.data.OfflineMapSearchEngine
 import com.example.data.PreferencesManager
 import com.example.data.TripComputer
@@ -25,6 +26,7 @@ class LauncherRuntime(application: Application) {
     val gps = GpsTelemetryManager(application)
     val trip = TripComputer(preferences)
     val maps = OfflineMapEngine(application, preferences)
+    val recommendedMap = RecommendedMapInstaller(application, maps)
     val diagnostics = DiagnosticManager(application, preferences)
     val offroad = (application as CarLauncherApp).offroadTrackManager
     val mapSearch = OfflineMapSearchEngine()

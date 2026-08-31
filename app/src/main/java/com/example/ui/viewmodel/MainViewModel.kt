@@ -46,6 +46,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val gpsTelemetryManager = runtime.gps
     private val tripComputer = runtime.trip
     private val offlineMapEngine = runtime.maps
+    private val recommendedMapInstaller = runtime.recommendedMap
     private val diagnosticManager = runtime.diagnostics
     private val offroadTrackManager = runtime.offroad
     private val offlineMapSearchEngine = runtime.mapSearch
@@ -99,6 +100,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val mapsList: StateFlow<List<MapItem>> = offlineMapEngine.mapsList
     val activeMap: StateFlow<MapItem?> = offlineMapEngine.activeMap
     val mapError: StateFlow<String?> = offlineMapEngine.mapError
+    val recommendedMapDownloadState: StateFlow<RecommendedMapDownloadState> = recommendedMapInstaller.state
     val offroadTrackPoints: StateFlow<List<OffroadTrackPoint>> = offroadTrackManager.trackPoints
     val savedOffroadPlaces: StateFlow<List<SavedOffroadPlace>> = offroadTrackManager.savedPlaces
     val offroadNavigationTarget: StateFlow<OffroadNavigationTarget?> = offroadTrackManager.navigationTarget
@@ -898,6 +900,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return File(directory, if (extension.isBlank()) "$base-${System.currentTimeMillis()}" else "$base-${System.currentTimeMillis()}.$extension")
     }
 
+    fun downloadRecommendedMap() {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (recommendedMapInstaller.downloadAndInstall()) offlineMapSearchEngine.clear()
+        }
+    }
+
+    fun clearRecommendedMapDownloadMessage() = recommendedMapInstaller.clearMessage()
     fun clearFileImportStatus() { _fileImportStatus.value = null }
     fun setActiveMap(mapId: String) { offlineMapEngine.setActiveMap(mapId); offlineMapSearchEngine.clear() }
     fun renameMap(mapId: String, newName: String) = offlineMapEngine.renameMap(mapId, newName)

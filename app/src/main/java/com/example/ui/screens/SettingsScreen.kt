@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.RecommendedMapStatus
 import com.example.model.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MainViewModel
@@ -52,12 +53,14 @@ fun SettingsScreen(
     val playback by viewModel.playbackState.collectAsState()
     val gps by viewModel.gpsTelemetry.collectAsState()
     val fileImportStatus by viewModel.fileImportStatus.collectAsState()
+    val recommendedMapDownload by viewModel.recommendedMapDownloadState.collectAsState()
     var selected by remember { mutableStateOf(SettingsCategory.INTERFACE) }
     var interfaceBackgroundOpen by remember { mutableStateOf(true) }
     var interfaceBarsOpen by remember { mutableStateOf(false) }
     var interfaceAppsOpen by remember { mutableStateOf(false) }
     var interfaceSafeAreaOpen by remember { mutableStateOf(false) }
     var mapPendingDelete by remember { mutableStateOf<MapItem?>(null) }
+    var confirmRecommendedMapDownload by remember { mutableStateOf(false) }
     val accent = Color(settings.interfaceAccent.argb)
 
     val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { it?.let(viewModel::importMusicUri) }
@@ -243,7 +246,27 @@ fun SettingsScreen(
 
                                 item { SectionTitle("الخريطة دون إنترنت", Icons.Default.Map) }
                                 item { InfoCard("Mapsforge (.map) هو الخيار المفضل: أسماء طرق ومواقع قابلة للبحث مع حفظ المواقع والتوجيه المباشر. وتدعم الخريطة أيضًا MBTiles الصورية إذا كانت الأسماء مرسومة داخلها.") }
-                                item { ActionButton("إضافة خريطة", Icons.Default.AddLocationAlt) { viewModel.prepareForExternalPicker(); mapPicker.launch("*/*") } }
+                                item {
+                                    ActionButton(
+                                        title = if (recommendedMapDownload.status == RecommendedMapStatus.DOWNLOADING) {
+                                            "تنزيل خريطة الخليج ${recommendedMapDownload.progressPercent}%"
+                                        } else {
+                                            "تنزيل خريطة الخليج 2026 (322 MB)"
+                                        },
+                                        icon = Icons.Default.CloudDownload,
+                                        enabled = recommendedMapDownload.status != RecommendedMapStatus.DOWNLOADING
+                                    ) { confirmRecommendedMapDownload = true }
+                                }
+                                if (recommendedMapDownload.status != RecommendedMapStatus.IDLE) {
+                                    item {
+                                        StatusMetric(
+                                            "الخريطة المقترحة",
+                                            recommendedMapDownload.message,
+                                            recommendedMapDownload.status == RecommendedMapStatus.INSTALLED
+                                        )
+                                    }
+                                }
+                                item { ActionButton("إضافة خريطة من الجهاز", Icons.Default.AddLocationAlt) { viewModel.prepareForExternalPicker(); mapPicker.launch("*/*") } }
                                 fileImportStatus?.let { status -> item { StatusMetric("حالة الاستيراد", status, status.startsWith("تم")) } }
                                 if (maps.isEmpty()) item { StatusMetric("الخرائط", "لا توجد خريطة مضافة", false) }
                                 items(maps, key = { it.id }) { map ->
@@ -295,6 +318,22 @@ fun SettingsScreen(
                 ) { Text("حذف", color = Color.White) }
             },
             dismissButton = { TextButton(onClick = { mapPendingDelete = null }) { Text("إلغاء") } }
+        )
+    }
+    if (confirmRecommendedMapDownload) {
+        AlertDialog(
+            onDismissRequest = { confirmRecommendedMapDownload = false },
+            title = { Text("تنزيل خريطة الخليج؟") },
+            text = { Text("حجم الخريطة 322 ميجابايت. يفضّل الاتصال بشبكة Wi‑Fi وترك Launcher مفتوحًا حتى يكتمل التحقق والتفعيل.") },
+            confirmButton = {
+                Button(onClick = {
+                    confirmRecommendedMapDownload = false
+                    viewModel.downloadRecommendedMap()
+                }) { Text("تنزيل") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRecommendedMapDownload = false }) { Text("إلغاء") }
+            }
         )
     }
 }
@@ -381,9 +420,9 @@ private fun NumberSlider(label: String, value: Int, min: Int, max: Int, unit: St
 }
 
 @Composable
-private fun ActionButton(title: String, icon: ImageVector, onClick: () -> Unit) {
+private fun ActionButton(title: String, icon: ImageVector, enabled: Boolean = true, onClick: () -> Unit) {
     val accent = LocalSettingsAccent.current
-    Button(onClick = onClick, modifier = Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.buttonColors(containerColor = CarbonSurface), border = BorderStroke(1.dp, CarbonCardBorder)) {
+    Button(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.buttonColors(containerColor = CarbonSurface), border = BorderStroke(1.dp, CarbonCardBorder)) {
         Icon(icon, null, tint = accent, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(7.dp))
         Text(title, color = TextPrimary, fontWeight = FontWeight.Bold)
