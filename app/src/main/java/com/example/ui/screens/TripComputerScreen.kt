@@ -36,6 +36,7 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
     var finishName by remember { mutableStateOf("") }
     var renameTrip by remember { mutableStateOf<SavedTrip?>(null) }
     var renameText by remember { mutableStateOf("") }
+    var deleteTrip by remember { mutableStateOf<SavedTrip?>(null) }
 
     Row(modifier.fillMaxSize().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Card(
@@ -167,7 +168,7 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
                                     viewModel.navigateTo(CarScreen.MAP)
                                 },
                                 onRename = { renameTrip = saved; renameText = saved.name },
-                                onDelete = { viewModel.deleteSavedTrip(saved.id) }
+                                onDelete = { deleteTrip = saved }
                             )
                         }
                     }
@@ -200,6 +201,21 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
             text = { OutlinedTextField(value = renameText, onValueChange = { renameText = it.take(50) }, singleLine = true) },
             confirmButton = { Button(onClick = { viewModel.renameSavedTrip(saved.id, renameText); renameTrip = null }) { Text("حفظ") } },
             dismissButton = { TextButton(onClick = { renameTrip = null }) { Text("إلغاء") } }
+        )
+    }
+
+    deleteTrip?.let { saved ->
+        AlertDialog(
+            onDismissRequest = { deleteTrip = null },
+            title = { Text("حذف الرحلة؟") },
+            text = { Text("سيُحذف سجل «${saved.name}» ومساره نهائيًا.") },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.deleteSavedTrip(saved.id); deleteTrip = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = HighContrastRed)
+                ) { Text("حذف", color = Color.White) }
+            },
+            dismissButton = { TextButton(onClick = { deleteTrip = null }) { Text("إلغاء") } }
         )
     }
 }

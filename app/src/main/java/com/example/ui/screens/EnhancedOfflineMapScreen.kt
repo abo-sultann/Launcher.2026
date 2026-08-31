@@ -81,6 +81,7 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
     val storedMapState by viewModel.offroadMapState.collectAsState()
     val searchResults by viewModel.offlineSearchResults.collectAsState()
     val transferMessage by viewModel.offroadTransferMessage.collectAsState()
+    val fileImportStatus by viewModel.fileImportStatus.collectAsState()
     val launcherSettings by viewModel.settings.collectAsState()
     val interfaceAccent = Color(launcherSettings.interfaceAccent.argb)
 
@@ -322,6 +323,32 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             LaunchedEffect(msg) { delay(3500L); viewModel.clearOffroadTransferMessage() }
             Surface(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 105.dp), color = CarbonDark.copy(alpha = .95f), shape = RoundedCornerShape(9.dp), border = BorderStroke(1.dp, EmeraldSafe)) {
                 Text(msg, color = EmeraldSafe, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+            }
+        }
+
+        fileImportStatus?.let { status ->
+            val inProgress = status.startsWith("جارٍ")
+            LaunchedEffect(status) {
+                if (!inProgress) {
+                    delay(4500L)
+                    viewModel.clearFileImportStatus()
+                }
+            }
+            Surface(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 142.dp),
+                color = CarbonDark.copy(alpha = .96f),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, if (status.startsWith("تم")) EmeraldSafe else if (inProgress) interfaceAccent else HighContrastRed)
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (inProgress) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = interfaceAccent)
+                    else Icon(if (status.startsWith("تم")) Icons.Default.CheckCircle else Icons.Default.Error, null, tint = if (status.startsWith("تم")) EmeraldSafe else HighContrastRed, modifier = Modifier.size(18.dp))
+                    Text(status, color = TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
 
@@ -762,6 +789,7 @@ private fun MapToolRow(icon: androidx.compose.ui.graphics.vector.ImageVector, ti
 
 @Composable
 private fun EnhancedMapManagerDialog(maps: List<MapItem>, onAdd: () -> Unit, onActivate: (String) -> Unit, onDelete: (String) -> Unit, onClose: () -> Unit) {
+    var pendingDelete by remember { mutableStateOf<MapItem?>(null) }
     Dialog(onDismissRequest = onClose) {
         Card(modifier = Modifier.fillMaxWidth(.90f).fillMaxHeight(.80f), colors = CardDefaults.cardColors(containerColor = CarbonDark), border = BorderStroke(1.dp, CyanNeon)) {
             Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -777,13 +805,27 @@ private fun EnhancedMapManagerDialog(maps: List<MapItem>, onAdd: () -> Unit, onA
                                 Icon(Icons.Default.Map, null, tint = CyanNeon)
                                 Column(Modifier.weight(1f)) { Text(map.name, color = TextPrimary, fontWeight = FontWeight.Bold); Text(map.fileSizeFormatted, color = TextSecondary, fontSize = 9.sp) }
                                 if (!map.isActive) Button(onClick = { onActivate(map.id) }) { Text("عرض") }
-                                IconButton(onClick = { onDelete(map.id) }) { Icon(Icons.Default.Delete, "حذف", tint = HighContrastRed) }
+                                IconButton(onClick = { pendingDelete = map }) { Icon(Icons.Default.Delete, "حذف", tint = HighContrastRed) }
                             }
                         }
                     }
                 }
             }
         }
+    }
+    pendingDelete?.let { map ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("حذف الخريطة؟") },
+            text = { Text("سيُحذف ملف «${map.name}» نهائيًا من Launcher.") },
+            confirmButton = {
+                Button(
+                    onClick = { onDelete(map.id); pendingDelete = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = HighContrastRed)
+                ) { Text("حذف", color = Color.White) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("إلغاء") } }
+        )
     }
 }
 

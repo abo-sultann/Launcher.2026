@@ -57,6 +57,7 @@ fun SettingsScreen(
     var interfaceBarsOpen by remember { mutableStateOf(false) }
     var interfaceAppsOpen by remember { mutableStateOf(false) }
     var interfaceSafeAreaOpen by remember { mutableStateOf(false) }
+    var mapPendingDelete by remember { mutableStateOf<MapItem?>(null) }
     val accent = Color(settings.interfaceAccent.argb)
 
     val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { it?.let(viewModel::importMusicUri) }
@@ -254,7 +255,7 @@ fun SettingsScreen(
                                                 Text("${map.fileSizeFormatted}${if (map.isActive) " • نشطة" else ""}", color = TextSecondary, fontSize = 10.sp)
                                             }
                                             if (!map.isActive) FilledTonalButton(onClick = { viewModel.setActiveMap(map.id) }, contentPadding = PaddingValues(horizontal = 8.dp), modifier = Modifier.height(34.dp)) { Text("تفعيل", fontSize = 10.sp) }
-                                            IconButton(onClick = { viewModel.deleteMap(map.id) }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Delete, "حذف", tint = HighContrastRed, modifier = Modifier.size(19.dp)) }
+                                            IconButton(onClick = { mapPendingDelete = map }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Delete, "حذف", tint = HighContrastRed, modifier = Modifier.size(19.dp)) }
                                         }
                                     }
                                 }
@@ -280,6 +281,21 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    mapPendingDelete?.let { map ->
+        AlertDialog(
+            onDismissRequest = { mapPendingDelete = null },
+            title = { Text("حذف الخريطة؟") },
+            text = { Text("سيُحذف ملف «${map.name}» من Launcher. لا يمكن التراجع عن ذلك.") },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.deleteMap(map.id); mapPendingDelete = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = HighContrastRed)
+                ) { Text("حذف", color = Color.White) }
+            },
+            dismissButton = { TextButton(onClick = { mapPendingDelete = null }) { Text("إلغاء") } }
+        )
     }
 }
 
