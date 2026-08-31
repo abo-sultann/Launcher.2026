@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-    types: [ opened, synchronize, reopened, labeled ]
+    types: [ opened, synchronize, reopened ]
   workflow_dispatch:
 
 concurrency:
@@ -20,7 +20,6 @@ env:
 
 jobs:
   build:
-    if: github.event_name != 'pull_request' || github.event.action != 'labeled'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -64,27 +63,3 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  map-pack:
-    if: github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'documentation'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Download official 2026 GCC map
-        run: |
-          mkdir -p map-pack
-          curl --fail --location --retry 5 --retry-delay 4 \
-            https://download.mapsforge.org/maps/v5/asia/gcc-states.map \
-            --output map-pack/Launcher-2026-GCC.map
-          bytes=$(stat -c%s map-pack/Launcher-2026-GCC.map)
-          test "$bytes" -gt 250000000
-          sha256sum map-pack/Launcher-2026-GCC.map | tee map-pack/SHA256.txt
-          printf 'Source: https://download.mapsforge.org/maps/v5/asia/gcc-states.map\nBytes: %s\n' "$bytes" > map-pack/MAP-INFO.txt
-
-      - name: Upload verified map package
-        uses: actions/upload-artifact@v4
-        with:
-          name: Launcher-2026-GCC-Map
-          path: map-pack/*
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 3
