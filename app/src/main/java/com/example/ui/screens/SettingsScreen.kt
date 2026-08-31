@@ -420,7 +420,12 @@ private fun NumberSlider(label: String, value: Int, min: Int, max: Int, unit: St
 }
 
 @Composable
-private fun ActionButton(title: String, icon: ImageVector, enabled: Boolean = true, onClick: () -> Unit) {
+private fun ActionButton(title: String, icon: ImageVector, onClick: () -> Unit) {
+    ActionButton(title, icon, true, onClick)
+}
+
+@Composable
+private fun ActionButton(title: String, icon: ImageVector, enabled: Boolean, onClick: () -> Unit) {
     val accent = LocalSettingsAccent.current
     Button(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.buttonColors(containerColor = CarbonSurface), border = BorderStroke(1.dp, CarbonCardBorder)) {
         Icon(icon, null, tint = accent, modifier = Modifier.size(20.dp))
