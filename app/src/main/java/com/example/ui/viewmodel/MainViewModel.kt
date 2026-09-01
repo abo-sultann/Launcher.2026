@@ -146,18 +146,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun loadWidgets() {
+        val migrateSpeedWidget = !layoutPrefs.getBoolean(KEY_SPEED_NUMBER_TOP_LEFT, false)
         val migrated = preferencesManager.getWidgets()
             .map(legacyWidgetVisualStore::decorate)
             .map { item ->
                 val tone = WidgetTone.fromArgb(item.foregroundColorArgb)
-                item.copy(
+                val modern = item.copy(
                     style = modernWidgetStyle(item.style),
                     foregroundColorArgb = tone.argb,
                     accentColorArgb = tone.argb
                 )
+                if (migrateSpeedWidget && modern.type == WidgetType.SPEEDOMETER) {
+                    modern.copy(
+                        style = WidgetStyle.SPEED_DIGITAL_LARGE,
+                        xFraction = .025f,
+                        yFraction = .025f,
+                        widthFraction = .13f,
+                        heightFraction = .15f,
+                        surfaceStyle = WidgetSurfaceStyle.TRANSPARENT,
+                        showBorder = false,
+                        foregroundColorArgb = WidgetTone.BLACK.argb,
+                        accentColorArgb = WidgetTone.BLACK.argb
+                    )
+                } else modern
             }
         _widgets.value = migrated
         preferencesManager.saveWidgets(migrated)
+        if (migrateSpeedWidget) layoutPrefs.edit().putBoolean(KEY_SPEED_NUMBER_TOP_LEFT, true).apply()
         migrated.forEach { legacyWidgetVisualStore.remove(it.id) }
     }
     fun toggleDesignMode() { _isDesignMode.value = !_isDesignMode.value }
@@ -945,7 +960,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearOfflineMapSearch() { _offlineSearchResults.value = emptyList() }
     fun navigateToSearchResult(result: OfflineMapSearchResult) {
         offroadTrackManager.navigateToCoordinates(result.id, result.name, result.latitude, result.longitude)
-        updateOffroadMapState(offroadMapState.value.copy(latitude = result.latitude, longitude = result.longitude, followGps = false, zoomLevel = 15))
+        // أثناء التوجيه تبقى الخريطة متتبعة للسيارة؛ الهدف يظهر بعلامة وسهم وخط.
+        updateOffroadMapState(offroadMapState.value.copy(latitude = result.latitude, longitude = result.longitude, followGps = true, zoomLevel = 15))
     }
 
     fun importGpxUri(uri: Uri) = readOffroadText(uri, "GPX") { raw -> offroadTrackManager.importGpx(raw) }
@@ -993,6 +1009,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val WALLPAPER_HEIGHT = 600
         private const val MAP_IMPORT_FREE_SPACE_MARGIN = 64L * 1024L * 1024L
         private const val SAFE_MODE_CRASH_THRESHOLD = 2
+        private const val KEY_SPEED_NUMBER_TOP_LEFT = "speed_number_top_left_v203"
         private val SUPPORTED_MAP_EXTENSIONS = setOf("map", "mbtiles")
     }
 }

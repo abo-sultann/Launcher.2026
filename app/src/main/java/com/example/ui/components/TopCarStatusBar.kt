@@ -96,24 +96,28 @@ private fun WifiStatusButton(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val connected = state == WifiVisualState.CONNECTED
-    val tint = when (state) {
-        WifiVisualState.CONNECTED -> accentColor
-        WifiVisualState.ENABLED -> TextSecondary
+    val statusColor = when (state) {
+        WifiVisualState.CONNECTED -> EmeraldSafe
+        WifiVisualState.ENABLED -> AmberRacing
         WifiVisualState.OFF -> TextMuted
     }
     val description = when (state) {
         WifiVisualState.CONNECTED -> "Wi-Fi متصل"
-        WifiVisualState.ENABLED -> "Wi-Fi مفعّل وغير متصل"
+        WifiVisualState.ENABLED -> "Wi-Fi يعمل لكن غير متصل"
         WifiVisualState.OFF -> "Wi-Fi متوقف"
+    }
+    val badge = when (state) {
+        WifiVisualState.CONNECTED -> "✓"
+        WifiVisualState.ENABLED -> "!"
+        WifiVisualState.OFF -> "×"
     }
 
     Surface(
-        color = CarbonDark.copy(alpha = .38f),
+        color = Color.Transparent,
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, if (connected) accentColor.copy(alpha = .30f) else CarbonCardBorder.copy(alpha = .40f)),
+        border = BorderStroke(1.dp, statusColor.copy(alpha = .72f)),
         modifier = modifier
-            .size(42.dp, 32.dp)
+            .size(44.dp, 34.dp)
             .clip(RoundedCornerShape(12.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
     ) {
@@ -121,17 +125,20 @@ private fun WifiStatusButton(
             Icon(
                 imageVector = if (state == WifiVisualState.OFF) Icons.Default.WifiOff else Icons.Default.Wifi,
                 contentDescription = description,
-                tint = tint,
-                modifier = Modifier.size(19.dp)
+                tint = statusColor,
+                modifier = Modifier.size(21.dp)
             )
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 6.dp, bottom = 4.dp)
-                    .size(4.dp)
+                    .padding(end = 3.dp, bottom = 2.dp)
+                    .size(12.dp)
                     .clip(CircleShape)
-                    .background(if (connected) accentColor else TextMuted, CircleShape)
-            )
+                    .background(statusColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(badge, color = CarbonDark, fontSize = 8.sp, fontWeight = FontWeight.Black)
+            }
         }
     }
 }

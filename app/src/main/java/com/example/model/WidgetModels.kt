@@ -70,9 +70,9 @@ enum class WidgetStyle(val type: WidgetType, val arabicName: String, val descrip
     GPS_COORDINATES(WidgetType.GPS, "الإحداثيات", "خطوط الطول والعرض"),
     GPS_ACCURACY(WidgetType.GPS, "دقة الموقع", "دقة التثبيت وعدد الأقمار"),
 
-    MUSIC_MINI(WidgetType.MUSIC, "تحكم صغير", "تشغيل وسابق وتالي فقط"),
-    MUSIC_COMPACT(WidgetType.MUSIC, "مشغل مدمج", "اسم المقطع وأزرار التحكم"),
-    MUSIC_COVER(WidgetType.MUSIC, "مع الغلاف", "الغلاف والمقطع والتحكم"),
+    MUSIC_MINI(WidgetType.MUSIC, "أزرار عائمة", "اسم مختصر وتحكم سريع بلا إطار"),
+    MUSIC_COMPACT(WidgetType.MUSIC, "شريط قيادة", "شريط أفقي منخفض يناسب شاشة السيارة"),
+    MUSIC_COVER(WidgetType.MUSIC, "بطاقة الألبوم", "هوية بصرية واضحة مع المقطع والتحكم"),
     MUSIC_CONTROLS(WidgetType.MUSIC, "تحكم كامل", "التحكم والتقدم ومستوى الصوت"),
     MUSIC_LARGE_AUTOMOTIVE(WidgetType.MUSIC, "مشغل كبير", "واجهة موسيقى كبيرة للمس"),
     MUSIC_MINIMAL(WidgetType.MUSIC, "مشغل خفيف", "أقل عناصر ممكنة"),
@@ -317,10 +317,10 @@ data class WidgetItem(
 
         fun createDefaultList(): List<WidgetItem> = listOf(
             WidgetItem(
-                id = "widget_speed", type = WidgetType.SPEEDOMETER, style = WidgetStyle.SPEED_GAUGE_CIRCULAR,
-                order = 0, xFraction = .025f, yFraction = .05f, widthFraction = .17f, heightFraction = .24f,
+                id = "widget_speed", type = WidgetType.SPEEDOMETER, style = WidgetStyle.SPEED_DIGITAL_LARGE,
+                order = 0, xFraction = .025f, yFraction = .025f, widthFraction = .13f, heightFraction = .15f,
                 zIndex = 0, surfaceStyle = WidgetSurfaceStyle.TRANSPARENT,
-                foregroundColorArgb = WidgetTone.WHITE.argb, accentColorArgb = WidgetTone.WHITE.argb
+                foregroundColorArgb = WidgetTone.BLACK.argb, accentColorArgb = WidgetTone.BLACK.argb
             ),
             WidgetItem(
                 id = "widget_clock", type = WidgetType.CLOCK, style = WidgetStyle.CLOCK_MINIMAL,

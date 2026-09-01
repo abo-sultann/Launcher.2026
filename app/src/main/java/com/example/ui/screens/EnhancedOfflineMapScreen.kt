@@ -11,6 +11,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -45,6 +47,7 @@ import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
 import org.mapsforge.map.layer.cache.InMemoryTileCache
 import org.mapsforge.map.layer.cache.TileCache
+import org.mapsforge.map.layer.overlay.FixedPixelCircle
 import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
@@ -166,6 +169,7 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
                     trackVisible = mapUi.trackVisible,
                     trackWidth = mapUi.trackWidth,
                     navigationTarget = navTarget,
+                    savedPlaces = allPlaces,
                     measureA = measureA,
                     measureB = measureB,
                     detailedTheme = mapUi.detailedTheme,
@@ -270,12 +274,6 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
         if (mapUi.showTelemetry) {
             EnhancedTelemetryCard(
                 gps = gps,
-                trip = trip,
-                target = navTarget,
-                targetDistance = viewModel.offroadDistanceToTargetMeters(),
-                targetBearing = viewModel.offroadBearingToTarget(),
-                trackKm = viewModel.offroadTrackDistanceKm(),
-                accentColor = interfaceAccent,
                 modifier = mapOverlayModifier(mapUi.telemetrySlot)
             )
         }
@@ -284,7 +282,9 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             NavigationTargetStrip(
                 target = target,
                 distance = viewModel.offroadDistanceToTargetMeters(),
-                bearing = viewModel.offroadBearingToTarget(),
+                bearing = viewModel.offroadBearingToTarget()?.let { targetBearing ->
+                    if (orientationMode == MapOrientationMode.HEADING_UP) shortestAngleDelta(gps.bearingDegrees, targetBearing) else targetBearing
+                },
                 onStop = viewModel::stopOffroadNavigation,
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 72.dp)
             )
@@ -503,15 +503,16 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
 }
 
 private fun BoxWithConstraintsScope.mapOverlayModifier(slot: MapOverlaySlot): Modifier {
+    // المواقع هنا مطلقة بصريًا؛ لا تنعكس بسبب اتجاه اللغة العربية.
     val alignment = when (slot) {
-        MapOverlaySlot.TOP_START -> Alignment.TopStart
+        MapOverlaySlot.TOP_START -> AbsoluteAlignment.TopLeft
         MapOverlaySlot.TOP_CENTER -> Alignment.TopCenter
-        MapOverlaySlot.TOP_END -> Alignment.TopEnd
-        MapOverlaySlot.CENTER_START -> Alignment.CenterStart
-        MapOverlaySlot.CENTER_END -> Alignment.CenterEnd
-        MapOverlaySlot.BOTTOM_START -> Alignment.BottomStart
+        MapOverlaySlot.TOP_END -> AbsoluteAlignment.TopRight
+        MapOverlaySlot.CENTER_START -> AbsoluteAlignment.CenterLeft
+        MapOverlaySlot.CENTER_END -> AbsoluteAlignment.CenterRight
+        MapOverlaySlot.BOTTOM_START -> AbsoluteAlignment.BottomLeft
         MapOverlaySlot.BOTTOM_CENTER -> Alignment.BottomCenter
-        MapOverlaySlot.BOTTOM_END -> Alignment.BottomEnd
+        MapOverlaySlot.BOTTOM_END -> AbsoluteAlignment.BottomRight
     }
     val bottomInset = if (slot.name.startsWith("BOTTOM")) 62.dp else 10.dp
     return Modifier.align(alignment).padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = bottomInset)
@@ -525,55 +526,70 @@ private fun nextMapOverlaySlot(current: MapOverlaySlot): MapOverlaySlot {
 @Composable
 private fun EnhancedTelemetryCard(
     gps: GpsTelemetry,
-    trip: TripData,
-    target: OffroadNavigationTarget?,
-    targetDistance: Float?,
-    targetBearing: Float?,
-    trackKm: Double,
-    accentColor: Color,
     modifier: Modifier = Modifier
 ) {
-    val statusColor = gpsStatusColor(gps)
-    Surface(modifier = modifier.widthIn(min = 238.dp), color = CarbonDark.copy(alpha = .89f), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, CarbonCardBorder), shadowElevation = 5.dp) {
-        Row(
-            Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(9.dp)
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (gps.hasGpsFix && gps.isSpeedReliable) gps.speedKmH.toInt().toString() else "--", color = accentColor, fontWeight = FontWeight.Black, fontSize = 26.sp)
-                Text("كم/س", color = TextSecondary, fontSize = 8.sp)
-            }
-            VerticalDivider(Modifier.height(40.dp), color = CarbonCardBorder)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Box(Modifier.size(8.dp).background(statusColor, CircleShape))
-                    Text(if (gps.hasGpsFix) bearingToArabicDirection(gps.bearingDegrees) else "بانتظار GPS", color = TextPrimary, fontWeight = FontWeight.Black, fontSize = 11.sp)
-                }
-                Text(if (gps.hasGpsFix) "±${gps.accuracyMeters.toInt()}م • ${gps.satellitesCount} أقمار" else gps.statusArabic, color = TextSecondary, fontSize = 8.sp)
-                Text("رحلة ${String.format(Locale.US, "%.1f", trip.distanceKm)} • أثر ${String.format(Locale.US, "%.1f", trackKm)} كم", color = TextMuted, fontSize = 8.sp)
-                if (target != null && targetDistance != null) {
-                    Text("${formatDistanceEnhanced(targetDistance)} ${targetBearing?.let(::bearingToArabicDirection) ?: ""}", color = EmeraldSafe, fontWeight = FontWeight.Bold, fontSize = 8.sp, maxLines = 1)
-                }
-            }
-        }
+    // السرعة على الخريطة رقم فقط؛ بلا بطاقة مرنة كي لا تتحول إلى شريط داكن.
+    Box(
+        modifier = modifier.size(82.dp, 62.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = if (gps.hasGpsFix && gps.isSpeedReliable) gps.speedKmH.toInt().toString() else "--",
+            color = Color.Black,
+            fontWeight = FontWeight.Black,
+            fontSize = 34.sp,
+            maxLines = 1
+        )
     }
 }
-
 @Composable
-private fun NavigationTargetStrip(target: OffroadNavigationTarget, distance: Float?, bearing: Float?, onStop: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(modifier = modifier.widthIn(max = 360.dp), color = CarbonDark.copy(alpha = .92f), shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, AmberRacing)) {
-        Row(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(Icons.Default.Navigation, null, tint = AmberRacing, modifier = Modifier.size(22.dp).rotate(bearing ?: 0f))
-            Column(Modifier.weight(1f)) {
-                Text(target.name, color = TextPrimary, fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1)
-                Text(buildString { if (distance != null) append(formatDistanceEnhanced(distance)); if (bearing != null) append(" • ${bearingToArabicDirection(bearing)}") }, color = EmeraldSafe, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+private fun NavigationTargetStrip(
+    target: OffroadNavigationTarget,
+    distance: Float?,
+    bearing: Float?,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.widthIn(max = 340.dp),
+        color = Color.White.copy(alpha = .88f),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, AmberRacing)
+    ) {
+        Row(
+            Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Surface(color = AmberRacing, shape = CircleShape, modifier = Modifier.size(44.dp)) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Navigation,
+                        "اتجاه الهدف",
+                        tint = Color.Black,
+                        modifier = Modifier.size(31.dp).rotate(bearing ?: 0f)
+                    )
+                }
             }
-            IconButton(onClick = onStop, modifier = Modifier.size(30.dp)) { Icon(Icons.Default.Close, "إيقاف التوجيه", tint = HighContrastRed) }
+            Column(Modifier.weight(1f)) {
+                Text(target.name, color = Color.Black, fontWeight = FontWeight.Black, fontSize = 11.sp, maxLines = 1)
+                Text(
+                    buildString {
+                        if (distance != null) append(formatDistanceEnhanced(distance))
+                        if (bearing != null) append(" • ${bearingToArabicDirection(bearing)}")
+                    },
+                    color = Color(0xFF146B3A),
+                    fontWeight = FontWeight.Black,
+                    fontSize = 10.sp,
+                    maxLines = 1
+                )
+            }
+            IconButton(onClick = onStop, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.Close, "إيقاف التوجيه", tint = HighContrastRed)
+            }
         }
     }
 }
-
 @Composable
 private fun MeasurementCard(a: LatLong?, b: LatLong?, onClear: () -> Unit, modifier: Modifier = Modifier) {
     val distance = if (a != null && b != null) distanceMetersEnhanced(a.latitude, a.longitude, b.latitude, b.longitude) else null
@@ -783,29 +799,97 @@ private fun EnhancedPlacesDialog(
 }
 
 @Composable
-private fun EnhancedSearchDialog(results: List<OfflineMapSearchResult>, extras: List<EnhancedSavedPlace>, onSearch: (String) -> Unit, onNavigate: (OfflineMapSearchResult) -> Unit, onClose: () -> Unit) {
+private fun EnhancedSearchDialog(
+    results: List<OfflineMapSearchResult>,
+    extras: List<EnhancedSavedPlace>,
+    onSearch: (String) -> Unit,
+    onNavigate: (OfflineMapSearchResult) -> Unit,
+    onClose: () -> Unit
+) {
     var query by remember { mutableStateOf("") }
-    val local = remember(query, extras) {
-        if (query.trim().length < 2) emptyList() else extras.filter { it.name.contains(query.trim(), true) }.map { OfflineMapSearchResult(it.id, it.name, it.latitude, it.longitude, "موقع محفوظ") }
+    val categories = remember {
+        listOf(
+            Triple("وقود", "محطة وقود", Icons.Default.LocalGasStation),
+            Triple("مطاعم", "مطعم", Icons.Default.Restaurant),
+            Triple("مقاهي", "مقهى", Icons.Default.LocalCafe),
+            Triple("مستشفيات", "مستشفى", Icons.Default.LocalHospital),
+            Triple("صيدليات", "صيدلية", Icons.Default.LocalPharmacy),
+            Triple("تسوق", "محل تجاري", Icons.Default.ShoppingBag),
+            Triple("مساجد", "مسجد", Icons.Default.Mosque)
+        )
     }
-    val merged = remember(results, local) { (local + results).distinctBy { it.id }.take(50) }
+    val local = remember(query, extras) {
+        if (query.trim().length < 2) emptyList() else extras
+            .filter { it.name.contains(query.trim(), true) || it.notes.contains(query.trim(), true) }
+            .map { OfflineMapSearchResult(it.id, it.name, it.latitude, it.longitude, "موقع محفوظ") }
+    }
+    val merged = remember(results, local) { (local + results).distinctBy { it.id }.take(60) }
+
     Dialog(onDismissRequest = onClose) {
-        Card(modifier = Modifier.fillMaxWidth(.90f).fillMaxHeight(.78f), colors = CardDefaults.cardColors(containerColor = CarbonDark), border = BorderStroke(1.dp, CyanNeon)) {
+        Card(
+            modifier = Modifier.fillMaxWidth(.94f).fillMaxHeight(.84f),
+            colors = CardDefaults.cardColors(containerColor = CarbonDark),
+            border = BorderStroke(1.dp, CyanNeon)
+        ) {
             Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("بحث أوفلاين", color = CyanNeon, fontWeight = FontWeight.Black, fontSize = 19.sp, modifier = Modifier.weight(1f))
+                    Text("بحث الخريطة", color = CyanNeon, fontWeight = FontWeight.Black, fontSize = 19.sp, modifier = Modifier.weight(1f))
+                    Text("مدن • قرى • طرق • خدمات", color = TextSecondary, fontSize = 9.sp)
                     IconButton(onClick = onClose) { Icon(Icons.Default.Close, "إغلاق", tint = TextPrimary) }
                 }
-                OutlinedTextField(value = query, onValueChange = { query = it; if (it.trim().length >= 2) onSearch(it) }, modifier = Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) }, label = { Text("مدينة، قرية، وادي، طريق، موقع") })
-                if (query.trim().length < 2) Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { Text("اكتب حرفين على الأقل", color = TextSecondary) }
-                else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(merged, key = { it.id }) { r ->
-                        Surface(onClick = { onNavigate(r) }, color = CarbonSurface, shape = RoundedCornerShape(9.dp), border = BorderStroke(1.dp, CarbonCardBorder)) {
-                            Row(Modifier.fillMaxWidth().padding(9.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Place, null, tint = CyanNeon)
-                                Spacer(Modifier.width(8.dp))
-                                Column(Modifier.weight(1f)) { Text(r.name, color = TextPrimary, fontWeight = FontWeight.Bold); Text(r.source, color = TextSecondary, fontSize = 9.sp) }
-                                Text("توجيه", color = EmeraldSafe, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = {
+                        query = it
+                        if (it.trim().length >= 2) onSearch(it) else onSearch("")
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                    label = { Text("اكتب اسم مدينة، قرية، محل أو موقع") }
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(categories, key = { it.first }) { category ->
+                        FilterChip(
+                            selected = query == category.second,
+                            onClick = {
+                                query = category.second
+                                onSearch(category.second)
+                            },
+                            label = { Text(category.first, fontSize = 9.sp) },
+                            leadingIcon = { Icon(category.third, null, modifier = Modifier.size(17.dp)) }
+                        )
+                    }
+                }
+                if (query.trim().length < 2) {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("اختر اختصارًا أو اكتب حرفين على الأقل", color = TextSecondary)
+                    }
+                } else if (merged.isEmpty()) {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("لا توجد نتائج في ملف الخريطة الحالي", color = TextSecondary)
+                    }
+                } else {
+                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(merged, key = { it.id }) { result ->
+                            Surface(
+                                onClick = { onNavigate(result) },
+                                color = CarbonSurface,
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, CarbonCardBorder)
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(mapSearchResultIcon(result.source), null, tint = CyanNeon)
+                                    Column(Modifier.weight(1f)) {
+                                        Text(result.name, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
+                                        Text(result.source, color = TextSecondary, fontSize = 9.sp)
+                                    }
+                                    Icon(Icons.Default.Navigation, "توجيه", tint = EmeraldSafe, modifier = Modifier.size(21.dp))
+                                }
                             }
                         }
                     }
@@ -813,6 +897,19 @@ private fun EnhancedSearchDialog(results: List<OfflineMapSearchResult>, extras: 
             }
         }
     }
+}
+
+private fun mapSearchResultIcon(source: String) = when {
+    source.contains("وقود") -> Icons.Default.LocalGasStation
+    source.contains("مطعم") -> Icons.Default.Restaurant
+    source.contains("مقهى") -> Icons.Default.LocalCafe
+    source.contains("مستشفى") || source.contains("عيادة") -> Icons.Default.LocalHospital
+    source.contains("صيدلية") -> Icons.Default.LocalPharmacy
+    source.contains("مسجد") -> Icons.Default.Mosque
+    source.contains("محل") || source.contains("سوق") -> Icons.Default.ShoppingBag
+    source.contains("مدينة") || source.contains("بلدة") || source.contains("قرية") -> Icons.Default.LocationCity
+    source.contains("محفوظ") -> Icons.Default.Bookmark
+    else -> Icons.Default.Place
 }
 
 @Composable
@@ -961,6 +1058,7 @@ private fun EnhancedMapsforgeMap(
     trackVisible: Boolean,
     trackWidth: Float,
     navigationTarget: OffroadNavigationTarget?,
+    savedPlaces: List<UiOffroadPlace>,
     measureA: LatLong?,
     measureB: LatLong?,
     detailedTheme: Boolean,
@@ -975,12 +1073,12 @@ private fun EnhancedMapsforgeMap(
     val latestLongPress by rememberUpdatedState(onLongPress)
     val latestRenderError by rememberUpdatedState(onRenderError)
 
-    key("${mapItem.id}:$detailedTheme:${trackWidth.toInt()}") {
+    key("${mapItem.id}:$detailedTheme:${trackWidth.toInt()}:${savedPlaces.hashCode()}") {
         AndroidView(
             modifier = modifier,
             factory = { ctx ->
                 val holder = try {
-                    createEnhancedMapView(ctx, mapItem, gps, autoZoom, initialState, trackPoints, trackVisible, trackWidth, navigationTarget, measureA, measureB, detailedTheme, drivingView).also {
+                    createEnhancedMapView(ctx, mapItem, gps, autoZoom, initialState, trackPoints, trackVisible, trackWidth, navigationTarget, savedPlaces, measureA, measureB, detailedTheme, drivingView).also {
                         it.mapView.post { latestRenderError(null) }
                     }
                 } catch (t: Throwable) {
@@ -1030,6 +1128,8 @@ private fun EnhancedMapsforgeMap(
                 holderRef?.trackLayer?.setPoints(if (trackVisible) trackPoints.map { LatLong(it.latitude, it.longitude) } else emptyList())
                 holderRef?.navigationLayer?.setPoints(if (gps.hasGpsFix && navigationTarget != null) listOf(LatLong(gps.latitude, gps.longitude), LatLong(navigationTarget.latitude, navigationTarget.longitude)) else emptyList())
                 holderRef?.measureLayer?.setPoints(if (measureA != null && measureB != null) listOf(measureA, measureB) else emptyList())
+                holderRef?.vehicleMarkerLayer?.setLatLong(if (gps.hasGpsFix) LatLong(gps.latitude, gps.longitude) else null)
+                holderRef?.targetMarkerLayer?.setLatLong(navigationTarget?.let { LatLong(it.latitude, it.longitude) })
                 mapView.repaint()
             }
         )
@@ -1041,6 +1141,27 @@ private fun EnhancedMapsforgeMap(
             try { holderRef?.mapFile?.close() } catch (_: Exception) { }
             holderRef = null
         }
+    }
+}
+
+private fun addFixedMarker(
+    mapView: MapView,
+    position: LatLong?,
+    radiusPx: Float,
+    fillColor: Int,
+    strokeColor: Int
+): FixedPixelCircle {
+    val fill = AndroidGraphicFactory.INSTANCE.createPaint().apply {
+        color = fillColor
+        setStyle(Style.FILL)
+    }
+    val stroke = AndroidGraphicFactory.INSTANCE.createPaint().apply {
+        color = strokeColor
+        strokeWidth = 2f
+        setStyle(Style.STROKE)
+    }
+    return FixedPixelCircle(position, radiusPx, fill, stroke).also {
+        mapView.layerManager.layers.add(it)
     }
 }
 
@@ -1062,12 +1183,24 @@ private fun createEmptyMapHolder(context: Context): EnhancedMapHolder {
         AndroidGraphicFactory.INSTANCE
     ).also { mapView.layerManager.layers.add(it) }
 
+    val targetMarker = addFixedMarker(
+        mapView, null, 12f,
+        AndroidGraphicFactory.INSTANCE.createColor(255, 255, 184, 0),
+        AndroidGraphicFactory.INSTANCE.createColor(255, 20, 20, 20)
+    )
+    val vehicleMarker = addFixedMarker(
+        mapView, null, 9f,
+        AndroidGraphicFactory.INSTANCE.createColor(255, 0, 205, 255),
+        AndroidGraphicFactory.INSTANCE.createColor(255, 255, 255, 255)
+    )
     return EnhancedMapHolder(
         mapView = mapView,
         mapFile = null,
         trackLayer = overlay(AndroidGraphicFactory.INSTANCE.createColor(255, 255, 70, 155), 6f),
         navigationLayer = overlay(AndroidGraphicFactory.INSTANCE.createColor(240, 255, 184, 0), 5f),
-        measureLayer = overlay(AndroidGraphicFactory.INSTANCE.createColor(230, 0, 220, 255), 4f)
+        measureLayer = overlay(AndroidGraphicFactory.INSTANCE.createColor(230, 0, 220, 255), 4f),
+        targetMarkerLayer = targetMarker,
+        vehicleMarkerLayer = vehicleMarker
     )
 }
 
@@ -1077,6 +1210,8 @@ private data class EnhancedMapHolder(
     val trackLayer: Polyline,
     val navigationLayer: Polyline,
     val measureLayer: Polyline,
+    val targetMarkerLayer: FixedPixelCircle,
+    val vehicleMarkerLayer: FixedPixelCircle,
     val zoomMin: Int = 3,
     val zoomMax: Int = 20,
     var appliedRotation: Float = 0f
@@ -1092,6 +1227,7 @@ private fun createEnhancedMapView(
     trackVisible: Boolean,
     trackWidth: Float,
     navigationTarget: OffroadNavigationTarget?,
+    savedPlaces: List<UiOffroadPlace>,
     measureA: LatLong?,
     measureB: LatLong?,
     detailedTheme: Boolean,
@@ -1181,6 +1317,35 @@ private fun createEnhancedMapView(
     }
     mapView.layerManager.layers.add(measure)
 
+    // نقاط محفوظة ثابتة وواضحة على الخريطة. الحد يحمي ذاكرة شاشة Android 7.
+    savedPlaces.take(MAX_VISIBLE_SAVED_MARKERS).forEach { place ->
+        addFixedMarker(
+            mapView = mapView,
+            position = LatLong(place.latitude, place.longitude),
+            radiusPx = if (place.favorite) 9f else 7f,
+            fillColor = if (place.favorite) {
+                AndroidGraphicFactory.INSTANCE.createColor(255, 255, 184, 0)
+            } else {
+                AndroidGraphicFactory.INSTANCE.createColor(245, 255, 255, 255)
+            },
+            strokeColor = AndroidGraphicFactory.INSTANCE.createColor(255, 20, 20, 20)
+        )
+    }
+    val targetMarker = addFixedMarker(
+        mapView = mapView,
+        position = navigationTarget?.let { LatLong(it.latitude, it.longitude) },
+        radiusPx = 13f,
+        fillColor = AndroidGraphicFactory.INSTANCE.createColor(255, 255, 184, 0),
+        strokeColor = AndroidGraphicFactory.INSTANCE.createColor(255, 20, 20, 20)
+    )
+    val vehicleMarker = addFixedMarker(
+        mapView = mapView,
+        position = if (gps.hasGpsFix) LatLong(gps.latitude, gps.longitude) else null,
+        radiusPx = 9f,
+        fillColor = AndroidGraphicFactory.INSTANCE.createColor(255, 0, 205, 255),
+        strokeColor = AndroidGraphicFactory.INSTANCE.createColor(255, 255, 255, 255)
+    )
+
     val stored = initialState.takeIf { it.latitude != 0.0 || it.longitude != 0.0 }?.let { LatLong(it.latitude, it.longitude) }
     val start = when {
         gps.hasGpsFix && initialState.followGps -> LatLong(gps.latitude, gps.longitude)
@@ -1194,7 +1359,17 @@ private fun createEnhancedMapView(
             .coerceIn(sourceZoomMin, sourceZoomMax)
             .toByte()
     )
-    return EnhancedMapHolder(mapView, mapFile, track, nav, measure, sourceZoomMin, sourceZoomMax)
+    return EnhancedMapHolder(
+        mapView = mapView,
+        mapFile = mapFile,
+        trackLayer = track,
+        navigationLayer = nav,
+        measureLayer = measure,
+        targetMarkerLayer = targetMarker,
+        vehicleMarkerLayer = vehicleMarker,
+        zoomMin = sourceZoomMin,
+        zoomMax = sourceZoomMax
+    )
 }
 
 @Composable
@@ -1295,6 +1470,7 @@ private const val MAP_FRAMEBUFFER_OVERDRAW = 1.7
 private const val MAP_TILE_CACHE_SCREEN_RATIO = 2f
 private const val MAP_ROTATION_STEP_DEGREES = 4.5f
 private const val MBTILES_MEMORY_CACHE_TILES = 48
+private const val MAX_VISIBLE_SAVED_MARKERS = 150
 private const val DEFAULT_MAP_LATITUDE = 24.7136
 private const val DEFAULT_MAP_LONGITUDE = 46.6753
 

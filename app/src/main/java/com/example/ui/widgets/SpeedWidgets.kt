@@ -52,9 +52,15 @@ fun SpeedWidget(
 
         when (style) {
             WidgetStyle.SPEED_DIGITAL_LARGE -> {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text(display, fontSize = largeNumber, fontWeight = FontWeight.Black, color = widgetColors.accent, maxLines = 1)
-                    Text(speedUnit, fontSize = labelSize, fontWeight = FontWeight.Bold, color = widgetColors.secondary)
+                // رقم فقط: أخف ودجت للقيادة، بلا بطاقة أو وحدة أو عناصر زائدة.
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = display,
+                        fontSize = largeNumber,
+                        fontWeight = FontWeight.Black,
+                        color = androidx.compose.ui.graphics.Color.Black,
+                        maxLines = 1
+                    )
                 }
             }
 

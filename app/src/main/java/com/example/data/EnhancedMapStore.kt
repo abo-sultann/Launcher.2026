@@ -50,7 +50,7 @@ data class EnhancedMapUiPreferences(
     val showTelemetry: Boolean = true,
     val showPrimaryActions: Boolean = true,
     val showMapScale: Boolean = true,
-    val telemetrySlot: MapOverlaySlot = MapOverlaySlot.TOP_END,
+    val telemetrySlot: MapOverlaySlot = MapOverlaySlot.TOP_START,
     val primaryActionsSlot: MapOverlaySlot = MapOverlaySlot.TOP_START,
     val dockSlot: MapOverlaySlot = MapOverlaySlot.CENTER_END,
     val scaleSlot: MapOverlaySlot = MapOverlaySlot.BOTTOM_START
@@ -150,20 +150,31 @@ class EnhancedMapStore(context: Context) {
             .apply()
     }
 
-    private fun loadUi() = EnhancedMapUiPreferences(
-        trackVisible = prefs.getBoolean("track_visible", true),
-        trackWidth = prefs.getFloat("track_width", 6f).coerceIn(3f, 12f),
-        nightMap = prefs.getBoolean("night_map", false),
-        drivingView = prefs.getBoolean("driving_view", true),
-        detailedTheme = prefs.getBoolean("detailed_theme", true),
-        showTelemetry = prefs.getBoolean("show_telemetry", true),
-        showPrimaryActions = prefs.getBoolean("show_primary_actions", true),
-        showMapScale = prefs.getBoolean("show_map_scale", true),
-        telemetrySlot = loadSlot("telemetry_slot", MapOverlaySlot.TOP_END),
-        primaryActionsSlot = loadSlot("primary_actions_slot", MapOverlaySlot.TOP_START),
-        dockSlot = loadSlot("dock_slot", MapOverlaySlot.CENTER_END),
-        scaleSlot = loadSlot("scale_slot", MapOverlaySlot.BOTTOM_START)
-    )
+    private fun loadUi(): EnhancedMapUiPreferences {
+        val migrateAbsoluteSlots = !prefs.getBoolean(KEY_ABSOLUTE_OVERLAY_SLOTS, false)
+        val telemetrySlot = if (migrateAbsoluteSlots) MapOverlaySlot.TOP_START
+        else loadSlot("telemetry_slot", MapOverlaySlot.TOP_START)
+        if (migrateAbsoluteSlots) {
+            prefs.edit()
+                .putString("telemetry_slot", telemetrySlot.name)
+                .putBoolean(KEY_ABSOLUTE_OVERLAY_SLOTS, true)
+                .apply()
+        }
+        return EnhancedMapUiPreferences(
+            trackVisible = prefs.getBoolean("track_visible", true),
+            trackWidth = prefs.getFloat("track_width", 6f).coerceIn(3f, 12f),
+            nightMap = prefs.getBoolean("night_map", false),
+            drivingView = prefs.getBoolean("driving_view", true),
+            detailedTheme = prefs.getBoolean("detailed_theme", true),
+            showTelemetry = prefs.getBoolean("show_telemetry", true),
+            showPrimaryActions = prefs.getBoolean("show_primary_actions", true),
+            showMapScale = prefs.getBoolean("show_map_scale", true),
+            telemetrySlot = telemetrySlot,
+            primaryActionsSlot = loadSlot("primary_actions_slot", MapOverlaySlot.TOP_START),
+            dockSlot = loadSlot("dock_slot", MapOverlaySlot.CENTER_END),
+            scaleSlot = loadSlot("scale_slot", MapOverlaySlot.BOTTOM_START)
+        )
+    }
 
     private fun loadSlot(key: String, fallback: MapOverlaySlot): MapOverlaySlot =
         try { MapOverlaySlot.valueOf(prefs.getString(key, fallback.name) ?: fallback.name) } catch (_: Exception) { fallback }
@@ -223,5 +234,6 @@ class EnhancedMapStore(context: Context) {
 
         private const val KEY_KINDS = "place_kinds"
         private const val KEY_EXTRA_PLACES = "extra_places"
+        private const val KEY_ABSOLUTE_OVERLAY_SLOTS = "absolute_overlay_slots_v203"
     }
 }

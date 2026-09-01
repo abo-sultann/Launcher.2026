@@ -55,7 +55,10 @@ class OfflineMapSearchEngine {
 
         return (saved + mapIndex)
             .asSequence()
-            .map { result -> result to matchScore(normalize(result.name), q) }
+            .map { result ->
+                val searchable = normalize("${result.name} ${result.source}")
+                result to matchScore(searchable, q)
+            }
             .filter { it.second > 0 }
             .sortedWith(compareByDescending<Pair<OfflineMapSearchResult, Int>> { it.second }.thenBy { it.first.name.length })
             .map { it.first }
@@ -138,7 +141,26 @@ class OfflineMapSearchEngine {
         val waterway = tags.firstOrNull { it.key == "waterway" }?.value
         val highway = tags.firstOrNull { it.key == "highway" }?.value
         val natural = tags.firstOrNull { it.key == "natural" }?.value
+        val amenity = tags.firstOrNull { it.key == "amenity" }?.value
+        val shop = tags.firstOrNull { it.key == "shop" }?.value
+        val tourism = tags.firstOrNull { it.key == "tourism" }?.value
+        val healthcare = tags.firstOrNull { it.key == "healthcare" }?.value
+        val office = tags.firstOrNull { it.key == "office" }?.value
         val source = when {
+            amenity == "fuel" -> "محطة وقود"
+            amenity in setOf("restaurant", "fast_food", "food_court") -> "مطعم"
+            amenity == "cafe" -> "مقهى"
+            amenity in setOf("hospital", "clinic") || healthcare in setOf("hospital", "clinic") -> "مستشفى/عيادة"
+            amenity == "pharmacy" || healthcare == "pharmacy" -> "صيدلية"
+            amenity == "place_of_worship" -> "مسجد/دار عبادة"
+            amenity in setOf("bank", "atm") -> "بنك/صراف"
+            shop != null -> when (shop) {
+                "supermarket", "convenience" -> "تموينات/سوبرماركت"
+                "mall", "department_store" -> "سوق/مجمع تجاري"
+                else -> "محل تجاري"
+            }
+            tourism != null -> "سياحة/إقامة"
+            office != null -> "نشاط تجاري"
             placeType != null -> when (placeType) {
                 "city" -> "مدينة"
                 "town" -> "بلدة"
@@ -175,7 +197,7 @@ class OfflineMapSearchEngine {
         .replace(Regex("\\s+"), " ")
 
     companion object {
-        private const val MAX_INDEX_ITEMS = 8_000
+        private const val MAX_INDEX_ITEMS = 24_000
         private const val MAP_LANGUAGE_ARABIC = "ar"
     }
 }

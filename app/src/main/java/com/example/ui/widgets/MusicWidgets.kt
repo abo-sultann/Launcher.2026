@@ -69,29 +69,34 @@ fun MusicWidget(
         when (style) {
             WidgetStyle.MUSIC_MINI -> {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(text = title, style = MaterialTheme.typography.labelLarge, color = widgetColors.primary, maxLines = 1)
-                        Text(text = artist, style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary, maxLines = 1)
+                    IconButton(onClick = onPrevious, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Default.SkipNext, contentDescription = "السابق", tint = widgetColors.primary, modifier = Modifier.size(21.dp))
                     }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        onClick = onTogglePlayPause,
+                        color = widgetColors.accent.copy(alpha = .16f),
+                        shape = CircleShape,
+                        modifier = Modifier.size(42.dp)
                     ) {
-                        IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(40.dp).testTag("btn_music_mini_play")) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = if (isPlaying) Icons.Default.PauseCircleFilled else Icons.Default.PlayCircleFilled,
-                                contentDescription = if (isPlaying) "إيقاف مؤقت" else "تشغيل",
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = "تشغيل/إيقاف",
                                 tint = widgetColors.accent,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(28.dp)
                             )
                         }
-                        IconButton(onClick = onNext, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "التالي في RTL", tint = widgetColors.primary)
-                        }
+                    }
+                    IconButton(onClick = onNext, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = widgetColors.primary, modifier = Modifier.size(21.dp))
+                    }
+                    Column(Modifier.weight(1f).padding(start = 5.dp)) {
+                        Text(title, color = widgetColors.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(if (isPlaying) "يعمل الآن" else "متوقف مؤقتًا", color = widgetColors.secondary, fontSize = 8.sp, maxLines = 1)
                     }
                 }
             }
@@ -99,52 +104,37 @@ fun MusicWidget(
             WidgetStyle.MUSIC_COMPACT -> {
                 Surface(
                     color = resolvedWidgetSurface(CarbonSurface),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
+                    shape = RoundedCornerShape(18.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, widgetColors.primary.copy(alpha = .20f)),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(10.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = widgetColors.accent, modifier = Modifier.size(20.dp))
-                            Column {
-                                Text(text = title, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary, maxLines = 1)
-                                Text(text = artist, style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary, maxLines = 1)
-                            }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(title, color = widgetColors.primary, fontSize = 12.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                            Text(artist, color = widgetColors.secondary, fontSize = 8.sp, maxLines = 1)
+                            LinearProgressIndicator(
+                                progress = { progressFraction },
+                                modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
+                                color = widgetColors.accent,
+                                trackColor = widgetColors.primary.copy(alpha = .14f)
+                            )
                         }
-
-                        // Progress Bar
-                        LinearProgressIndicator(
-                            progress = { progressFraction },
-                            modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                            color = widgetColors.accent,
-                            trackColor = CarbonCardBorder
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
+                        IconButton(onClick = onPrevious, modifier = Modifier.size(34.dp)) {
+                            Icon(Icons.Default.SkipNext, "السابق", tint = widgetColors.primary, modifier = Modifier.size(21.dp))
+                        }
+                        FilledIconButton(
+                            onClick = onTogglePlayPause,
+                            modifier = Modifier.size(46.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = widgetColors.accent)
                         ) {
-                            IconButton(onClick = onPrevious, modifier = Modifier.size(36.dp)) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "السابق", tint = widgetColors.primary)
-                            }
-                            IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(42.dp)) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
-                                    contentDescription = "تشغيل/إيقاف",
-                                    tint = widgetColors.accent,
-                                    modifier = Modifier.size(38.dp)
-                                )
-                            }
-                            IconButton(onClick = onNext, modifier = Modifier.size(36.dp)) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = widgetColors.primary)
-                            }
+                            Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "تشغيل/إيقاف", tint = CarbonDark, modifier = Modifier.size(28.dp))
+                        }
+                        IconButton(onClick = onNext, modifier = Modifier.size(34.dp)) {
+                            Icon(Icons.Default.SkipPrevious, "التالي", tint = widgetColors.primary, modifier = Modifier.size(21.dp))
                         }
                     }
                 }
@@ -153,8 +143,8 @@ fun MusicWidget(
             WidgetStyle.MUSIC_COVER -> {
                 Surface(
                     color = resolvedWidgetSurface(CarbonSurface),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, widgetColors.primary.copy(alpha = .22f)),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     Row(
@@ -162,59 +152,33 @@ fun MusicWidget(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Vinyl Disc
                         Box(
                             modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(Brush.radialGradient(listOf(Color(0xFF2A2E3D), Color(0xFF0F1218))))
-                                .border(2.dp, widgetColors.accent.copy(alpha = 0.5f), CircleShape)
-                                .rotate(if (isPlaying) rotationAngle else 0f),
+                                .fillMaxHeight()
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(widgetColors.primary.copy(alpha = .10f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clip(CircleShape)
-                                    .background(widgetColors.accent),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(CarbonDark)
-                                )
-                            }
+                            Icon(Icons.Default.GraphicEq, null, tint = widgetColors.accent, modifier = Modifier.size(34.dp))
                         }
-
-                        // Info & Controls
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(text = title, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = widgetColors.primary, maxLines = 1)
-                                Text(text = artist, style = MaterialTheme.typography.labelSmall, color = widgetColors.secondary, maxLines = 1)
-                            }
-
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                IconButton(onClick = onPrevious, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.SkipNext, contentDescription = "السابق", tint = widgetColors.primary, modifier = Modifier.size(20.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                            Text(title, color = widgetColors.primary, fontSize = 13.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                            Text(artist, color = widgetColors.secondary, fontSize = 9.sp, maxLines = 1)
+                            Spacer(Modifier.height(5.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                IconButton(onClick = onPrevious, modifier = Modifier.size(30.dp)) {
+                                    Icon(Icons.Default.SkipNext, "السابق", tint = widgetColors.primary, modifier = Modifier.size(20.dp))
                                 }
-                                IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(36.dp).testTag("btn_music_cover_play")) {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
-                                        contentDescription = "تشغيل/إيقاف",
-                                        tint = widgetColors.accent,
-                                        modifier = Modifier.size(32.dp)
-                                    )
+                                FilledIconButton(
+                                    onClick = onTogglePlayPause,
+                                    modifier = Modifier.size(40.dp),
+                                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = widgetColors.accent)
+                                ) {
+                                    Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "تشغيل/إيقاف", tint = CarbonDark, modifier = Modifier.size(25.dp))
                                 }
-                                IconButton(onClick = onNext, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.SkipPrevious, contentDescription = "التالي", tint = widgetColors.primary, modifier = Modifier.size(20.dp))
+                                IconButton(onClick = onNext, modifier = Modifier.size(30.dp)) {
+                                    Icon(Icons.Default.SkipPrevious, "التالي", tint = widgetColors.primary, modifier = Modifier.size(20.dp))
                                 }
                             }
                         }
