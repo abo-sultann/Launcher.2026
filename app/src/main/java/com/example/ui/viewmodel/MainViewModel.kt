@@ -20,6 +20,7 @@ import com.example.data.*
 import com.example.model.*
 import com.example.ui.components.CarScreen
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -82,6 +83,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _offlineSearchResults = MutableStateFlow<List<OfflineMapSearchResult>>(emptyList())
     val offlineSearchResults: StateFlow<List<OfflineMapSearchResult>> = _offlineSearchResults.asStateFlow()
+    private val _offlineSearchInProgress = MutableStateFlow(false)
+    val offlineSearchInProgress: StateFlow<Boolean> = _offlineSearchInProgress.asStateFlow()
+    private var offlineSearchJob: Job? = null
+    private var offlineSearchGeneration = 0
     private val _offroadTransferMessage = MutableStateFlow<String?>(null)
     val offroadTransferMessage: StateFlow<String?> = _offroadTransferMessage.asStateFlow()
     private val _fileImportStatus = MutableStateFlow<String?>(null)
@@ -953,11 +958,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateOffroadMapState(state: OffroadMapState) = offroadTrackManager.saveMapState(state)
 
     fun searchOfflineMap(query: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _offlineSearchResults.value = offlineMapSearchEngine.search(query, activeMap.value, savedOffroadPlaces.value)
+        val cleanQuery = query.trim()
+        offlineSearchJob?.cancel()
+        val generation = ++offlineSearchGeneration
+        if (cleanQuery.length < 2) {
+            _offlineSearchInProgress.value = false
+            _offlineSearchResults.value = emptyList()
+            return
+        }
+        _offlineSearchInProgress.value = true
+        offlineSearchJob = viewModelScope.launch(Dispatchers.IO) {
+            // Prevent every keystroke from rebuilding a large country map index.
+            delay(180L)
+            val telemetry = gpsTelemetry.value
+            val latitude = telemetry.latitude.takeIf { telemetry.hasGpsFix }
+            val longitude = telemetry.longitude.takeIf { telemetry.hasGpsFix }
+            val results = offlineMapSearchEngine.search(
+                query = cleanQuery,
+                activeMap = activeMap.value,
+                savedPlaces = savedOffroadPlaces.value,
+                currentLatitude = latitude,
+                currentLongitude = longitude
+            )
+            if (generation == offlineSearchGeneration) {
+                _offlineSearchResults.value = results
+                _offlineSearchInProgress.value = false
+            }
         }
     }
-    fun clearOfflineMapSearch() { _offlineSearchResults.value = emptyList() }
+    fun clearOfflineMapSearch() {
+        offlineSearchJob?.cancel()
+        offlineSearchGeneration++
+        _offlineSearchInProgress.value = false
+        _offlineSearchResults.value = emptyList()
+    }
     fun navigateToSearchResult(result: OfflineMapSearchResult) {
         offroadTrackManager.navigateToCoordinates(result.id, result.name, result.latitude, result.longitude)
         // أثناء التوجيه تبقى الخريطة متتبعة للسيارة؛ الهدف يظهر بعلامة وسهم وخط.
