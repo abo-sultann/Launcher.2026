@@ -19,12 +19,25 @@ enum class OffroadPlaceKind(val arabicName: String) {
     FLAG("نقطة")
 }
 
+enum class MapOverlaySlot(val arabicName: String) {
+    TOP_START("أعلى اليسار"),
+    TOP_CENTER("أعلى المنتصف"),
+    TOP_END("أعلى اليمين"),
+    CENTER_START("منتصف اليسار"),
+    CENTER_END("منتصف اليمين"),
+    BOTTOM_START("أسفل اليسار"),
+    BOTTOM_CENTER("أسفل المنتصف"),
+    BOTTOM_END("أسفل اليمين")
+}
+
 data class EnhancedSavedPlace(
     val id: String,
     val name: String,
     val latitude: Double,
     val longitude: Double,
     val kind: OffroadPlaceKind = OffroadPlaceKind.FLAG,
+    val notes: String = "",
+    val favorite: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -33,30 +46,52 @@ data class EnhancedMapUiPreferences(
     val trackWidth: Float = 6f,
     val nightMap: Boolean = false,
     val drivingView: Boolean = true,
-    val detailedTheme: Boolean = true
+    val detailedTheme: Boolean = true,
+    val showTelemetry: Boolean = true,
+    val showPrimaryActions: Boolean = true,
+    val showMapScale: Boolean = true,
+    val telemetrySlot: MapOverlaySlot = MapOverlaySlot.TOP_END,
+    val primaryActionsSlot: MapOverlaySlot = MapOverlaySlot.TOP_START,
+    val dockSlot: MapOverlaySlot = MapOverlaySlot.CENTER_END,
+    val scaleSlot: MapOverlaySlot = MapOverlaySlot.BOTTOM_START
 )
 
 class EnhancedMapStore(context: Context) {
     private val prefs = context.getSharedPreferences("enhanced_offroad_map_2026", Context.MODE_PRIVATE)
 
-    private val _extraPlaces = MutableStateFlow(loadExtraPlaces())
+    private val _extraPlaces: MutableStateFlow<List<EnhancedSavedPlace>> = synchronized(SHARED_LOCK) {
+        sharedExtraPlaces ?: MutableStateFlow(loadExtraPlaces()).also { sharedExtraPlaces = it }
+    }
     val extraPlaces: StateFlow<List<EnhancedSavedPlace>> = _extraPlaces.asStateFlow()
 
-    private val _placeKinds = MutableStateFlow(loadKinds())
+    private val _placeKinds: MutableStateFlow<Map<String, OffroadPlaceKind>> = synchronized(SHARED_LOCK) {
+        sharedPlaceKinds ?: MutableStateFlow(loadKinds()).also { sharedPlaceKinds = it }
+    }
     val placeKinds: StateFlow<Map<String, OffroadPlaceKind>> = _placeKinds.asStateFlow()
 
-    private val _ui = MutableStateFlow(loadUi())
+    private val _ui: MutableStateFlow<EnhancedMapUiPreferences> = synchronized(SHARED_LOCK) {
+        sharedUi ?: MutableStateFlow(loadUi()).also { sharedUi = it }
+    }
     val ui: StateFlow<EnhancedMapUiPreferences> = _ui.asStateFlow()
 
-    fun saveExtraPlace(name: String, latitude: Double, longitude: Double, kind: OffroadPlaceKind): EnhancedSavedPlace {
+    fun saveExtraPlace(
+        name: String,
+        latitude: Double,
+        longitude: Double,
+        kind: OffroadPlaceKind,
+        notes: String = "",
+        favorite: Boolean = false
+    ): EnhancedSavedPlace {
         val place = EnhancedSavedPlace(
             id = "map_${UUID.randomUUID()}",
             name = name.trim().ifBlank { "نقطة محفوظة" },
             latitude = latitude,
             longitude = longitude,
-            kind = kind
+            kind = kind,
+            notes = notes.trim().take(120),
+            favorite = favorite
         )
-        _extraPlaces.value = _extraPlaces.value + place
+        _extraPlaces.value = (_extraPlaces.value + place).sortedWith(compareByDescending<EnhancedSavedPlace> { it.favorite }.thenByDescending { it.createdAt })
         persistExtraPlaces()
         return place
     }
@@ -70,6 +105,15 @@ class EnhancedMapStore(context: Context) {
 
     fun updateExtraPlaceKind(id: String, kind: OffroadPlaceKind) {
         _extraPlaces.value = _extraPlaces.value.map { if (it.id == id) it.copy(kind = kind) else it }
+        persistExtraPlaces()
+    }
+
+    fun updateExtraPlace(id: String, name: String, kind: OffroadPlaceKind, notes: String, favorite: Boolean) {
+        val clean = name.trim()
+        if (clean.isBlank()) return
+        _extraPlaces.value = _extraPlaces.value.map {
+            if (it.id == id) it.copy(name = clean, kind = kind, notes = notes.trim().take(120), favorite = favorite) else it
+        }.sortedWith(compareByDescending<EnhancedSavedPlace> { it.favorite }.thenByDescending { it.createdAt })
         persistExtraPlaces()
     }
 
@@ -96,6 +140,13 @@ class EnhancedMapStore(context: Context) {
             .putBoolean("night_map", next.nightMap)
             .putBoolean("driving_view", next.drivingView)
             .putBoolean("detailed_theme", next.detailedTheme)
+            .putBoolean("show_telemetry", next.showTelemetry)
+            .putBoolean("show_primary_actions", next.showPrimaryActions)
+            .putBoolean("show_map_scale", next.showMapScale)
+            .putString("telemetry_slot", next.telemetrySlot.name)
+            .putString("primary_actions_slot", next.primaryActionsSlot.name)
+            .putString("dock_slot", next.dockSlot.name)
+            .putString("scale_slot", next.scaleSlot.name)
             .apply()
     }
 
@@ -104,8 +155,18 @@ class EnhancedMapStore(context: Context) {
         trackWidth = prefs.getFloat("track_width", 6f).coerceIn(3f, 12f),
         nightMap = prefs.getBoolean("night_map", false),
         drivingView = prefs.getBoolean("driving_view", true),
-        detailedTheme = prefs.getBoolean("detailed_theme", true)
+        detailedTheme = prefs.getBoolean("detailed_theme", true),
+        showTelemetry = prefs.getBoolean("show_telemetry", true),
+        showPrimaryActions = prefs.getBoolean("show_primary_actions", true),
+        showMapScale = prefs.getBoolean("show_map_scale", true),
+        telemetrySlot = loadSlot("telemetry_slot", MapOverlaySlot.TOP_END),
+        primaryActionsSlot = loadSlot("primary_actions_slot", MapOverlaySlot.TOP_START),
+        dockSlot = loadSlot("dock_slot", MapOverlaySlot.CENTER_END),
+        scaleSlot = loadSlot("scale_slot", MapOverlaySlot.BOTTOM_START)
     )
+
+    private fun loadSlot(key: String, fallback: MapOverlaySlot): MapOverlaySlot =
+        try { MapOverlaySlot.valueOf(prefs.getString(key, fallback.name) ?: fallback.name) } catch (_: Exception) { fallback }
 
     private fun loadKinds(): Map<String, OffroadPlaceKind> {
         return try {
@@ -134,6 +195,8 @@ class EnhancedMapStore(context: Context) {
                         latitude = o.getDouble("lat"),
                         longitude = o.getDouble("lon"),
                         kind = kind,
+                        notes = o.optString("notes", ""),
+                        favorite = o.optBoolean("favorite", false),
                         createdAt = o.optLong("time", 0L)
                     ))
                 }
@@ -146,13 +209,18 @@ class EnhancedMapStore(context: Context) {
         _extraPlaces.value.forEach { p ->
             arr.put(JSONObject().apply {
                 put("id", p.id); put("name", p.name); put("lat", p.latitude); put("lon", p.longitude)
-                put("kind", p.kind.name); put("time", p.createdAt)
+                put("kind", p.kind.name); put("notes", p.notes); put("favorite", p.favorite); put("time", p.createdAt)
             })
         }
         prefs.edit().putString(KEY_EXTRA_PLACES, arr.toString()).apply()
     }
 
     companion object {
+        private val SHARED_LOCK = Any()
+        @Volatile private var sharedExtraPlaces: MutableStateFlow<List<EnhancedSavedPlace>>? = null
+        @Volatile private var sharedPlaceKinds: MutableStateFlow<Map<String, OffroadPlaceKind>>? = null
+        @Volatile private var sharedUi: MutableStateFlow<EnhancedMapUiPreferences>? = null
+
         private const val KEY_KINDS = "place_kinds"
         private const val KEY_EXTRA_PLACES = "extra_places"
     }

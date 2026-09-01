@@ -59,6 +59,9 @@ private data class UiOffroadPlace(
     val latitude: Double,
     val longitude: Double,
     val kind: OffroadPlaceKind,
+    val notes: String,
+    val favorite: Boolean,
+    val createdAt: Long,
     val legacy: Boolean
 )
 
@@ -94,7 +97,10 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
     var longPressPoint by remember { mutableStateOf<LatLong?>(null) }
     var savePoint by remember { mutableStateOf<LatLong?>(null) }
     var saveName by remember { mutableStateOf("") }
+    var saveNotes by remember { mutableStateOf("") }
     var saveKind by remember { mutableStateOf(OffroadPlaceKind.FLAG) }
+    var saveFavorite by remember { mutableStateOf(false) }
+    var navigateAfterSave by remember { mutableStateOf(false) }
     var saveIsCurrent by remember { mutableStateOf(false) }
 
     var followGps by remember { mutableStateOf(storedMapState.followGps) }
@@ -132,9 +138,10 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
     }
 
     val allPlaces = remember(legacyPlaces, extraPlaces, placeKinds) {
-        legacyPlaces.map { p ->
-            UiOffroadPlace(p.id, p.name, p.latitude, p.longitude, placeKinds[p.id] ?: OffroadPlaceKind.FLAG, true)
-        } + extraPlaces.map { p -> UiOffroadPlace(p.id, p.name, p.latitude, p.longitude, p.kind, false) }
+        (legacyPlaces.map { p ->
+            UiOffroadPlace(p.id, p.name, p.latitude, p.longitude, placeKinds[p.id] ?: OffroadPlaceKind.FLAG, "", false, p.createdAt, true)
+        } + extraPlaces.map { p -> UiOffroadPlace(p.id, p.name, p.latitude, p.longitude, p.kind, p.notes, p.favorite, p.createdAt, false) })
+            .sortedWith(compareByDescending<UiOffroadPlace> { it.favorite }.thenByDescending { it.createdAt })
     }
 
     val renderedTrack = remember(trackPoints) { sampleTrack(trackPoints, 3200) }
@@ -142,7 +149,7 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
         if (!gps.hasGpsFix || renderedTrack.isEmpty()) null else nearestTrackPoint(renderedTrack, gps.latitude, gps.longitude)
     }
 
-    Box(modifier.fillMaxSize().background(Color(0xFF10151C))) {
+    BoxWithConstraints(modifier.fillMaxSize().background(Color(0xFF10151C))) {
         when {
             activeMap == null -> EnhancedEmptyMapState(launchMapPicker)
             activeMap!!.filePath.isSupportedOfflineMap() -> {
@@ -200,31 +207,36 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             }
         }
 
-        Surface(
-            modifier = Modifier.align(Alignment.TopStart).padding(top = 10.dp, start = 10.dp),
-            color = CarbonDark.copy(alpha = .88f),
-            shape = RoundedCornerShape(15.dp),
-            border = BorderStroke(1.dp, CarbonCardBorder),
-            shadowElevation = 5.dp
-        ) {
-            Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                MapPrimaryActionButton(Icons.Default.BookmarkAdd, "حفظ موقعي", interfaceAccent) {
-                    if (gps.hasGpsFix) {
-                        saveIsCurrent = true
-                        savePoint = LatLong(gps.latitude, gps.longitude)
-                        saveName = ""
-                        saveKind = OffroadPlaceKind.FLAG
-                        showSaveCurrent = true
+        if (mapUi.showPrimaryActions) {
+            Surface(
+                modifier = mapOverlayModifier(mapUi.primaryActionsSlot),
+                color = CarbonDark.copy(alpha = .78f),
+                shape = RoundedCornerShape(15.dp),
+                border = BorderStroke(1.dp, CarbonCardBorder.copy(alpha = .65f)),
+                shadowElevation = 3.dp
+            ) {
+                Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    MapPrimaryActionButton(Icons.Default.BookmarkAdd, "حفظ موقعي", interfaceAccent) {
+                        if (gps.hasGpsFix) {
+                            saveIsCurrent = true
+                            savePoint = LatLong(gps.latitude, gps.longitude)
+                            saveName = ""
+                            saveNotes = ""
+                            saveKind = OffroadPlaceKind.FLAG
+                            saveFavorite = false
+                            navigateAfterSave = false
+                            showSaveCurrent = true
+                        }
                     }
+                    MapPrimaryActionButton(Icons.Default.Place, "المحفوظة", interfaceAccent) { showPlaces = true }
+                    MapPrimaryActionButton(Icons.Default.Navigation, "بحث وتوجيه", interfaceAccent) { showSearch = true }
+                    MapPrimaryActionButton(Icons.Default.Tune, "إعدادات", interfaceAccent) { showTools = true }
                 }
-                MapPrimaryActionButton(Icons.Default.Place, "المحفوظة", interfaceAccent) { showPlaces = true }
-                MapPrimaryActionButton(Icons.Default.Navigation, "بحث وتوجيه", interfaceAccent) { showSearch = true }
-                MapPrimaryActionButton(Icons.Default.Tune, "إعدادات", interfaceAccent) { showTools = true }
             }
         }
 
         Surface(
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 60.dp),
+            modifier = mapOverlayModifier(mapUi.dockSlot),
             color = CarbonDark.copy(alpha = .88f),
             shape = RoundedCornerShape(15.dp),
             border = BorderStroke(1.dp, CarbonCardBorder),
@@ -250,19 +262,22 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
                     orientationMode = if (orientationMode == MapOrientationMode.NORTH_UP) MapOrientationMode.HEADING_UP else MapOrientationMode.NORTH_UP
                     viewModel.updateOffroadMapState(storedMapState.copy(followGps = followGps, orientationMode = orientationMode))
                 }
+                MapDockButton(Icons.Default.Tune, "إعدادات الخريطة", interfaceAccent) { showTools = true }
             }
         }
 
-        EnhancedTelemetryCard(
-            gps = gps,
-            trip = trip,
-            target = navTarget,
-            targetDistance = viewModel.offroadDistanceToTargetMeters(),
-            targetBearing = viewModel.offroadBearingToTarget(),
-            trackKm = viewModel.offroadTrackDistanceKm(),
-            accentColor = interfaceAccent,
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 10.dp)
-        )
+        if (mapUi.showTelemetry) {
+            EnhancedTelemetryCard(
+                gps = gps,
+                trip = trip,
+                target = navTarget,
+                targetDistance = viewModel.offroadDistanceToTargetMeters(),
+                targetBearing = viewModel.offroadBearingToTarget(),
+                trackKm = viewModel.offroadTrackDistanceKm(),
+                accentColor = interfaceAccent,
+                modifier = mapOverlayModifier(mapUi.telemetrySlot)
+            )
+        }
 
         navTarget?.let { target ->
             NavigationTargetStrip(
@@ -274,15 +289,17 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             )
         }
 
-        Surface(
-            modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 62.dp),
-            color = CarbonDark.copy(alpha = .86f),
-            shape = RoundedCornerShape(9.dp),
-            border = BorderStroke(1.dp, CarbonCardBorder)
-        ) {
-            Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Box(Modifier.width(48.dp).height(3.dp).background(interfaceAccent))
-                Text(scaleLabel(autoZoom), color = TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        if (mapUi.showMapScale) {
+            Surface(
+                modifier = mapOverlayModifier(mapUi.scaleSlot),
+                color = CarbonDark.copy(alpha = .76f),
+                shape = RoundedCornerShape(9.dp),
+                border = BorderStroke(1.dp, CarbonCardBorder.copy(alpha = .65f))
+            ) {
+                Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Box(Modifier.width(48.dp).height(3.dp).background(interfaceAccent))
+                    Text(scaleLabel(autoZoom), color = TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
 
@@ -354,18 +371,29 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
 
         if (showSaveCurrent) {
             EnhancedSavePlaceDialog(
+                point = savePoint,
                 name = saveName,
+                notes = saveNotes,
                 kind = saveKind,
+                favorite = saveFavorite,
+                navigateAfterSave = navigateAfterSave,
                 onName = { saveName = it.take(40) },
+                onNotes = { saveNotes = it.take(120) },
                 onKind = { saveKind = it },
+                onFavorite = { saveFavorite = it },
+                onNavigateAfterSave = { navigateAfterSave = it },
                 onSave = {
-                    val point = savePoint
-                    if (point != null) {
-                        if (saveIsCurrent) {
-                            val saved = viewModel.saveCurrentOffroadPlace(saveName.ifBlank { null })
-                            saved?.let { mapStore.setPlaceKind(it.id, saveKind) }
-                        } else {
-                            mapStore.saveExtraPlace(saveName.ifBlank { "نقطة محفوظة" }, point.latitude, point.longitude, saveKind)
+                    savePoint?.let { point ->
+                        val saved = mapStore.saveExtraPlace(
+                            saveName.ifBlank { if (saveIsCurrent) "موقعي الحالي" else "نقطة محفوظة" },
+                            point.latitude,
+                            point.longitude,
+                            saveKind,
+                            saveNotes,
+                            saveFavorite
+                        )
+                        if (navigateAfterSave) {
+                            viewModel.navigateToSearchResult(OfflineMapSearchResult(saved.id, saved.name, saved.latitude, saved.longitude, "موقع محفوظ"))
                         }
                     }
                     showSaveCurrent = false
@@ -382,7 +410,10 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
                         saveIsCurrent = false
                         savePoint = point
                         saveName = ""
+                        saveNotes = ""
                         saveKind = OffroadPlaceKind.FLAG
+                        saveFavorite = false
+                        navigateAfterSave = false
                         showLongPressActions = false
                         showSaveCurrent = true
                     },
@@ -405,9 +436,15 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
                     else viewModel.navigateToSearchResult(OfflineMapSearchResult(p.id, p.name, p.latitude, p.longitude, "موقع محفوظ"))
                     showPlaces = false
                 },
-                onRename = { p, name -> if (p.legacy) viewModel.renameSavedOffroadPlace(p.id, name) else mapStore.renameExtraPlace(p.id, name) },
+                onUpdate = { p, name, kind, notes, favorite ->
+                    if (p.legacy) {
+                        viewModel.renameSavedOffroadPlace(p.id, name)
+                        mapStore.setPlaceKind(p.id, kind)
+                    } else {
+                        mapStore.updateExtraPlace(p.id, name, kind, notes, favorite)
+                    }
+                },
                 onDelete = { p -> if (p.legacy) viewModel.deleteSavedOffroadPlace(p.id) else mapStore.deleteExtraPlace(p.id) },
-                onKind = { p, kind -> if (p.legacy) mapStore.setPlaceKind(p.id, kind) else mapStore.updateExtraPlaceKind(p.id, kind) },
                 onClose = { showPlaces = false }
             )
         }
@@ -462,6 +499,26 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             )
         }
     }
+}
+
+private fun BoxWithConstraintsScope.mapOverlayModifier(slot: MapOverlaySlot): Modifier {
+    val alignment = when (slot) {
+        MapOverlaySlot.TOP_START -> Alignment.TopStart
+        MapOverlaySlot.TOP_CENTER -> Alignment.TopCenter
+        MapOverlaySlot.TOP_END -> Alignment.TopEnd
+        MapOverlaySlot.CENTER_START -> Alignment.CenterStart
+        MapOverlaySlot.CENTER_END -> Alignment.CenterEnd
+        MapOverlaySlot.BOTTOM_START -> Alignment.BottomStart
+        MapOverlaySlot.BOTTOM_CENTER -> Alignment.BottomCenter
+        MapOverlaySlot.BOTTOM_END -> Alignment.BottomEnd
+    }
+    val bottomInset = if (slot.name.startsWith("BOTTOM")) 62.dp else 10.dp
+    return Modifier.align(alignment).padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = bottomInset)
+}
+
+private fun nextMapOverlaySlot(current: MapOverlaySlot): MapOverlaySlot {
+    val slots = MapOverlaySlot.entries
+    return slots[(current.ordinal + 1) % slots.size]
 }
 
 @Composable
@@ -574,23 +631,54 @@ private fun MapPrimaryActionButton(
 }
 
 @Composable
-private fun EnhancedSavePlaceDialog(name: String, kind: OffroadPlaceKind, onName: (String) -> Unit, onKind: (OffroadPlaceKind) -> Unit, onSave: () -> Unit, onDismiss: () -> Unit) {
+private fun EnhancedSavePlaceDialog(
+    point: LatLong?,
+    name: String,
+    notes: String,
+    kind: OffroadPlaceKind,
+    favorite: Boolean,
+    navigateAfterSave: Boolean,
+    onName: (String) -> Unit,
+    onNotes: (String) -> Unit,
+    onKind: (OffroadPlaceKind) -> Unit,
+    onFavorite: (Boolean) -> Unit,
+    onNavigateAfterSave: (Boolean) -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("حفظ الموقع") },
+        title = { Text("حفظ الموقع", fontWeight = FontWeight.Black) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                OutlinedTextField(value = name, onValueChange = onName, label = { Text("اسم الموقع") }, singleLine = true)
-                Text("نوع العلامة", fontWeight = FontWeight.Bold)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    OffroadPlaceKind.entries.take(4).forEach { item -> FilterChip(selected = kind == item, onClick = { onKind(item) }, label = { Text(item.arabicName, fontSize = 9.sp) }) }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                point?.let {
+                    Surface(color = CarbonSurface, shape = RoundedCornerShape(8.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.MyLocation, null, tint = CyanNeon, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(String.format(Locale.US, "%.6f, %.6f", it.latitude, it.longitude), color = TextSecondary, fontSize = 9.sp)
+                        }
+                    }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    OffroadPlaceKind.entries.drop(4).forEach { item -> FilterChip(selected = kind == item, onClick = { onKind(item) }, label = { Text(item.arabicName, fontSize = 9.sp) }) }
+                OutlinedTextField(value = name, onValueChange = onName, label = { Text("اسم واضح للموقع") }, placeholder = { Text("مثال: مخيم الشتاء") }, singleLine = true)
+                OutlinedTextField(value = notes, onValueChange = onNotes, label = { Text("ملاحظة اختيارية") }, placeholder = { Text("طريق الدخول أو وصف المكان") }, maxLines = 2)
+                Text("نوع العلامة", fontWeight = FontWeight.Bold)
+                OffroadPlaceKind.entries.chunked(4).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        row.forEach { item -> FilterChip(selected = kind == item, onClick = { onKind(item) }, label = { Text(item.arabicName, fontSize = 9.sp) }) }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("تثبيت في أعلى المحفوظات", modifier = Modifier.weight(1f), fontSize = 10.sp)
+                    Switch(checked = favorite, onCheckedChange = onFavorite)
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("بدء التوجيه بعد الحفظ", modifier = Modifier.weight(1f), fontSize = 10.sp)
+                    Switch(checked = navigateAfterSave, onCheckedChange = onNavigateAfterSave)
                 }
             }
         },
-        confirmButton = { Button(onClick = onSave) { Text("حفظ") } },
+        confirmButton = { Button(onClick = onSave, enabled = point != null) { Text("حفظ الموقع") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
     )
 }
@@ -618,33 +706,35 @@ private fun LongPressMapPointDialog(point: LatLong, onSave: () -> Unit, onNaviga
 private fun EnhancedPlacesDialog(
     places: List<UiOffroadPlace>,
     onNavigate: (UiOffroadPlace) -> Unit,
-    onRename: (UiOffroadPlace, String) -> Unit,
+    onUpdate: (UiOffroadPlace, String, OffroadPlaceKind, String, Boolean) -> Unit,
     onDelete: (UiOffroadPlace) -> Unit,
-    onKind: (UiOffroadPlace, OffroadPlaceKind) -> Unit,
     onClose: () -> Unit
 ) {
     var editing by remember { mutableStateOf<UiOffroadPlace?>(null) }
-    var editName by remember { mutableStateOf("") }
+    var pendingDelete by remember { mutableStateOf<UiOffroadPlace?>(null) }
     Dialog(onDismissRequest = onClose) {
-        Card(modifier = Modifier.fillMaxWidth(.92f).fillMaxHeight(.80f), colors = CardDefaults.cardColors(containerColor = CarbonDark), border = BorderStroke(1.dp, CyanNeon)) {
+        Card(modifier = Modifier.fillMaxWidth(.92f).fillMaxHeight(.82f), colors = CardDefaults.cardColors(containerColor = CarbonDark), border = BorderStroke(1.dp, CyanNeon)) {
             Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("المواقع المحفوظة", color = CyanNeon, fontWeight = FontWeight.Black, fontSize = 19.sp, modifier = Modifier.weight(1f))
+                    Column(Modifier.weight(1f)) {
+                        Text("المواقع المحفوظة", color = CyanNeon, fontWeight = FontWeight.Black, fontSize = 19.sp)
+                        Text("المثبتة أولًا • تعديل الاسم والوصف والعلامة", color = TextSecondary, fontSize = 9.sp)
+                    }
                     IconButton(onClick = onClose) { Icon(Icons.Default.Close, "إغلاق", tint = TextPrimary) }
                 }
                 if (places.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { Text("لا توجد مواقع محفوظة", color = TextSecondary) }
                 else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     items(places, key = { it.id }) { p ->
-                        Surface(color = CarbonSurface, shape = RoundedCornerShape(9.dp), border = BorderStroke(1.dp, CarbonCardBorder)) {
+                        Surface(color = CarbonSurface, shape = RoundedCornerShape(9.dp), border = BorderStroke(1.dp, if (p.favorite) AmberRacing else CarbonCardBorder)) {
                             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Icon(placeKindIcon(p.kind), p.kind.arabicName, tint = AmberRacing)
+                                Icon(if (p.favorite) Icons.Default.Star else placeKindIcon(p.kind), p.kind.arabicName, tint = if (p.favorite) AmberRacing else CyanNeon)
                                 Column(Modifier.weight(1f)) {
-                                    Text(p.name, color = TextPrimary, fontWeight = FontWeight.Bold)
-                                    Text(p.kind.arabicName, color = TextSecondary, fontSize = 9.sp)
+                                    Text(p.name, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Text(if (p.notes.isNotBlank()) p.notes else p.kind.arabicName, color = TextSecondary, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                                IconButton(onClick = { editing = p; editName = p.name }) { Icon(Icons.Default.Edit, "تعديل", tint = TextSecondary) }
+                                IconButton(onClick = { editing = p }) { Icon(Icons.Default.Edit, "تعديل", tint = TextSecondary) }
                                 Button(onClick = { onNavigate(p) }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) { Text("توجيه") }
-                                IconButton(onClick = { onDelete(p) }) { Icon(Icons.Default.Delete, "حذف", tint = HighContrastRed) }
+                                IconButton(onClick = { pendingDelete = p }) { Icon(Icons.Default.Delete, "حذف", tint = HighContrastRed) }
                             }
                         }
                     }
@@ -653,20 +743,40 @@ private fun EnhancedPlacesDialog(
         }
     }
     editing?.let { p ->
+        var editName by remember(p.id) { mutableStateOf(p.name) }
+        var editNotes by remember(p.id) { mutableStateOf(p.notes) }
         var kind by remember(p.id) { mutableStateOf(p.kind) }
+        var favorite by remember(p.id) { mutableStateOf(p.favorite) }
         AlertDialog(
             onDismissRequest = { editing = null },
             title = { Text("تعديل الموقع") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = editName, onValueChange = { editName = it.take(40) }, singleLine = true)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        OffroadPlaceKind.entries.forEach { k -> AssistChip(onClick = { kind = k }, label = { Text(k.arabicName, fontSize = 8.sp) }, leadingIcon = { if (kind == k) Icon(Icons.Default.Check, null, modifier = Modifier.size(14.dp)) }) }
+                    OutlinedTextField(value = editName, onValueChange = { editName = it.take(40) }, label = { Text("اسم الموقع") }, singleLine = true)
+                    OutlinedTextField(value = editNotes, onValueChange = { editNotes = it.take(120) }, label = { Text("ملاحظة") }, maxLines = 2, enabled = !p.legacy)
+                    OffroadPlaceKind.entries.chunked(4).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            row.forEach { k -> AssistChip(onClick = { kind = k }, label = { Text(k.arabicName, fontSize = 8.sp) }, leadingIcon = { if (kind == k) Icon(Icons.Default.Check, null, modifier = Modifier.size(14.dp)) }) }
+                        }
                     }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (p.legacy) "التثبيت متاح للمواقع الجديدة" else "تثبيت في الأعلى", modifier = Modifier.weight(1f), fontSize = 9.sp, color = TextSecondary)
+                        Switch(checked = favorite, onCheckedChange = { favorite = it }, enabled = !p.legacy)
+                    }
+                    Text(String.format(Locale.US, "%.6f, %.6f", p.latitude, p.longitude), color = TextMuted, fontSize = 9.sp)
                 }
             },
-            confirmButton = { Button(onClick = { onRename(p, editName); if (kind != p.kind) onKind(p, kind); editing = null }) { Text("حفظ") } },
+            confirmButton = { Button(onClick = { onUpdate(p, editName, kind, editNotes, favorite); editing = null }) { Text("حفظ التعديل") } },
             dismissButton = { TextButton(onClick = { editing = null }) { Text("إلغاء") } }
+        )
+    }
+    pendingDelete?.let { p ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("حذف الموقع؟") },
+            text = { Text("سيُحذف «${p.name}» من المواقع المحفوظة.") },
+            confirmButton = { Button(onClick = { onDelete(p); pendingDelete = null }, colors = ButtonDefaults.buttonColors(containerColor = HighContrastRed)) { Text("حذف", color = Color.White) } },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("إلغاء") } }
         )
     }
 }
@@ -733,6 +843,14 @@ private fun EnhancedOffroadToolsDialog(
                     item { MapToolToggle(Icons.Default.DarkMode, "الوضع الليلي للخريطة", "ألوان أهدأ ووهج أقل أثناء القيادة الليلية", ui.nightMap) { onUiChange { it.copy(nightMap = !it.nightMap) } } }
                     item { MapToolToggle(Icons.Default.DirectionsCar, "وضع القيادة", "يضع السيارة أسفل منتصف الشاشة ليظهر أمامك مجال أكبر", ui.drivingView) { onUiChange { it.copy(drivingView = !it.drivingView) } } }
                     item { MapToolToggle(Icons.Default.Label, "تفاصيل وأسماء أكبر", "تكبير أسماء المدن والقرى والمعالم الموجودة في ملف الخريطة", ui.detailedTheme) { onUiChange { it.copy(detailedTheme = !it.detailedTheme) } } }
+                    item { Text("عناصر الخريطة ومواقعها", color = AmberRacing, fontWeight = FontWeight.Black, modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)) }
+                    item { MapToolToggle(Icons.Default.Speed, "إظهار السرعة وبيانات GPS", "يمكن إخفاؤها أو نقلها إلى أي طرف", ui.showTelemetry) { onUiChange { it.copy(showTelemetry = !it.showTelemetry) } } }
+                    if (ui.showTelemetry) item { MapToolRow(Icons.Default.OpenWith, "مكان السرعة والبيانات", ui.telemetrySlot.arabicName) { onUiChange { it.copy(telemetrySlot = nextMapOverlaySlot(it.telemetrySlot)) } } }
+                    item { MapToolToggle(Icons.Default.DashboardCustomize, "إظهار اختصارات الخريطة", "حفظ الموقع والمحفوظات والبحث", ui.showPrimaryActions) { onUiChange { it.copy(showPrimaryActions = !it.showPrimaryActions) } } }
+                    if (ui.showPrimaryActions) item { MapToolRow(Icons.Default.OpenWith, "مكان اختصارات الخريطة", ui.primaryActionsSlot.arabicName) { onUiChange { it.copy(primaryActionsSlot = nextMapOverlaySlot(it.primaryActionsSlot)) } } }
+                    item { MapToolRow(Icons.Default.OpenWith, "مكان أزرار التتبع والاتجاه", ui.dockSlot.arabicName) { onUiChange { it.copy(dockSlot = nextMapOverlaySlot(it.dockSlot)) } } }
+                    item { MapToolToggle(Icons.Default.Straighten, "إظهار مقياس الخريطة", "مقياس تقريبي حسب مستوى التقريب", ui.showMapScale) { onUiChange { it.copy(showMapScale = !it.showMapScale) } } }
+                    if (ui.showMapScale) item { MapToolRow(Icons.Default.OpenWith, "مكان مقياس الخريطة", ui.scaleSlot.arabicName) { onUiChange { it.copy(scaleSlot = nextMapOverlaySlot(it.scaleSlot)) } } }
                     item { MapToolToggle(Icons.Default.Route, "إظهار أثر المسار", "إخفاء الأثر لا يمسحه من الذاكرة", ui.trackVisible) { onUiChange { it.copy(trackVisible = !it.trackVisible) } } }
                     item {
                         Surface(color = CarbonSurface, shape = RoundedCornerShape(9.dp), border = BorderStroke(1.dp, CarbonCardBorder)) {

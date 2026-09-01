@@ -102,30 +102,39 @@ fun WidgetFrame(
             .alpha(widgetItem.opacity)
             .background(normalBackground, shape)
             .then(if (outlineWidth > 0.dp) Modifier.border(outlineWidth, outlineColor, shape) else Modifier)
-            .then(if (isDesignMode) Modifier.clickable { onSelect() } else Modifier)
-            .then(
-                if (isDesignMode && !widgetItem.isLocked) {
-                    Modifier.pointerInput(widgetItem.id, widgetItem.isLocked) {
-                        detectDragGestures(
-                            onDragStart = {
-                                onSelect()
-                                onBringToFront()
-                            },
-                            onDragEnd = onTransformFinished,
-                            onDragCancel = onTransformFinished
-                        ) { change, dragAmount ->
-                            change.consume()
-                            onMoveBy(dragAmount.x, dragAmount.y)
-                        }
-                    }
-                } else Modifier
-            )
     ) {
         CompositionLocalProvider(
             LocalWidgetVisualTokens provides WidgetVisualTokens(foregroundColor, accentColor, normalBackground.takeIf { it != Color.Transparent }),
             LocalWidgetForegroundColor provides foregroundColor
         ) {
             content()
+        }
+
+        // A transparent editor layer sits above widget content. This is essential for map and
+        // app widgets whose own click targets otherwise intercept the first touch.
+        if (isDesignMode) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .clickable { onSelect() }
+                    .then(
+                        if (!widgetItem.isLocked) {
+                            Modifier.pointerInput(widgetItem.id, widgetItem.isLocked) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        onSelect()
+                                        onBringToFront()
+                                    },
+                                    onDragEnd = onTransformFinished,
+                                    onDragCancel = onTransformFinished
+                                ) { change, dragAmount ->
+                                    change.consume()
+                                    onMoveBy(dragAmount.x, dragAmount.y)
+                                }
+                            }
+                        } else Modifier
+                    )
+            )
         }
 
         if (isDesignMode && isSelected) {
