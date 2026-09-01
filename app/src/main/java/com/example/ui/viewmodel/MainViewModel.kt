@@ -787,8 +787,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun loadApps() { _installedApps.value = appRepository.getInstalledApps() }
     fun toggleAppFavorite(packageName: String) { viewModelScope.launch(Dispatchers.IO) { appRepository.toggleFavorite(packageName); loadApps() } }
     fun toggleAppHidden(packageName: String) { viewModelScope.launch(Dispatchers.IO) { appRepository.toggleHidden(packageName); loadApps() } }
-    fun launchApp(packageName: String) { appRepository.launchApp(packageName) }
-    fun launchAndroidSettings() { appRepository.launchAndroidSettings() }
+    fun launchApp(packageName: String) {
+        (getApplication<Application>() as? com.example.CarLauncherApp)?.prepareForExternalActivity()
+        appRepository.launchApp(packageName)
+    }
+    fun launchAndroidSettings() {
+        (getApplication<Application>() as? com.example.CarLauncherApp)?.prepareForExternalActivity()
+        appRepository.launchAndroidSettings()
+    }
 
     fun togglePlayPause() = musicPlayerService.togglePlayPause()
     fun playNext() = musicPlayerService.playNext()
@@ -986,7 +992,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val WALLPAPER_WIDTH = 1024
         private const val WALLPAPER_HEIGHT = 600
         private const val MAP_IMPORT_FREE_SPACE_MARGIN = 64L * 1024L * 1024L
-        private const val SAFE_MODE_CRASH_THRESHOLD = 1
+        private const val SAFE_MODE_CRASH_THRESHOLD = 2
         private val SUPPORTED_MAP_EXTENSIONS = setOf("map", "mbtiles")
     }
 }

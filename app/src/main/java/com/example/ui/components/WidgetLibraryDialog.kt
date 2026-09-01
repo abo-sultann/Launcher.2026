@@ -31,13 +31,16 @@ import com.example.ui.theme.*
 @Composable
 fun WidgetLibraryDialog(
     initialType: WidgetType? = null,
+    initialStyle: WidgetStyle? = null,
     isStyleChangerMode: Boolean = false,
     onDismiss: () -> Unit,
     onSelectStyle: (WidgetStyle) -> Unit
 ) {
-    var selectedType by remember { mutableStateOf(initialType ?: WidgetType.CLOCK) }
+    var selectedType by remember(initialType) { mutableStateOf(initialType ?: WidgetType.CLOCK) }
     val stylesForType = remember(selectedType) { preferredWidgetStylesFor(selectedType) }
-    var selectedStyle by remember(selectedType) { mutableStateOf(stylesForType.firstOrNull() ?: WidgetStyle.CLOCK_MINIMAL) }
+    var selectedStyle by remember(selectedType, initialStyle) {
+        mutableStateOf(initialStyle?.takeIf { it.type == selectedType && it in stylesForType } ?: stylesForType.firstOrNull() ?: WidgetStyle.CLOCK_MINIMAL)
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(

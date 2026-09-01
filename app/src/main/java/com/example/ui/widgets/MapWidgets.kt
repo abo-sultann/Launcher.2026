@@ -35,6 +35,7 @@ fun MapWidget(
     targetDistanceMeters: Float? = null,
     targetBearing: Float? = null,
     onOpenFullMap: () -> Unit,
+    interactionEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val widgetColors = resolvedWidgetColors()
@@ -44,7 +45,7 @@ fun MapWidget(
     val title = navigationTarget?.name ?: activeMap?.name ?: "الخريطة"
 
     BoxWithConstraints(
-        modifier = modifier.fillMaxSize().clickable(onClick = onOpenFullMap).padding(6.dp),
+        modifier = modifier.fillMaxSize().clickable(enabled = interactionEnabled, onClick = onOpenFullMap).padding(6.dp),
         contentAlignment = Alignment.Center
     ) {
         val tiny = maxWidth < 155.dp || maxHeight < 100.dp
@@ -123,7 +124,7 @@ fun MapWidget(
                             Text(if (hasTarget) direction else if (gpsTelemetry.hasGpsFix) "اتجاه السيارة" else "لا توجد إشارة", color = widgetColors.secondary, fontSize = 9.sp)
                         }
                     }
-                    if (!tiny) Text(if (activeMap != null) "الخريطة: ${activeMap.name}" else "أضف خريطة Mapsforge للاستخدام دون إنترنت", color = TextMuted, fontSize = 8.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (!tiny) Text(if (activeMap != null) "الخريطة: ${activeMap.name}" else "أضف خريطة Mapsforge للاستخدام دون إنترنت", color = widgetColors.secondary, fontSize = 8.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
 

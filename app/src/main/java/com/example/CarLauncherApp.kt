@@ -29,7 +29,8 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var startedActivities = 0
     private var changingConfiguration = false
-    @Volatile private var suppressBackgroundTrackingUntil = 0L
+    private val processStartedAtElapsed = SystemClock.elapsedRealtime()
+    @Volatile private var expectedExternalHandoffUntil = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -70,18 +71,29 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
     override fun onActivityStopped(activity: Activity) {
         changingConfiguration = activity.isChangingConfigurations
         startedActivities = (startedActivities - 1).coerceAtLeast(0)
-        if (startedActivities == 0 && !changingConfiguration && SystemClock.elapsedRealtime() >= suppressBackgroundTrackingUntil) {
-            OffroadTrackingService.start(this)
+
+        // Do not start a foreground GPS service merely because Launcher hands the screen to
+        // another app. Several Android 7 head-unit ROMs terminate the process while creating
+        // that service/notification. The in-app map continues to record from its own GPS flow;
+        // background off-road recording must be started only by an explicit user action.
+        if (startedActivities == 0 && !changingConfiguration) {
+            OffroadTrackingService.stop(this)
         }
     }
 
-    /** A system picker is not a real switch away from Launcher and must not start GPS service. */
-    fun prepareForExternalPicker() {
-        suppressBackgroundTrackingUntil = SystemClock.elapsedRealtime() + 5 * 60_000L
+    /** Marks an intentional hand-off so it cannot be mistaken for a startup crash loop. */
+    fun prepareForExternalActivity() {
+        expectedExternalHandoffUntil = SystemClock.elapsedRealtime() + EXTERNAL_HANDOFF_WINDOW_MS
+        OffroadTrackingService.stop(this)
     }
 
+    /** Kept as a compatibility alias for wallpaper/map/file pickers. */
+    fun prepareForExternalPicker() = prepareForExternalActivity()
+
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
-    override fun onActivityResumed(activity: Activity) {}
+    override fun onActivityResumed(activity: Activity) {
+        expectedExternalHandoffUntil = 0L
+    }
     override fun onActivityPaused(activity: Activity) {}
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
     override fun onActivityDestroyed(activity: Activity) {}
@@ -160,14 +172,28 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
     private fun recordCrash(throwable: Throwable) {
         try {
             val prefs = safeModePrefs()
+            val elapsed = SystemClock.elapsedRealtime()
+            val message = throwable.localizedMessage ?: throwable.javaClass.simpleName
+
+            // Safe mode is for a repeated crash while Launcher itself is starting. A runtime
+            // failure during an intentional app/file hand-off must remain diagnostic only.
+            val isStartupWindow = elapsed - processStartedAtElapsed <= STARTUP_CRASH_WINDOW_MS
+            val isExpectedHandoff = elapsed <= expectedExternalHandoffUntil
+            if (!isStartupWindow || isExpectedHandoff) {
+                prefs.edit()
+                    .putLong("last_runtime_crash_time", System.currentTimeMillis())
+                    .putString("last_runtime_crash_msg", message)
+                    .apply()
+                return
+            }
+
             val now = System.currentTimeMillis()
             val lastCrash = prefs.getLong("last_crash_time", 0L)
             val previousCount = if (lastCrash > 0L && now - lastCrash <= CRASH_WINDOW_MS) prefs.getInt("crash_count", 0) else 0
-            val crashCount = previousCount + 1
             prefs.edit()
-                .putInt("crash_count", crashCount)
+                .putInt("crash_count", previousCount + 1)
                 .putLong("last_crash_time", now)
-                .putString("last_crash_msg", throwable.localizedMessage ?: throwable.javaClass.simpleName)
+                .putString("last_crash_msg", message)
                 .apply()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to record crash", e)
@@ -179,6 +205,8 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
         private const val UPDATE_CHANNEL = "launcher_updates"
         private const val UPDATE_NOTIFICATION_ID = 20262
         private const val CRASH_WINDOW_MS = 10 * 60 * 1000L
+        private const val STARTUP_CRASH_WINDOW_MS = 45 * 1000L
+        private const val EXTERNAL_HANDOFF_WINDOW_MS = 5 * 60 * 1000L
         private const val STABLE_SESSION_MS = 90 * 1000L
         lateinit var instance: CarLauncherApp
             private set

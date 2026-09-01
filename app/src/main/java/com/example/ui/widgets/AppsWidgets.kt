@@ -36,6 +36,7 @@ fun AppsWidget(
     installedApps: List<AppItem>,
     onLaunchApp: (String) -> Unit,
     onOpenAppDrawer: () -> Unit,
+    interactionEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val widgetColors = resolvedWidgetColors()
@@ -54,12 +55,12 @@ fun AppsWidget(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     items(favoriteApps.take(10), key = { it.packageName }) { app ->
-                        AppShortcutItem(app, true) { onLaunchApp(app.packageName) }
+                        AppShortcutItem(app, true, interactionEnabled) { onLaunchApp(app.packageName) }
                     }
                     item {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { onOpenAppDrawer() }.padding(4.dp).testTag("btn_widget_all_apps")
+                            modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(enabled = interactionEnabled) { onOpenAppDrawer() }.padding(4.dp).testTag("btn_widget_all_apps")
                         ) {
                             Surface(
                                 color = widgetColors.accent.copy(alpha = 0.2f),
@@ -80,7 +81,7 @@ fun AppsWidget(
 
             WidgetStyle.APPS_ICONS_ONLY -> {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    favoriteApps.take(5).forEach { app -> AppShortcutItem(app, false) { onLaunchApp(app.packageName) } }
+                    favoriteApps.take(5).forEach { app -> AppShortcutItem(app, false, interactionEnabled) { onLaunchApp(app.packageName) } }
                 }
             }
 
@@ -88,10 +89,10 @@ fun AppsWidget(
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceEvenly) {
                     val apps4 = favoriteApps.take(4)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        apps4.take(2).forEach { app -> AppShortcutItem(app, true) { onLaunchApp(app.packageName) } }
+                        apps4.take(2).forEach { app -> AppShortcutItem(app, true, interactionEnabled) { onLaunchApp(app.packageName) } }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        apps4.drop(2).take(2).forEach { app -> AppShortcutItem(app, true) { onLaunchApp(app.packageName) } }
+                        apps4.drop(2).take(2).forEach { app -> AppShortcutItem(app, true, interactionEnabled) { onLaunchApp(app.packageName) } }
                     }
                 }
             }
@@ -100,10 +101,10 @@ fun AppsWidget(
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceEvenly) {
                     val apps6 = favoriteApps.take(6)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        apps6.take(3).forEach { app -> AppShortcutItem(app, false) { onLaunchApp(app.packageName) } }
+                        apps6.take(3).forEach { app -> AppShortcutItem(app, false, interactionEnabled) { onLaunchApp(app.packageName) } }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        apps6.drop(3).take(3).forEach { app -> AppShortcutItem(app, false) { onLaunchApp(app.packageName) } }
+                        apps6.drop(3).take(3).forEach { app -> AppShortcutItem(app, false, interactionEnabled) { onLaunchApp(app.packageName) } }
                     }
                 }
             }
@@ -112,13 +113,13 @@ fun AppsWidget(
                 Surface(
                     color = resolvedWidgetSurface(CarbonSurface),
                     shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, widgetColors.secondary.copy(alpha = .45f)),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.SpaceBetween) {
                         Text("المفضلة السريعة", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = widgetColors.secondary)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                            favoriteApps.take(4).forEach { app -> AppShortcutItem(app, true) { onLaunchApp(app.packageName) } }
+                            favoriteApps.take(4).forEach { app -> AppShortcutItem(app, true, interactionEnabled) { onLaunchApp(app.packageName) } }
                         }
                     }
                 }
@@ -126,7 +127,7 @@ fun AppsWidget(
 
             else -> {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    favoriteApps.take(4).forEach { app -> AppShortcutItem(app, true) { onLaunchApp(app.packageName) } }
+                    favoriteApps.take(4).forEach { app -> AppShortcutItem(app, true, interactionEnabled) { onLaunchApp(app.packageName) } }
                 }
             }
         }
@@ -134,18 +135,18 @@ fun AppsWidget(
 }
 
 @Composable
-private fun AppShortcutItem(app: AppItem, showLabel: Boolean, onClick: () -> Unit) {
+private fun AppShortcutItem(app: AppItem, showLabel: Boolean, interactionEnabled: Boolean, onClick: () -> Unit) {
     val widgetColors = resolvedWidgetColors()
     val imageBitmap = remember(app.packageName, app.iconBitmap) { app.iconBitmap?.asImageBitmap() }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(4.dp).testTag("app_shortcut_${app.packageName}")
+        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = interactionEnabled, onClick = onClick).padding(4.dp).testTag("app_shortcut_${app.packageName}")
     ) {
         Surface(
             color = resolvedWidgetSurface(CarbonSurface),
             shape = RoundedCornerShape(10.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder),
+            border = androidx.compose.foundation.BorderStroke(1.dp, widgetColors.secondary.copy(alpha = .45f)),
             modifier = Modifier.size(44.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {

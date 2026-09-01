@@ -144,6 +144,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         playbackState,
                         gpsTelemetry,
                         tripData,
+                        isDesignMode,
                         activeMap,
                         navigationTarget,
                         if (navigationTarget != null) viewModel.offroadDistanceToTargetMeters() else null,
@@ -261,6 +262,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         editingWidgetForStyle?.let { target ->
             WidgetLibraryDialog(
                 initialType = target.type,
+                initialStyle = target.style,
                 isStyleChangerMode = true,
                 onDismiss = { editingWidgetForStyle = null },
                 onSelectStyle = {
@@ -306,6 +308,7 @@ private fun RenderWidgetContent(
     p: MusicPlaybackState,
     gps: GpsTelemetry,
     trip: TripData,
+    isDesignMode: Boolean,
     map: MapItem?,
     navigationTarget: OffroadNavigationTarget?,
     targetDistanceMeters: Float?,
@@ -317,9 +320,9 @@ private fun RenderWidgetContent(
         WidgetType.DATE -> DateWidget(w.style)
         WidgetType.GPS -> GpsWidget(w.style, gps)
         WidgetType.MUSIC -> MusicWidget(w.style, p, { vm.togglePlayPause() }, { vm.playNext() }, { vm.playPrevious() }, { vm.seekTo(it) })
-        WidgetType.MAP -> MapWidget(w.style, gps, trip, map, navigationTarget, targetDistanceMeters, targetBearing, onOpenFullMap = { vm.navigateTo(CarScreen.MAP) })
+        WidgetType.MAP -> MapWidget(w.style, gps, trip, map, navigationTarget, targetDistanceMeters, targetBearing, onOpenFullMap = { vm.navigateTo(CarScreen.MAP) }, interactionEnabled = !isDesignMode)
         WidgetType.TRIP -> TripWidget(w.style, trip, { vm.startTrip() }, { vm.pauseTrip() }, { vm.resetTrip() })
-        WidgetType.APPS -> AppsWidget(w.style, apps, onOpenAppDrawer = { vm.navigateTo(CarScreen.APPS) }, onLaunchApp = { vm.launchApp(it) })
+        WidgetType.APPS -> AppsWidget(w.style, apps, onOpenAppDrawer = { vm.navigateTo(CarScreen.APPS) }, onLaunchApp = { vm.launchApp(it) }, interactionEnabled = !isDesignMode)
         WidgetType.CONTROLS -> ControlsWidget(w.style, p, { vm.adjustVolume(it) }, { vm.toggleMute() }, { vm.togglePlayPause() }, { vm.playNext() }, { vm.playPrevious() })
     }
 }
