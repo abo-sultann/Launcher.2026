@@ -39,5 +39,6 @@ data class OfflineMapSearchResult(
     val name: String,
     val latitude: Double,
     val longitude: Double,
-    val source: String
+    val source: String,
+    val distanceMeters: Float? = null
 )
