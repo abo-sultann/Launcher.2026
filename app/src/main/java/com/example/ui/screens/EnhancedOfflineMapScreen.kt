@@ -87,6 +87,7 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
     val navTarget by viewModel.offroadNavigationTarget.collectAsState()
     val storedMapState by viewModel.offroadMapState.collectAsState()
     val searchResults by viewModel.offlineSearchResults.collectAsState()
+    val searchInProgress by viewModel.offlineSearchInProgress.collectAsState()
     val transferMessage by viewModel.offroadTransferMessage.collectAsState()
     val fileImportStatus by viewModel.fileImportStatus.collectAsState()
     val launcherSettings by viewModel.settings.collectAsState()
@@ -454,6 +455,7 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             EnhancedSearchDialog(
                 results = searchResults,
                 extras = extraPlaces,
+                isSearching = searchInProgress,
                 onSearch = viewModel::searchOfflineMap,
                 onNavigate = { result -> viewModel.navigateToSearchResult(result); showSearch = false },
                 onClose = { viewModel.clearOfflineMapSearch(); showSearch = false }
@@ -802,6 +804,7 @@ private fun EnhancedPlacesDialog(
 private fun EnhancedSearchDialog(
     results: List<OfflineMapSearchResult>,
     extras: List<EnhancedSavedPlace>,
+    isSearching: Boolean,
     onSearch: (String) -> Unit,
     onNavigate: (OfflineMapSearchResult) -> Unit,
     onClose: () -> Unit
@@ -814,6 +817,9 @@ private fun EnhancedSearchDialog(
             Triple("مقاهي", "مقهى", Icons.Default.LocalCafe),
             Triple("مستشفيات", "مستشفى", Icons.Default.LocalHospital),
             Triple("صيدليات", "صيدلية", Icons.Default.LocalPharmacy),
+            Triple("تموينات", "تموينات", Icons.Default.Store),
+            Triple("صراف", "صراف", Icons.Default.AccountBalance),
+            Triple("سيارات", "خدمات سيارات", Icons.Default.DirectionsCar),
             Triple("تسوق", "محل تجاري", Icons.Default.ShoppingBag),
             Triple("مساجد", "مسجد", Icons.Default.Mosque)
         )
@@ -865,9 +871,25 @@ private fun EnhancedSearchDialog(
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text("اختر اختصارًا أو اكتب حرفين على الأقل", color = TextSecondary)
                     }
+                } else if (isSearching) {
+                    Column(
+                        Modifier.weight(1f).fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(color = CyanNeon, modifier = Modifier.size(34.dp), strokeWidth = 3.dp)
+                        Spacer(Modifier.height(10.dp))
+                        Text("جاري البحث حول موقع السيارة…", color = TextSecondary)
+                        Text("قد تستغرق الفهرسة الأولى عدة ثوانٍ", color = TextMuted, fontSize = 9.sp)
+                    }
                 } else if (merged.isEmpty()) {
-                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text("لا توجد نتائج في ملف الخريطة الحالي", color = TextSecondary)
+                    Column(
+                        Modifier.weight(1f).fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text("لم تُعثر على نتائج قريبة", color = TextSecondary, fontWeight = FontWeight.Bold)
+                        Text("جرّب اسمًا آخر؛ بعض بيانات الخريطة قد لا تحمل أسماء", color = TextMuted, fontSize = 9.sp)
                     }
                 } else {
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -886,7 +908,14 @@ private fun EnhancedSearchDialog(
                                     Icon(mapSearchResultIcon(result.source), null, tint = CyanNeon)
                                     Column(Modifier.weight(1f)) {
                                         Text(result.name, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
-                                        Text(result.source, color = TextSecondary, fontSize = 9.sp)
+                                        val distanceText = result.distanceMeters?.let { distance ->
+                                            if (distance < 1000f) "${distance.toInt()} م" else String.format(Locale.US, "%.1f كم", distance / 1000f)
+                                        }
+                                        Text(
+                                            listOfNotNull(result.source, distanceText).joinToString(" • "),
+                                            color = TextSecondary,
+                                            fontSize = 9.sp
+                                        )
                                     }
                                     Icon(Icons.Default.Navigation, "توجيه", tint = EmeraldSafe, modifier = Modifier.size(21.dp))
                                 }
