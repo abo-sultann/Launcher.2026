@@ -107,7 +107,7 @@ class OfflineMapSearchEngine {
         indexedKey = key
     }
 
-    private fun focusTile(file: File, latitude: Double?, longitude: Double?): Pair<Long, Long> {
+    private fun focusTile(file: File, latitude: Double?, longitude: Double?): Pair<Int, Int> {
         var mapFile: MapFile? = null
         return try {
             mapFile = MapFile(file, MAP_LANGUAGE_ARABIC)
@@ -118,7 +118,7 @@ class OfflineMapSearchEngine {
             val lon = longitude?.takeIf { it in bbox.minLongitude..bbox.maxLongitude } ?: bbox.centerPoint.longitude
             MercatorProjection.longitudeToTileX(lon, zoom) to MercatorProjection.latitudeToTileY(lat, zoom)
         } catch (_: Exception) {
-            0L to 0L
+            0 to 0
         } finally {
             try { mapFile?.close() } catch (_: Exception) { }
         }
@@ -150,8 +150,8 @@ class OfflineMapSearchEngine {
             val focusX = MercatorProjection.longitudeToTileX(focusLon, zoom).coerceIn(minX, maxX)
             val focusY = MercatorProjection.latitudeToTileY(focusLat, zoom).coerceIn(minY, maxY)
 
-            val orderedTiles = ArrayList<Pair<Long, Long>>(((maxX - minX + 1) * (maxY - minY + 1)).toInt())
-            for (x in minX..maxX) for (y in minY..maxY) orderedTiles += x to y
+            val orderedTiles = ArrayList<Pair<Int, Int>>(((maxX - minX + 1) * (maxY - minY + 1)).toInt())
+            for (x in minX..maxX) for (y in minY..maxY) orderedTiles.add(x to y)
             orderedTiles.sortBy { (x, y) ->
                 val dx = x - focusX
                 val dy = y - focusY
@@ -302,7 +302,7 @@ class OfflineMapSearchEngine {
     companion object {
         private const val MAX_INDEX_ITEMS = 28_000
         private const val INDEX_ZOOM = 9
-        private const val NEARBY_RADIUS_TILES = 10L
+        private const val NEARBY_RADIUS_TILES = 10
         private const val MAP_LANGUAGE_ARABIC = "ar"
         private val GENERIC_SERVICE_NAMES = setOf(
             "محطة وقود", "مطعم", "مقهى", "مستشفى/عيادة", "صيدلية", "مسجد/دار عبادة",
