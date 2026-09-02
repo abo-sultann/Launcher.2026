@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
 import com.example.CarLauncherApp
 import com.example.data.StableBackupManager
+import com.example.data.readUtf8TextLimited
 import com.example.data.UpdateStatus
 import com.example.ui.theme.*
 import kotlinx.coroutines.Dispatchers
@@ -54,7 +55,7 @@ fun StableSystemPanel(modifier: Modifier = Modifier) {
             localMessage = "جارٍ استعادة الإعدادات..."
             val count = withContext(Dispatchers.IO) {
                 runCatching {
-                    val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: return@runCatching 0
+                    val raw = context.contentResolver.readUtf8TextLimited(uri)
                     backupManager.importBackup(raw)
                 }.getOrDefault(0)
             }

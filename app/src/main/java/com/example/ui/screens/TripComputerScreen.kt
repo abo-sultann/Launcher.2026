@@ -16,7 +16,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.SavedTripRouteBridge
 import com.example.model.SavedTrip
 import com.example.ui.components.CarScreen
 import com.example.ui.theme.*
@@ -163,10 +162,8 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
                         items(history, key = { it.id }) { saved ->
                             SavedTripCard(
                                 trip = saved,
-                                onMap = {
-                                    SavedTripRouteBridge.show(saved)
-                                    viewModel.navigateTo(CarScreen.MAP)
-                                },
+                                hasRoute = viewModel.hasSavedTripRoute(saved.id),
+                                onMap = { viewModel.openSavedTripRoute(saved.id) },
                                 onRename = { renameTrip = saved; renameText = saved.name },
                                 onDelete = { deleteTrip = saved }
                             )
@@ -231,15 +228,15 @@ private fun TripMetric(title: String, value: String, icon: androidx.compose.ui.g
 }
 
 @Composable
-private fun SavedTripCard(trip: SavedTrip, onMap: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+private fun SavedTripCard(trip: SavedTrip, hasRoute: Boolean, onMap: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
     Surface(color = CarbonSurface, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             Column(Modifier.weight(1f)) {
                 Text(trip.name, color = TextPrimary, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("${formatTripDate(trip.startTimeStamp)} • ${String.format(Locale.US, "%.1f", trip.distanceKm)} كم • حركة ${formatDuration(trip.movingTimeSec)}", color = TextSecondary, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("أعلى ${trip.maxSpeedKmH.toInt()} • متوسط ${trip.averageSpeedKmH.toInt()} • مواقع ${trip.placesSavedCount} • مسار ${trip.route.size} نقطة", color = TextMuted, fontSize = 8.sp, maxLines = 1)
+                Text("أعلى ${trip.maxSpeedKmH.toInt()} • متوسط ${trip.averageSpeedKmH.toInt()} • مواقع ${trip.placesSavedCount} • ${if (hasRoute) "مسار محفوظ" else "بلا مسار"}", color = TextMuted, fontSize = 8.sp, maxLines = 1)
             }
-            FilledTonalIconButton(onClick = onMap, enabled = trip.route.isNotEmpty(), modifier = Modifier.size(34.dp)) { Icon(Icons.Default.Map, "عرض المسار", tint = if (trip.route.isNotEmpty()) CyanNeon else TextMuted, modifier = Modifier.size(17.dp)) }
+            FilledTonalIconButton(onClick = onMap, enabled = hasRoute, modifier = Modifier.size(34.dp)) { Icon(Icons.Default.Map, "عرض المسار", tint = if (hasRoute) CyanNeon else TextMuted, modifier = Modifier.size(17.dp)) }
             IconButton(onClick = onRename, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Edit, "تعديل الاسم", tint = TextSecondary, modifier = Modifier.size(17.dp)) }
             IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Delete, "حذف", tint = HighContrastRed, modifier = Modifier.size(17.dp)) }
         }

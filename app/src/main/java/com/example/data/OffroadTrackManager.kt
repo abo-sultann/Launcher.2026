@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import android.location.Location
+import android.util.AtomicFile
 import android.util.Xml
 import com.example.model.GpsTelemetry
 import com.example.model.MapOrientationMode
@@ -11,16 +12,19 @@ import com.example.model.OffroadTrackPoint
 import com.example.model.SavedOffroadPlace
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
 import java.io.File
+import java.io.FileOutputStream
 import java.io.StringReader
 import java.util.UUID
 import kotlin.math.max
@@ -29,6 +33,10 @@ class OffroadTrackManager(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val prefs = context.getSharedPreferences("offroad_navigation_2026", Context.MODE_PRIVATE)
     private val trackFile = File(context.filesDir, "offroad_track_rolling.json")
+    private val trackAtomicFile = AtomicFile(trackFile)
+    private val persistLock = Any()
+    private var pendingTrackSnapshot: List<OffroadTrackPoint>? = null
+    private var persistJob: Job? = null
 
     private val _trackPoints = MutableStateFlow<List<OffroadTrackPoint>>(emptyList())
     val trackPoints: StateFlow<List<OffroadTrackPoint>> = _trackPoints.asStateFlow()
@@ -72,7 +80,7 @@ class OffroadTrackManager(private val context: Context) {
         trimRollingTrack(updated)
 
         _trackPoints.value = updated
-        if (now - lastPersistAt > 15_000L || updated.size % 8 == 0) {
+        if (now - lastPersistAt > TRACK_PERSIST_INTERVAL_MS || updated.size % TRACK_PERSIST_POINT_INTERVAL == 0) {
             lastPersistAt = now
             persistTrackAsync(updated)
         }
@@ -224,7 +232,9 @@ class OffroadTrackManager(private val context: Context) {
                         "trkpt", "rtept" -> {
                             val lat = parser.getAttributeValue(null, "lat")?.toDoubleOrNull()
                             val lon = parser.getAttributeValue(null, "lon")?.toDoubleOrNull()
-                            if (lat != null && lon != null) importedPoints += OffroadTrackPoint(lat, lon, System.currentTimeMillis() + importedPoints.size)
+                            if (lat != null && lon != null && importedPoints.size < MAX_TRACK_POINTS) {
+                                importedPoints += OffroadTrackPoint(lat, lon, System.currentTimeMillis() + importedPoints.size)
+                            }
                         }
                         "wpt" -> {
                             pendingWptLat = parser.getAttributeValue(null, "lat")?.toDoubleOrNull()
@@ -236,7 +246,7 @@ class OffroadTrackManager(private val context: Context) {
                 } else if (event == XmlPullParser.END_TAG && parser.name.equals("wpt", true)) {
                     val lat = pendingWptLat
                     val lon = pendingWptLon
-                    if (lat != null && lon != null) {
+                    if (lat != null && lon != null && importedPlaces.size < MAX_IMPORTED_PLACES) {
                         importedPlaces += SavedOffroadPlace(
                             id = UUID.randomUUID().toString(),
                             name = pendingWptName?.trim().takeUnless { it.isNullOrBlank() } ?: "نقطة GPX",
@@ -294,7 +304,7 @@ class OffroadTrackManager(private val context: Context) {
             val root = JSONObject(raw)
             val importedTrack = mutableListOf<OffroadTrackPoint>()
             root.optJSONArray("track")?.let { a ->
-                for (i in 0 until a.length()) {
+                for (i in 0 until minOf(a.length(), MAX_TRACK_POINTS)) {
                     val o = a.getJSONObject(i)
                     importedTrack += OffroadTrackPoint(o.getDouble("lat"), o.getDouble("lon"), o.optLong("time", System.currentTimeMillis()))
                 }
@@ -310,7 +320,7 @@ class OffroadTrackManager(private val context: Context) {
             var placeCount = 0
             root.optJSONArray("places")?.let { a ->
                 val merged = _savedPlaces.value.associateBy { it.id }.toMutableMap()
-                for (i in 0 until a.length()) {
+                for (i in 0 until minOf(a.length(), MAX_IMPORTED_PLACES)) {
                     val o = a.getJSONObject(i)
                     val p = SavedOffroadPlace(
                         id = o.optString("id", UUID.randomUUID().toString()),
@@ -338,14 +348,20 @@ class OffroadTrackManager(private val context: Context) {
     }
 
     fun release() {
-        persistTrackNow(_trackPoints.value)
+        val finalSnapshot = _trackPoints.value.toList()
+        val activeJob = synchronized(persistLock) {
+            pendingTrackSnapshot = null
+            persistJob
+        }
+        runBlocking { activeJob?.join() }
+        persistTrackNow(finalSnapshot)
         scope.cancel()
     }
 
     private fun loadTrack() {
         try {
             if (!trackFile.exists()) return
-            val array = JSONArray(trackFile.readText())
+            val array = trackAtomicFile.openRead().bufferedReader(Charsets.UTF_8).use { JSONArray(it.readText()) }
             val points = ArrayList<OffroadTrackPoint>(array.length())
             for (i in 0 until array.length()) {
                 val o = array.getJSONObject(i)
@@ -373,15 +389,41 @@ class OffroadTrackManager(private val context: Context) {
 
     private fun persistTrackAsync(points: List<OffroadTrackPoint>) {
         val snapshot = points.toList()
-        scope.launch { persistTrackNow(snapshot) }
+        synchronized(persistLock) {
+            pendingTrackSnapshot = snapshot
+            if (persistJob?.isActive == true) return
+            persistJob = scope.launch {
+                while (true) {
+                    val next = synchronized(persistLock) {
+                        val queued = pendingTrackSnapshot
+                        pendingTrackSnapshot = null
+                        if (queued == null) persistJob = null
+                        queued
+                    } ?: break
+                    persistTrackNow(next)
+                }
+            }
+        }
     }
 
     private fun persistTrackNow(points: List<OffroadTrackPoint>) {
+        val array = JSONArray()
+        points.forEach { point ->
+            array.put(JSONObject().apply {
+                put("lat", point.latitude)
+                put("lon", point.longitude)
+                put("time", point.timestamp)
+            })
+        }
+        var output: FileOutputStream? = null
         try {
-            val array = JSONArray()
-            points.forEach { point -> array.put(JSONObject().apply { put("lat", point.latitude); put("lon", point.longitude); put("time", point.timestamp) }) }
-            trackFile.writeText(array.toString())
-        } catch (_: Exception) { }
+            output = trackAtomicFile.startWrite()
+            output.write(array.toString().toByteArray(Charsets.UTF_8))
+            output.fd.sync()
+            trackAtomicFile.finishWrite(output)
+        } catch (_: Exception) {
+            output?.let { trackAtomicFile.failWrite(it) }
+        }
     }
 
     private fun loadPlaces() {
@@ -460,5 +502,8 @@ class OffroadTrackManager(private val context: Context) {
     companion object {
         private const val MAX_TRACK_KM = 1000.0
         private const val MAX_TRACK_POINTS = 24_000
+        private const val MAX_IMPORTED_PLACES = 2_000
+        private const val TRACK_PERSIST_INTERVAL_MS = 30_000L
+        private const val TRACK_PERSIST_POINT_INTERVAL = 20
     }
 }

@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -863,6 +864,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun resetTrip() = tripComputer.resetTrip()
     fun renameSavedTrip(id: String, name: String) = tripComputer.renameSavedTrip(id, name)
     fun deleteSavedTrip(id: String) = tripComputer.deleteSavedTrip(id)
+    fun hasSavedTripRoute(id: String): Boolean = tripComputer.hasSavedTripRoute(id)
+    fun openSavedTripRoute(id: String) {
+        viewModelScope.launch {
+            val saved = withContext(Dispatchers.IO) { tripComputer.loadSavedTripWithRoute(id) }
+            if (saved != null) {
+                SavedTripRouteBridge.show(saved)
+                navigateTo(CarScreen.MAP)
+            }
+        }
+    }
     fun noteTripSavedPlace() = tripComputer.noteSavedPlace()
 
     fun importMapFile(file: File, name: String? = null) = offlineMapEngine.importMapFile(file, name)
@@ -1004,7 +1015,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun readOffroadText(uri: Uri, label: String, importer: (String) -> Int) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val raw = getApplication<Application>().contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
+                val raw = getApplication<Application>().contentResolver.readUtf8TextLimited(uri)
                 val count = importer(raw)
                 _offroadTransferMessage.value = if (count > 0) "تم استيراد $label: $count عنصر" else "لم يتم العثور على بيانات صالحة في $label"
             } catch (_: Exception) { _offroadTransferMessage.value = "تعذر استيراد $label" }
@@ -1031,7 +1042,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         gpsTelemetryManager.stopGpsUpdates()
         musicPlayerService.release()
         tripComputer.release()
-        offroadTrackManager.release()
+        // Application-owned: keep off-road persistence alive across Activity recreation.
         super.onCleared()
     }
 

@@ -131,7 +131,7 @@ class PreferencesManager(context: Context) {
         return try {
             val array = JSONArray(raw)
             val list = mutableListOf<WidgetItem>()
-            for (i in 0 until array.length()) {
+            for (i in 0 until minOf(array.length(), MAX_WIDGETS)) {
                 val obj = array.getJSONObject(i)
                 val id = obj.getString("id")
                 val type = try { WidgetType.valueOf(obj.getString("type")) } catch (_: Exception) { WidgetType.CLOCK }
@@ -266,7 +266,7 @@ class PreferencesManager(context: Context) {
         val raw = prefs.getString("saved_trips_json", "[]") ?: "[]"
         return try {
             val array = JSONArray(raw)
-            List(array.length()) { i ->
+            List(minOf(array.length(), MAX_SAVED_TRIPS)) { i ->
                 val o = array.getJSONObject(i)
                 SavedTrip(
                     id = o.getString("id"),
@@ -311,7 +311,7 @@ class PreferencesManager(context: Context) {
         val raw = prefs.getString("maps_json", null) ?: return emptyList()
         return try {
             val array = JSONArray(raw)
-            List(array.length()) { i ->
+            List(minOf(array.length(), MAX_SAVED_MAPS)) { i ->
                 val o = array.getJSONObject(i)
                 MapItem(o.getString("id"), o.getString("name"), o.getString("filePath"), o.optString("fileSizeFormatted", "--"), o.optBoolean("isActive", false), o.optString("dateAdded", ""))
             }
@@ -325,5 +325,10 @@ class PreferencesManager(context: Context) {
         } catch (e: Exception) { Log.e(TAG, "Error saving maps", e) }
     }
 
-    companion object { private const val TAG = "PreferencesManager" }
+    companion object {
+        private const val TAG = "PreferencesManager"
+        private const val MAX_WIDGETS = 64
+        private const val MAX_SAVED_TRIPS = 100
+        private const val MAX_SAVED_MAPS = 32
+    }
 }

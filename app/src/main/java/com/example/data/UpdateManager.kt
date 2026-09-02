@@ -362,14 +362,15 @@ class UpdateManager(private val context: Context) {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun readTextUrl(url: String): String {
+    private fun readTextUrl(url: String, confirmationDepth: Int = 0): String {
+        if (confirmationDepth > MAX_CONFIRMATION_DEPTH) throw IllegalStateException("تكررت صفحة تأكيد Drive")
         val conn = openConnection(url)
         val type = (conn.contentType ?: "").lowercase(Locale.US)
         return try {
             val raw = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             if (type.contains("text/html") && !raw.trimStart().startsWith("{")) {
                 val confirmed = extractDriveConfirmedUrl(raw, url)
-                if (confirmed != null) return readTextUrl(confirmed)
+                if (confirmed != null) return readTextUrl(confirmed, confirmationDepth + 1)
             }
             raw
         } finally { conn.disconnect() }
@@ -430,6 +431,7 @@ class UpdateManager(private val context: Context) {
 
     companion object {
         private const val MIN_APK_BYTES = 1_000_000L
+        private const val MAX_CONFIRMATION_DEPTH = 2
         private const val APK_MIME = "application/vnd.android.package-archive"
         private const val KEY_VERSION_CODE = "ready_version_code"
         private const val KEY_VERSION_NAME = "ready_version_name"

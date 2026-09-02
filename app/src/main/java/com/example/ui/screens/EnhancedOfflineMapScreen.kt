@@ -170,7 +170,6 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
                     trackVisible = mapUi.trackVisible,
                     trackWidth = mapUi.trackWidth,
                     navigationTarget = navTarget,
-                    savedPlaces = allPlaces,
                     measureA = measureA,
                     measureB = measureB,
                     detailedTheme = mapUi.detailedTheme,
@@ -1087,7 +1086,6 @@ private fun EnhancedMapsforgeMap(
     trackVisible: Boolean,
     trackWidth: Float,
     navigationTarget: OffroadNavigationTarget?,
-    savedPlaces: List<UiOffroadPlace>,
     measureA: LatLong?,
     measureB: LatLong?,
     detailedTheme: Boolean,
@@ -1097,17 +1095,20 @@ private fun EnhancedMapsforgeMap(
     onRenderError: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var holderRef by remember(mapItem.id, detailedTheme, trackWidth) { mutableStateOf<EnhancedMapHolder?>(null) }
+    val rendererKey = remember(mapItem.id, detailedTheme, trackWidth) {
+        "${mapItem.id}:$detailedTheme:${trackWidth.toInt()}"
+    }
+    var holderRef by remember(rendererKey) { mutableStateOf<EnhancedMapHolder?>(null) }
     val latestManual by rememberUpdatedState(onManualInteraction)
     val latestLongPress by rememberUpdatedState(onLongPress)
     val latestRenderError by rememberUpdatedState(onRenderError)
 
-    key("${mapItem.id}:$detailedTheme:${trackWidth.toInt()}:${savedPlaces.hashCode()}") {
+    key(rendererKey) {
         AndroidView(
             modifier = modifier,
             factory = { ctx ->
                 val holder = try {
-                    createEnhancedMapView(ctx, mapItem, gps, autoZoom, initialState, trackPoints, trackVisible, trackWidth, navigationTarget, savedPlaces, measureA, measureB, detailedTheme, drivingView).also {
+                    createEnhancedMapView(ctx, mapItem, gps, autoZoom, initialState, trackPoints, trackVisible, trackWidth, navigationTarget, measureA, measureB, detailedTheme, drivingView).also {
                         it.mapView.post { latestRenderError(null) }
                     }
                 } catch (t: Throwable) {
@@ -1164,7 +1165,7 @@ private fun EnhancedMapsforgeMap(
         )
     }
 
-    DisposableEffect(mapItem.id, detailedTheme, trackWidth) {
+    DisposableEffect(rendererKey) {
         onDispose {
             try { holderRef?.mapView?.destroyAll() } catch (_: Exception) { }
             try { holderRef?.mapFile?.close() } catch (_: Exception) { }
@@ -1256,7 +1257,6 @@ private fun createEnhancedMapView(
     trackVisible: Boolean,
     trackWidth: Float,
     navigationTarget: OffroadNavigationTarget?,
-    savedPlaces: List<UiOffroadPlace>,
     measureA: LatLong?,
     measureB: LatLong?,
     detailedTheme: Boolean,
@@ -1346,20 +1346,7 @@ private fun createEnhancedMapView(
     }
     mapView.layerManager.layers.add(measure)
 
-    // نقاط محفوظة ثابتة وواضحة على الخريطة. الحد يحمي ذاكرة شاشة Android 7.
-    savedPlaces.take(MAX_VISIBLE_SAVED_MARKERS).forEach { place ->
-        addFixedMarker(
-            mapView = mapView,
-            position = LatLong(place.latitude, place.longitude),
-            radiusPx = if (place.favorite) 9f else 7f,
-            fillColor = if (place.favorite) {
-                AndroidGraphicFactory.INSTANCE.createColor(255, 255, 184, 0)
-            } else {
-                AndroidGraphicFactory.INSTANCE.createColor(245, 255, 255, 255)
-            },
-            strokeColor = AndroidGraphicFactory.INSTANCE.createColor(255, 20, 20, 20)
-        )
-    }
+    // Saved places are drawn by the persistent overlay; do not rebuild Mapsforge here.
     val targetMarker = addFixedMarker(
         mapView = mapView,
         position = navigationTarget?.let { LatLong(it.latitude, it.longitude) },
@@ -1499,7 +1486,6 @@ private const val MAP_FRAMEBUFFER_OVERDRAW = 1.7
 private const val MAP_TILE_CACHE_SCREEN_RATIO = 2f
 private const val MAP_ROTATION_STEP_DEGREES = 4.5f
 private const val MBTILES_MEMORY_CACHE_TILES = 48
-private const val MAX_VISIBLE_SAVED_MARKERS = 150
 private const val DEFAULT_MAP_LATITUDE = 24.7136
 private const val DEFAULT_MAP_LONGITUDE = 46.6753
 

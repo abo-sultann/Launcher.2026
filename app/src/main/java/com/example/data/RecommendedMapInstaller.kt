@@ -146,7 +146,8 @@ class RecommendedMapInstaller(
         throw lastError ?: IllegalStateException("تعذر تنزيل الجزء $partNumber")
     }
 
-    private fun downloadCandidate(rawUrl: String, target: File, completedBytes: Long, partNumber: Int) {
+    private fun downloadCandidate(rawUrl: String, target: File, completedBytes: Long, partNumber: Int, confirmationDepth: Int = 0) {
+        if (confirmationDepth > MAX_CONFIRMATION_DEPTH) throw IllegalStateException("تكررت صفحة تأكيد Drive")
         val connection = openConnection(rawUrl)
         try {
             val contentType = (connection.contentType ?: "").lowercase(Locale.US)
@@ -157,7 +158,7 @@ class RecommendedMapInstaller(
                 val confirmed = extractDriveConfirmedUrl(body, rawUrl)
                     ?: throw IllegalStateException("Drive أعاد صفحة بدل الجزء $partNumber")
                 connection.disconnect()
-                downloadCandidate(confirmed, target, completedBytes, partNumber)
+                downloadCandidate(confirmed, target, completedBytes, partNumber, confirmationDepth + 1)
                 return
             }
 
@@ -276,6 +277,7 @@ class RecommendedMapInstaller(
         private const val READ_TIMEOUT_MS = 60_000
         private const val MAX_REDIRECTS = 8
         private const val MAX_CONFIRMATION_HTML_CHARS = 350_000
+        private const val MAX_CONFIRMATION_DEPTH = 2
 
         private val PARTS = listOf(
             MapPart("1CmnGz6CVgV4L8GURhKktz82e72mvWNNv", 90_000_000L, "990f43d2c3c33b71d6fb1917c3229a11ccb7b21a7d4e673635a2c803ccdcebca"),

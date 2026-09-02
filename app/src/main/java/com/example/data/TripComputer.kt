@@ -25,7 +25,7 @@ class TripComputer(private val preferencesManager: PreferencesManager) {
     private val routePrefs = CarLauncherApp.instance.getSharedPreferences("launcher_trip_routes_2026", Context.MODE_PRIVATE)
     private val _tripData = MutableStateFlow(preferencesManager.getTripData())
     val tripData: StateFlow<TripData> = _tripData.asStateFlow()
-    private val _history = MutableStateFlow(preferencesManager.getSavedTrips().map { it.copy(route = loadRoute(it.id)) })
+    private val _history = MutableStateFlow(preferencesManager.getSavedTrips())
     val history: StateFlow<List<SavedTrip>> = _history.asStateFlow()
 
     private var tripTickerJob: Job? = null
@@ -123,7 +123,7 @@ class TripComputer(private val preferencesManager: PreferencesManager) {
         } else null
         if (saved != null) {
             persistRoute(saved.id, saved.route)
-            _history.value = (listOf(saved) + _history.value).take(100)
+            _history.value = (listOf(saved.copy(route = emptyList())) + _history.value).take(100)
             preferencesManager.saveSavedTrips(_history.value)
         }
         clearCurrentTrip()
@@ -218,7 +218,7 @@ class TripComputer(private val preferencesManager: PreferencesManager) {
             currentRoute.clear()
             currentRoute.addAll(compacted)
         }
-        if (currentRoute.size % 8 == 0) persistRoute(CURRENT_ROUTE_KEY, currentRoute)
+        if (currentRoute.size % ROUTE_PERSIST_POINT_INTERVAL == 0) persistRoute(CURRENT_ROUTE_KEY, currentRoute)
     }
 
     private fun evaluateAutoStart(telemetry: GpsTelemetry, speed: Float) {
@@ -314,10 +314,23 @@ class TripComputer(private val preferencesManager: PreferencesManager) {
         } catch (e: Exception) { Log.w(TAG, "Unable to persist trip route", e) }
     }
 
+    fun hasSavedTripRoute(id: String): Boolean =
+        routePrefs.getString(routeKey(id), null)?.let { it.length > 2 } == true
+
+    fun loadSavedTripWithRoute(id: String): SavedTrip? {
+        val saved = _history.value.firstOrNull { it.id == id } ?: return null
+        val route = loadRoute(id)
+        return saved.copy(route = route).takeIf { route.isNotEmpty() }
+    }
+
     private fun loadRoute(id: String): List<TripRoutePoint> {
         return try {
             val array = JSONArray(routePrefs.getString(routeKey(id), "[]") ?: "[]")
-            List(array.length()) { i -> array.getJSONObject(i).let { TripRoutePoint(it.getDouble("lat"), it.getDouble("lon"), it.optLong("t", 0L)) } }
+            List(minOf(array.length(), MAX_ROUTE_POINTS)) { i ->
+                array.getJSONObject(i).let {
+                    TripRoutePoint(it.getDouble("lat"), it.getDouble("lon"), it.optLong("t", 0L))
+                }
+            }
         } catch (_: Exception) { emptyList() }
     }
 
@@ -339,6 +352,7 @@ class TripComputer(private val preferencesManager: PreferencesManager) {
         private const val TAG = "TripComputer"
         private const val AUTO_FINISH_STOP_MS = 15L * 60L * 1000L
         private const val MAX_ROUTE_POINTS = 2500
+        private const val ROUTE_PERSIST_POINT_INTERVAL = 24
         private const val CURRENT_ROUTE_KEY = "current_route"
     }
 }

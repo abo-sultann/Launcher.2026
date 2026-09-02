@@ -43,10 +43,11 @@ jobs:
       - name: Grant execute permission
         run: chmod +x ./gradlew
 
-      - name: Test Android 7 startup and rebuilt models
+      - name: Test Android 7 startup, lifecycle, storage, and rebuilt models
         run: >-
           ./gradlew :app:testDebugUnitTest
           --tests com.example.LauncherApi25SmokeTest
+          --tests com.example.LongUseStabilityTest
           --tests com.example.WidgetModelsTest
           --stacktrace --no-daemon
 

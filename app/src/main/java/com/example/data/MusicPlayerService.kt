@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import com.example.model.MusicPlaybackState
@@ -34,6 +35,8 @@ class MusicPlayerService(
     val playbackState: StateFlow<MusicPlaybackState> = _playbackState.asStateFlow()
 
     private var progressJob: Job? = null
+    private var scanJob: Job? = null
+    private var lastResumePersistAtElapsed = 0L
 
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
         when (change) {
@@ -62,7 +65,8 @@ class MusicPlayerService(
     }
 
     fun initialize() {
-        serviceScope.launch(Dispatchers.IO) {
+        scanJob?.cancel()
+        scanJob = serviceScope.launch(Dispatchers.IO) {
             val tracks = scanLocalAudioFiles()
             withContext(Dispatchers.Main) {
                 _playbackState.value = _playbackState.value.copy(playlist = tracks)
@@ -345,7 +349,9 @@ class MusicPlayerService(
                 if (currentTrack != null) {
                     val pos = mediaPlayer?.currentPosition?.toLong() ?: _playbackState.value.currentPositionMs
                     _playbackState.value = _playbackState.value.copy(currentPositionMs = pos)
-                    saveResumeState(currentTrack.dataPath, pos)
+                    if (SystemClock.elapsedRealtime() - lastResumePersistAtElapsed >= RESUME_SAVE_INTERVAL_MS) {
+                        saveResumeState(currentTrack.dataPath, pos)
+                    }
                     updateMediaSessionState()
                 }
             }
@@ -388,7 +394,10 @@ class MusicPlayerService(
     }
 
     private fun saveResumeState(path: String?, pos: Long) {
-        if (path != null) preferencesManager.saveMusicResumeState(path, pos)
+        if (path != null) {
+            preferencesManager.saveMusicResumeState(path, pos)
+            lastResumePersistAtElapsed = SystemClock.elapsedRealtime()
+        }
     }
 
     private fun stopCurrentPlayer() {
@@ -405,6 +414,9 @@ class MusicPlayerService(
 
     @Suppress("DEPRECATION")
     fun release() {
+        val current = _playbackState.value
+        saveResumeState(current.currentTrack?.dataPath, mediaPlayer?.currentPosition?.toLong() ?: current.currentPositionMs)
+        scanJob?.cancel()
         stopCurrentPlayer()
         try { audioManager?.abandonAudioFocus(audioFocusListener) } catch (_: Exception) { }
         try {
@@ -416,5 +428,6 @@ class MusicPlayerService(
 
     companion object {
         private const val TAG = "MusicPlayerService"
+        private const val RESUME_SAVE_INTERVAL_MS = 15_000L
     }
 }
