@@ -77,7 +77,7 @@ fun AboutOwnershipPanel(accent: Color) {
         OwnershipRow(
             icon = Icons.Default.Verified,
             title = "Launcher 2026",
-            value = "الإصدار \${BuildConfig.VERSION_NAME}  •  البناء \${BuildConfig.VERSION_CODE}",
+            value = "الإصدار ${BuildConfig.VERSION_NAME}  •  البناء ${BuildConfig.VERSION_CODE}",
             accent = accent
         )
         OwnershipRow(
