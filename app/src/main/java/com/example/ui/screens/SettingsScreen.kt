@@ -25,7 +25,7 @@ import com.example.model.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MainViewModel
 
-/** Seven task-oriented groups replace the previous twelve fragmented pages. */
+/** Task-oriented groups replace the previous fragmented settings pages. */
 enum class SettingsCategory(val arabicTitle: String, val icon: ImageVector) {
     INTERFACE("الواجهة", Icons.Default.DashboardCustomize),
     WIDGETS("الودجت", Icons.Default.Widgets),
@@ -33,7 +33,8 @@ enum class SettingsCategory(val arabicTitle: String, val icon: ImageVector) {
     MEDIA("الوسائط", Icons.Default.MusicNote),
     DRIVING("القيادة والخريطة", Icons.Default.Navigation),
     SECURITY("الأمان", Icons.Default.Lock),
-    SYSTEM("النظام والتحديث", Icons.Default.SettingsSuggest)
+    SYSTEM("النظام والتحديث", Icons.Default.SettingsSuggest),
+    ABOUT("حول", Icons.Default.VerifiedUser)
 }
 
 private val LocalSettingsAccent = staticCompositionLocalOf { CyanNeon }
@@ -298,6 +299,9 @@ fun SettingsScreen(
                                 item { StableSystemPanel() }
                                 item { ActionButton("فحص النظام", Icons.Default.HealthAndSafety) { viewModel.runDiagnostics(); onOpenDiagnostics() } }
                                 item { ActionButton("تصفير سجل الوضع الآمن", Icons.Default.Security) { viewModel.resetSafeMode() } }
+                            }
+                            SettingsCategory.ABOUT -> {
+                                item { AboutOwnershipPanel(accent) }
                             }
                         }
                     }
