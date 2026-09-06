@@ -105,7 +105,9 @@ enum class WidgetStyle(val type: WidgetType, val arabicName: String, val descrip
     CONTROLS_CARD(WidgetType.CONTROLS, "بطاقة التحكم", "الصوت والوسائط في بطاقة"),
     CONTROLS_LARGE_AUTOMOTIVE(WidgetType.CONTROLS, "تحكم كبير", "أزرار لمس كبيرة أثناء القيادة"),
 
-    MAINTENANCE_VERTICAL(WidgetType.MAINTENANCE, "شريط الصيانة", "عدادات الصيانة الرأسية على حافة الشاشة")
+    MAINTENANCE_VERTICAL(WidgetType.MAINTENANCE, "شريط الصيانة", "ستة عدادات رأسية على حافة الشاشة"),
+    MAINTENANCE_GRID(WidgetType.MAINTENANCE, "لوحة الصيانة", "شبكة 2 × 3 تعرض جميع عناصر الصيانة"),
+    MAINTENANCE_ALERTS(WidgetType.MAINTENANCE, "الأقرب للصيانة", "ملخص ذكي لأقرب ثلاثة عناصر تحتاج انتباه")
 }
 
 /**
@@ -158,7 +160,11 @@ fun preferredWidgetStylesFor(type: WidgetType): List<WidgetStyle> = when (type) 
         WidgetStyle.CONTROLS_HORIZONTAL_BAR,
         WidgetStyle.CONTROLS_LARGE_AUTOMOTIVE
     )
-    WidgetType.MAINTENANCE -> listOf(WidgetStyle.MAINTENANCE_VERTICAL)
+    WidgetType.MAINTENANCE -> listOf(
+        WidgetStyle.MAINTENANCE_VERTICAL,
+        WidgetStyle.MAINTENANCE_GRID,
+        WidgetStyle.MAINTENANCE_ALERTS
+    )
 }
 
 /** Maps every 1.x near-duplicate to the closest rebuilt construction. */
@@ -309,7 +315,13 @@ data class WidgetItem(
         }
 
         fun createForOrder(id: String, type: WidgetType, style: WidgetStyle, order: Int, spanX: Int = 1): WidgetItem {
-            val (w, h) = recommendedSize(type, WidgetSizePreset.SMALL)
+            val (w, h) = if (type == WidgetType.MAINTENANCE) {
+                when (style) {
+                    WidgetStyle.MAINTENANCE_GRID -> .40f to .42f
+                    WidgetStyle.MAINTENANCE_ALERTS -> .36f to .28f
+                    else -> recommendedSize(type, WidgetSizePreset.SMALL)
+                }
+            } else recommendedSize(type, WidgetSizePreset.SMALL)
             val x = if (type == WidgetType.MAINTENANCE) (1f - w - .015f) else (0.035f + (order % 3) * .31f).coerceAtMost((1f - w).coerceAtLeast(0f))
             val y = if (type == WidgetType.MAINTENANCE) .025f else (0.05f + (order / 3) * .36f).coerceAtMost((1f - h).coerceAtLeast(0f))
             return WidgetItem(
