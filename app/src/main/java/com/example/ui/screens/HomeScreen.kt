@@ -324,6 +324,6 @@ private fun RenderWidgetContent(
         WidgetType.TRIP -> TripWidget(w.style, trip, { vm.startTrip() }, { vm.pauseTrip() }, { vm.resetTrip() })
         WidgetType.APPS -> AppsWidget(w.style, apps, onOpenAppDrawer = { vm.navigateTo(CarScreen.APPS) }, onLaunchApp = { vm.launchApp(it) }, interactionEnabled = !isDesignMode)
         WidgetType.CONTROLS -> ControlsWidget(w.style, p, { vm.adjustVolume(it) }, { vm.toggleMute() }, { vm.togglePlayPause() }, { vm.playNext() }, { vm.playPrevious() })
-        WidgetType.MAINTENANCE -> MaintenanceWidget(interactionEnabled = !isDesignMode)
+        WidgetType.MAINTENANCE -> MaintenanceWidget(w.style, interactionEnabled = !isDesignMode)
     }
 }
