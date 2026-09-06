@@ -53,7 +53,7 @@ fun WidgetLibraryDialog(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
                         Text(if (isStyleChangerMode) "اختر تصميم الودجت" else "مكتبة الودجات", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Black)
-                        Text("ثلاثة أشكال مختلفة بوضوح؛ اللون الأبيض أو الأسود تختاره بعد الإضافة", color = TextSecondary, fontSize = 10.sp)
+                        Text("اللون الأبيض أو الأسود تختاره بعد الإضافة", color = TextSecondary, fontSize = 10.sp)
                     }
                     IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "إغلاق", tint = TextSecondary) }
                 }
@@ -154,6 +154,7 @@ private fun WidgetStylePreview(style: WidgetStyle) {
         WidgetType.TRIP -> TripStylePreview(style)
         WidgetType.APPS -> AppsStylePreview(style)
         WidgetType.CONTROLS -> ControlsStylePreview(style)
+        WidgetType.MAINTENANCE -> MaintenanceStylePreview()
     }
 }
 
@@ -187,3 +188,22 @@ private fun SpeedStylePreview(style: WidgetStyle) {
 @Composable private fun TripStylePreview(style: WidgetStyle) { Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("124", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Black); Text("كم", color = TextSecondary, fontSize = 7.sp) }; Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("1:46", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold); Text("مدة", color = TextSecondary, fontSize = 7.sp) }; if (style == WidgetStyle.TRIP_DASHBOARD || style == WidgetStyle.TRIP_FULL_METRICS) Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("72", color = TextSecondary, fontSize = 17.sp, fontWeight = FontWeight.Bold); Text("متوسط", color = TextSecondary, fontSize = 7.sp) } } }
 @Composable private fun AppsStylePreview(style: WidgetStyle) { Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) { val count = when (style) { WidgetStyle.APPS_GRID_2X2 -> 4; WidgetStyle.APPS_GRID_3X2 -> 6; WidgetStyle.APPS_GRID_4X2 -> 8; else -> 5 }; repeat(count.coerceAtMost(6)) { i -> Surface(color = if (i % 2 == 0) TextPrimary else TextSecondary, shape = RoundedCornerShape(7.dp), modifier = Modifier.size(28.dp)) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Apps, null, tint = CarbonDark, modifier = Modifier.size(15.dp)) } } } } }
 @Composable private fun ControlsStylePreview(style: WidgetStyle) { Row(horizontalArrangement = Arrangement.spacedBy(if (style == WidgetStyle.CONTROLS_LARGE_AUTOMOTIVE) 12.dp else 7.dp), verticalAlignment = Alignment.CenterVertically) { listOf(Icons.Default.VolumeDown, Icons.Default.SkipPrevious, Icons.Default.PlayArrow, Icons.Default.SkipNext, Icons.Default.VolumeUp).forEach { icon -> Surface(color = if (icon == Icons.Default.PlayArrow) TextPrimary else CarbonCard, shape = if (style == WidgetStyle.CONTROLS_CIRCULAR) CircleShape else RoundedCornerShape(8.dp), modifier = Modifier.size(if (style == WidgetStyle.CONTROLS_LARGE_AUTOMOTIVE) 34.dp else 27.dp)) { Box(contentAlignment = Alignment.Center) { Icon(icon, null, tint = if (icon == Icons.Default.PlayArrow) CarbonDark else TextPrimary, modifier = Modifier.size(15.dp)) } } } } }
+
+@Composable
+private fun MaintenanceStylePreview() {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        listOf(
+            Icons.Default.Opacity to "6,430",
+            Icons.Default.Settings to "18,200",
+            Icons.Default.FilterAlt to "4,100",
+            Icons.Default.BatteryFull to "14",
+            Icons.Default.TireRepair to "21,600",
+            Icons.Default.DiscFull to "8,900"
+        ).forEachIndexed { index, pair ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Icon(pair.first, null, tint = if (index == 2 || index == 5) AmberRacing else EmeraldSafe, modifier = Modifier.size(12.dp))
+                Text(pair.second, color = TextPrimary, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
