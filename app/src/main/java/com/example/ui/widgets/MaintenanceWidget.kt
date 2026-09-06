@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.example.model.WidgetStyle
 import com.example.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -55,7 +56,7 @@ private data class MaintenanceRow(
 )
 
 @Composable
-fun MaintenanceWidget(interactionEnabled: Boolean = true) {
+fun MaintenanceWidget(style: WidgetStyle, interactionEnabled: Boolean = true) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -103,59 +104,158 @@ fun MaintenanceWidget(interactionEnabled: Boolean = true) {
                 } else Modifier
             )
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 5.dp, vertical = 7.dp),
-            verticalArrangement = Arrangement.SpaceEvenly,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            displayRows.forEach { row -> MaintenanceCompactRow(row) }
+        when (style) {
+            WidgetStyle.MAINTENANCE_GRID -> MaintenanceGrid(displayRows)
+            WidgetStyle.MAINTENANCE_ALERTS -> MaintenanceAlerts(displayRows)
+            else -> MaintenanceVertical(displayRows)
         }
     }
 }
 
 @Composable
-private fun MaintenanceCompactRow(row: MaintenanceRow) {
-    val accent = when (row.health) {
-        MaintenanceHealth.GOOD -> EmeraldSafe
-        MaintenanceHealth.SOON -> AmberRacing
-        MaintenanceHealth.DUE -> Color(0xFFFF5F57)
-        MaintenanceHealth.UNCONFIGURED -> TextMuted
+private fun MaintenanceVertical(rows: List<MaintenanceRow>) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 5.dp, vertical = 7.dp),
+        verticalArrangement = Arrangement.SpaceEvenly,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        rows.forEach { row -> MaintenanceCompactRow(row) }
     }
+}
+
+@Composable
+private fun MaintenanceGrid(rows: List<MaintenanceRow>) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        rows.chunked(2).forEach { pair ->
+            Row(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                pair.forEach { row ->
+                    MaintenanceGridCell(row, Modifier.weight(1f))
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MaintenanceGridCell(row: MaintenanceRow, modifier: Modifier = Modifier) {
+    val accent = healthColor(row.health)
+    Surface(
+        modifier = modifier.fillMaxHeight(),
+        color = Color.White.copy(alpha = .035f),
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = .20f))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            ProgressGlyph(row, Modifier.size(39.dp), 2.6f)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                Text(kindName(row.kind), color = TextPrimary, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                if (row.configured) {
+                    Text(
+                        "${formatNumber(row.remaining)} ${unitName(row)}",
+                        color = accent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1
+                    )
+                } else {
+                    Text("غير مهيأ", color = TextMuted, fontSize = 8.sp, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MaintenanceAlerts(rows: List<MaintenanceRow>) {
+    val important = remember(rows) {
+        rows.sortedWith(
+            compareBy<MaintenanceRow> { healthRank(it.health) }
+                .thenBy { if (it.configured) it.remaining else Long.MAX_VALUE }
+        ).take(3)
+    }
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("الصيانة", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.weight(1f))
+            val dueCount = rows.count { it.health == MaintenanceHealth.DUE }
+            val soonCount = rows.count { it.health == MaintenanceHealth.SOON }
+            Text(
+                when {
+                    dueCount > 0 -> "$dueCount مستحق"
+                    soonCount > 0 -> "$soonCount قريب"
+                    rows.any { it.configured } -> "الحالة جيدة"
+                    else -> "بانتظار التهيئة"
+                },
+                color = when {
+                    dueCount > 0 -> Color(0xFFFF5F57)
+                    soonCount > 0 -> AmberRacing
+                    rows.any { it.configured } -> EmeraldSafe
+                    else -> TextMuted
+                },
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        important.forEach { row ->
+            MaintenanceAlertRow(row, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun MaintenanceAlertRow(row: MaintenanceRow, modifier: Modifier = Modifier) {
+    val accent = healthColor(row.health)
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        MaintenanceGlyph(
+            kind = row.kind,
+            tint = if (row.configured) TextPrimary else TextMuted,
+            modifier = Modifier.size(25.dp)
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Text(kindName(row.kind), color = TextPrimary, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(statusName(row.health), color = accent, fontSize = 7.sp, maxLines = 1)
+        }
+        Text(
+            if (row.configured) "${formatNumber(row.remaining)} ${unitName(row)}" else "—",
+            color = accent,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Black,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun MaintenanceCompactRow(row: MaintenanceRow) {
+    val accent = healthColor(row.health)
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Box(Modifier.size(43.dp), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize()) {
-                val stroke = 3.dp.toPx()
-                drawArc(
-                    color = Color.White.copy(alpha = .10f),
-                    startAngle = -90f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    style = Stroke(stroke, cap = StrokeCap.Round)
-                )
-                if (row.configured) {
-                    drawArc(
-                        color = accent,
-                        startAngle = -90f,
-                        sweepAngle = 360f * row.progress.coerceIn(0f, 1f),
-                        useCenter = false,
-                        style = Stroke(stroke, cap = StrokeCap.Round)
-                    )
-                }
-            }
-            MaintenanceGlyph(
-                kind = row.kind,
-                tint = if (row.configured) TextPrimary else TextMuted,
-                modifier = Modifier.size(24.dp)
-            )
-        }
+        ProgressGlyph(row, Modifier.size(43.dp), 3f)
         Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
             if (row.configured) {
                 Text(formatNumber(row.remaining), color = accent, fontSize = 15.sp, fontWeight = FontWeight.Black, maxLines = 1)
-                Text(if (row.unit == "MONTHS") "شهر" else "كم", color = TextSecondary, fontSize = 7.sp, maxLines = 1)
+                Text(unitName(row), color = TextSecondary, fontSize = 7.sp, maxLines = 1)
             } else {
                 Text("—", color = TextMuted, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             }
@@ -163,9 +263,40 @@ private fun MaintenanceCompactRow(row: MaintenanceRow) {
     }
 }
 
+@Composable
+private fun ProgressGlyph(row: MaintenanceRow, modifier: Modifier, strokeDp: Float) {
+    val accent = healthColor(row.health)
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = strokeDp.dp.toPx()
+            drawArc(
+                color = Color.White.copy(alpha = .10f),
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+            if (row.configured) {
+                drawArc(
+                    color = accent,
+                    startAngle = -90f,
+                    sweepAngle = 360f * row.progress.coerceIn(0f, 1f),
+                    useCenter = false,
+                    style = Stroke(stroke, cap = StrokeCap.Round)
+                )
+            }
+        }
+        MaintenanceGlyph(
+            kind = row.kind,
+            tint = if (row.configured) TextPrimary else TextMuted,
+            modifier = Modifier.fillMaxSize(.56f)
+        )
+    }
+}
+
 /**
  * Purpose-built automotive glyphs. They are drawn with primitives instead of depending on
- * generic phone UI icons, which keeps the launcher lightweight and gives the maintenance strip
+ * generic phone UI icons, which keeps the launcher lightweight and gives the maintenance widget
  * a consistent instrument-cluster visual language on API 25.
  */
 @Composable
@@ -320,4 +451,35 @@ private fun readMaintenance(context: android.content.Context): List<MaintenanceR
     }.getOrDefault(emptyList())
 }
 
+private fun healthColor(health: MaintenanceHealth): Color = when (health) {
+    MaintenanceHealth.GOOD -> EmeraldSafe
+    MaintenanceHealth.SOON -> AmberRacing
+    MaintenanceHealth.DUE -> Color(0xFFFF5F57)
+    MaintenanceHealth.UNCONFIGURED -> TextMuted
+}
+
+private fun healthRank(health: MaintenanceHealth): Int = when (health) {
+    MaintenanceHealth.DUE -> 0
+    MaintenanceHealth.SOON -> 1
+    MaintenanceHealth.GOOD -> 2
+    MaintenanceHealth.UNCONFIGURED -> 3
+}
+
+private fun kindName(kind: MaintenanceKind): String = when (kind) {
+    MaintenanceKind.ENGINE_OIL -> "زيت المحرك"
+    MaintenanceKind.TRANSMISSION_OIL -> "زيت القير"
+    MaintenanceKind.DIESEL_FILTER -> "فلتر الديزل"
+    MaintenanceKind.BATTERY -> "البطارية"
+    MaintenanceKind.TIRES -> "الكفرات"
+    MaintenanceKind.BRAKES -> "الفحمات"
+}
+
+private fun statusName(health: MaintenanceHealth): String = when (health) {
+    MaintenanceHealth.DUE -> "حان التغيير"
+    MaintenanceHealth.SOON -> "اقترب الموعد"
+    MaintenanceHealth.GOOD -> "جيد"
+    MaintenanceHealth.UNCONFIGURED -> "غير مهيأ"
+}
+
+private fun unitName(row: MaintenanceRow): String = if (row.unit == "MONTHS") "شهر" else "كم"
 private fun formatNumber(value: Long): String = NumberFormat.getIntegerInstance(Locale.US).format(value)
