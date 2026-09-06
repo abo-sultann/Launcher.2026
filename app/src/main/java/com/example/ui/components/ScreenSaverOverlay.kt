@@ -179,7 +179,7 @@ private fun ScreenSaverCanvas(
                 val borderColor = when {
                     isSelected -> interfaceAccent
                     editMode -> AmberRacing.copy(alpha = .28f)
-                        showBorder -> foreground.copy(alpha = .72f)
+                    showBorder -> foreground.copy(alpha = .72f)
                     else -> Color.Transparent
                 }
                 val borderWidth = if (isSelected) 2.dp else if (editMode || showBorder) 1.dp else 0.dp
@@ -396,6 +396,7 @@ private fun screenSaverShape(type: WidgetType) = when (type) {
     WidgetType.TRIP -> RoundedCornerShape(12.dp)
     WidgetType.APPS -> RoundedCornerShape(22.dp)
     WidgetType.CONTROLS -> RoundedCornerShape(20.dp)
+    WidgetType.MAINTENANCE -> RoundedCornerShape(18.dp)
 }
 
 @Composable
@@ -416,7 +417,7 @@ private fun RenderScreenSaverWidget(
         WidgetType.MUSIC -> ScreenSaverMusicSummary(style, playback)
         WidgetType.MAP -> ScreenSaverMapSummary(style, gps, trip, map)
         WidgetType.TRIP -> ScreenSaverTripSummary(style, trip)
-        WidgetType.APPS, WidgetType.CONTROLS -> Unit
+        WidgetType.APPS, WidgetType.CONTROLS, WidgetType.MAINTENANCE -> Unit
     }
 }
 
@@ -518,4 +519,5 @@ private fun defaultScreenSaverStyle(type: WidgetType): WidgetStyle = when (type)
     WidgetType.TRIP -> WidgetStyle.TRIP_CARD
     WidgetType.APPS -> WidgetStyle.APPS_ICONS_ONLY
     WidgetType.CONTROLS -> WidgetStyle.CONTROLS_HORIZONTAL_BAR
+    WidgetType.MAINTENANCE -> WidgetStyle.MAINTENANCE_VERTICAL
 }

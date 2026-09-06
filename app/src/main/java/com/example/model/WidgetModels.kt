@@ -9,7 +9,8 @@ enum class WidgetType(val arabicTitle: String, val iconRes: String) {
     MAP("الخريطة", "map"),
     TRIP("رحلتي", "directions_car"),
     APPS("التطبيقات والمفضلة", "apps"),
-    CONTROLS("التحكم السريع", "tune")
+    CONTROLS("التحكم السريع", "tune"),
+    MAINTENANCE("الصيانة", "build")
 }
 
 enum class WidgetSurfaceStyle(val arabicName: String) {
@@ -102,12 +103,16 @@ enum class WidgetStyle(val type: WidgetType, val arabicName: String, val descrip
     CONTROLS_SQUARE(WidgetType.CONTROLS, "أزرار مربعة", "أزرار كبيرة سهلة اللمس"),
     CONTROLS_HORIZONTAL_BAR(WidgetType.CONTROLS, "شريط تحكم", "شريط أفقي مدمج"),
     CONTROLS_CARD(WidgetType.CONTROLS, "بطاقة التحكم", "الصوت والوسائط في بطاقة"),
-    CONTROLS_LARGE_AUTOMOTIVE(WidgetType.CONTROLS, "تحكم كبير", "أزرار لمس كبيرة أثناء القيادة")
+    CONTROLS_LARGE_AUTOMOTIVE(WidgetType.CONTROLS, "تحكم كبير", "أزرار لمس كبيرة أثناء القيادة"),
+
+    MAINTENANCE_VERTICAL(WidgetType.MAINTENANCE, "شريط الصيانة", "ستة عدادات رأسية على حافة الشاشة"),
+    MAINTENANCE_GRID(WidgetType.MAINTENANCE, "لوحة الصيانة", "شبكة 2 × 3 تعرض جميع عناصر الصيانة"),
+    MAINTENANCE_ALERTS(WidgetType.MAINTENANCE, "الأقرب للصيانة", "ملخص ذكي لأقرب ثلاثة عناصر تحتاج انتباه")
 }
 
 /**
  * The complete enum stays readable for old saved layouts, but the rebuilt library offers only
- * three genuinely different constructions per widget instead of a long list of near-duplicates.
+ * genuinely different constructions per widget instead of a long list of near-duplicates.
  */
 fun preferredWidgetStylesFor(type: WidgetType): List<WidgetStyle> = when (type) {
     WidgetType.CLOCK -> listOf(
@@ -154,6 +159,11 @@ fun preferredWidgetStylesFor(type: WidgetType): List<WidgetStyle> = when (type) 
         WidgetStyle.CONTROLS_CIRCULAR,
         WidgetStyle.CONTROLS_HORIZONTAL_BAR,
         WidgetStyle.CONTROLS_LARGE_AUTOMOTIVE
+    )
+    WidgetType.MAINTENANCE -> listOf(
+        WidgetStyle.MAINTENANCE_VERTICAL,
+        WidgetStyle.MAINTENANCE_GRID,
+        WidgetStyle.MAINTENANCE_ALERTS
     )
 }
 
@@ -206,6 +216,7 @@ fun modernWidgetStyle(style: WidgetStyle): WidgetStyle {
             WidgetStyle.CONTROLS_LARGE_AUTOMOTIVE, WidgetStyle.CONTROLS_SQUARE -> WidgetStyle.CONTROLS_LARGE_AUTOMOTIVE
             else -> WidgetStyle.CONTROLS_HORIZONTAL_BAR
         }
+        WidgetType.MAINTENANCE -> WidgetStyle.MAINTENANCE_VERTICAL
     }
 }
 
@@ -235,10 +246,19 @@ data class WidgetItem(
     companion object {
         fun defaultSurfaceFor(type: WidgetType): WidgetSurfaceStyle = when (type) {
             WidgetType.CLOCK, WidgetType.SPEEDOMETER, WidgetType.DATE, WidgetType.GPS -> WidgetSurfaceStyle.TRANSPARENT
-            WidgetType.MUSIC, WidgetType.MAP, WidgetType.TRIP, WidgetType.APPS, WidgetType.CONTROLS -> WidgetSurfaceStyle.GLASS
+            WidgetType.MUSIC, WidgetType.MAP, WidgetType.TRIP, WidgetType.APPS, WidgetType.CONTROLS, WidgetType.MAINTENANCE -> WidgetSurfaceStyle.GLASS
         }
 
         fun recommendedSize(type: WidgetType, preset: WidgetSizePreset): Pair<Float, Float> {
+            if (type == WidgetType.MAINTENANCE) {
+                return when (preset) {
+                    WidgetSizePreset.CONTENT -> .15f to .92f
+                    WidgetSizePreset.SMALL -> .13f to .70f
+                    WidgetSizePreset.MEDIUM -> .15f to .82f
+                    WidgetSizePreset.LARGE -> .17f to .94f
+                    WidgetSizePreset.WIDE -> .22f to .94f
+                }
+            }
             return when (preset) {
                 WidgetSizePreset.CONTENT -> when (type) {
                     WidgetType.CLOCK -> .18f to .12f
@@ -250,6 +270,7 @@ data class WidgetItem(
                     WidgetType.TRIP -> .20f to .23f
                     WidgetType.APPS -> .30f to .16f
                     WidgetType.CONTROLS -> .24f to .15f
+                    WidgetType.MAINTENANCE -> error("handled above")
                 }
                 WidgetSizePreset.SMALL -> when (type) {
                     WidgetType.CLOCK -> .23f to .15f
@@ -261,6 +282,7 @@ data class WidgetItem(
                     WidgetType.TRIP -> .24f to .27f
                     WidgetType.APPS -> .34f to .19f
                     WidgetType.CONTROLS -> .29f to .18f
+                    WidgetType.MAINTENANCE -> error("handled above")
                 }
                 WidgetSizePreset.MEDIUM -> .32f to .30f
                 WidgetSizePreset.LARGE -> .43f to .42f
@@ -269,6 +291,7 @@ data class WidgetItem(
                     WidgetType.SPEEDOMETER -> .34f to .25f
                     WidgetType.MUSIC, WidgetType.APPS, WidgetType.CONTROLS -> .55f to .22f
                     WidgetType.MAP, WidgetType.TRIP -> .48f to .30f
+                    WidgetType.MAINTENANCE -> error("handled above")
                 }
             }
         }
@@ -284,14 +307,23 @@ data class WidgetItem(
 
         fun withDefaultGeometry(item: WidgetItem): WidgetItem {
             if (item.hasFreeGeometry()) return item
+            if (item.type == WidgetType.MAINTENANCE) {
+                return item.copy(xFraction = .835f, yFraction = .025f, widthFraction = .15f, heightFraction = .92f, zIndex = item.order)
+            }
             val g = legacyGeometryFor(item.order, item.spanX)
             return item.copy(xFraction = g[0], yFraction = g[1], widthFraction = g[2], heightFraction = g[3], zIndex = item.order)
         }
 
         fun createForOrder(id: String, type: WidgetType, style: WidgetStyle, order: Int, spanX: Int = 1): WidgetItem {
-            val (w, h) = recommendedSize(type, WidgetSizePreset.SMALL)
-            val x = (0.035f + (order % 3) * .31f).coerceAtMost((1f - w).coerceAtLeast(0f))
-            val y = (0.05f + (order / 3) * .36f).coerceAtMost((1f - h).coerceAtLeast(0f))
+            val (w, h) = if (type == WidgetType.MAINTENANCE) {
+                when (style) {
+                    WidgetStyle.MAINTENANCE_GRID -> .40f to .42f
+                    WidgetStyle.MAINTENANCE_ALERTS -> .36f to .28f
+                    else -> recommendedSize(type, WidgetSizePreset.SMALL)
+                }
+            } else recommendedSize(type, WidgetSizePreset.SMALL)
+            val x = if (type == WidgetType.MAINTENANCE) (1f - w - .015f) else (0.035f + (order % 3) * .31f).coerceAtMost((1f - w).coerceAtLeast(0f))
+            val y = if (type == WidgetType.MAINTENANCE) .025f else (0.05f + (order / 3) * .36f).coerceAtMost((1f - h).coerceAtLeast(0f))
             return WidgetItem(
                 id = id,
                 type = type,

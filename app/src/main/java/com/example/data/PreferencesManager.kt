@@ -146,6 +146,7 @@ class PreferencesManager(context: Context) {
                         WidgetType.TRIP -> WidgetStyle.TRIP_CARD
                         WidgetType.APPS -> WidgetStyle.APPS_HORIZONTAL_DOCK
                         WidgetType.CONTROLS -> WidgetStyle.CONTROLS_CARD
+                        WidgetType.MAINTENANCE -> WidgetStyle.MAINTENANCE_VERTICAL
                     }
                 }
 
