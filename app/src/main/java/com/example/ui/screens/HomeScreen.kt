@@ -104,9 +104,7 @@ fun HomeScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         selectedWidgetId = normalized.id
                         viewModel.previewWidgetResize(normalized.id, dwPx / canvasWidthPx, dhPx / canvasHeightPx)
                     },
-                    onTransformFinished = {
-                        viewModel.commitWidgetLayout()
-                    },
+                    onTransformFinished = { viewModel.commitWidgetLayout() },
                     onOpacityChange = { viewModel.setWidgetOpacity(normalized.id, it) },
                     onToggleLock = { rememberUndoPoint(); viewModel.toggleWidgetLock(normalized.id) },
                     onBringToFront = { viewModel.bringWidgetToFront(normalized.id) },
@@ -285,6 +283,7 @@ private fun backgroundFocusGeometry(type: WidgetType): FloatArray = when (type) 
     WidgetType.TRIP -> floatArrayOf(.80f, .39f, .18f, .27f)
     WidgetType.APPS -> floatArrayOf(.31f, .79f, .38f, .17f)
     WidgetType.CONTROLS -> floatArrayOf(.72f, .75f, .25f, .17f)
+    WidgetType.MAINTENANCE -> floatArrayOf(.835f, .025f, .15f, .92f)
 }
 
 private fun backgroundFocusStyle(type: WidgetType): WidgetStyle = when (type) {
@@ -297,6 +296,7 @@ private fun backgroundFocusStyle(type: WidgetType): WidgetStyle = when (type) {
     WidgetType.TRIP -> WidgetStyle.TRIP_CARD
     WidgetType.APPS -> WidgetStyle.APPS_HORIZONTAL_DOCK
     WidgetType.CONTROLS -> WidgetStyle.CONTROLS_HORIZONTAL_BAR
+    WidgetType.MAINTENANCE -> WidgetStyle.MAINTENANCE_VERTICAL
 }
 
 @Composable
@@ -324,5 +324,6 @@ private fun RenderWidgetContent(
         WidgetType.TRIP -> TripWidget(w.style, trip, { vm.startTrip() }, { vm.pauseTrip() }, { vm.resetTrip() })
         WidgetType.APPS -> AppsWidget(w.style, apps, onOpenAppDrawer = { vm.navigateTo(CarScreen.APPS) }, onLaunchApp = { vm.launchApp(it) }, interactionEnabled = !isDesignMode)
         WidgetType.CONTROLS -> ControlsWidget(w.style, p, { vm.adjustVolume(it) }, { vm.toggleMute() }, { vm.togglePlayPause() }, { vm.playNext() }, { vm.playPrevious() })
+        WidgetType.MAINTENANCE -> MaintenanceWidget(interactionEnabled = !isDesignMode)
     }
 }
