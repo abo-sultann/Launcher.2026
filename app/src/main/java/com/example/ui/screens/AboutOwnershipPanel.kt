@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,15 +35,20 @@ import com.example.R
 import com.example.ui.theme.CarbonCard
 import com.example.ui.theme.CarbonCardBorder
 import com.example.ui.theme.CarbonSurface
+import com.example.ui.theme.DarbakGold
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
+/**
+ * Official Darbak ownership panel.
+ * Identity is fixed by product decision: دربك — تصميم وتطوير — أبوسلطان.
+ */
 @Composable
-fun AboutOwnershipPanel(accent: Color) {
+fun AboutOwnershipPanel(accent: Color, onOpenDiagnostics: (() -> Unit)? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = CarbonCard),
-            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = CarbonCard.copy(alpha = .92f)),
+            shape = RoundedCornerShape(22.dp),
             border = BorderStroke(1.dp, accent.copy(alpha = .55f)),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -53,21 +59,22 @@ fun AboutOwnershipPanel(accent: Color) {
             ) {
                 Image(
                     painter = painterResource(R.drawable.owner_signature),
-                    contentDescription = "توقيع ملكية عبدالله الحربي",
+                    contentDescription = "هوية دربك — أبوسلطان",
                     modifier = Modifier.fillMaxWidth().heightIn(max = 150.dp),
                     contentScale = ContentScale.Fit
                 )
                 Text(
-                    "نسخة خاصة مملوكة لعبدالله الحربي — أبوسلطان",
+                    "دربك",
                     color = TextPrimary,
-                    fontSize = 14.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Black,
                     textAlign = TextAlign.Center
                 )
                 Text(
-                    "هوية الملكية مدمجة داخل التطبيق ولا تعتمد على الإنترنت.",
-                    color = TextSecondary,
-                    fontSize = 10.sp,
+                    "تصميم وتطوير  •  أبوسلطان",
+                    color = DarbakGold,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
             }
@@ -77,18 +84,22 @@ fun AboutOwnershipPanel(accent: Color) {
             icon = Icons.Default.Verified,
             title = "Launcher 2026",
             value = "الإصدار ${BuildConfig.VERSION_NAME}  •  البناء ${BuildConfig.VERSION_CODE}",
-            accent = accent
+            accent = accent,
+            modifier = Modifier.combinedClickable(
+                onClick = {},
+                onLongClick = { onOpenDiagnostics?.invoke() }
+            )
         )
         OwnershipRow(
             icon = Icons.Default.Fingerprint,
-            title = "إثبات الملكية",
-            value = "عبدالله الحربي  •  ABOSULTAN",
-            accent = accent
+            title = "الهوية والملكية",
+            value = "دربك  •  تصميم وتطوير  •  أبوسلطان",
+            accent = DarbakGold
         )
         OwnershipRow(
             icon = Icons.Default.Copyright,
             title = "الاستخدام",
-            value = "تطبيق شخصي خاص — جميع الحقوق محفوظة",
+            value = "تطبيق خاص — جميع الحقوق محفوظة",
             accent = accent
         )
     }
@@ -99,13 +110,14 @@ private fun OwnershipRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     value: String,
-    accent: Color
+    accent: Color,
+    modifier: Modifier = Modifier
 ) {
     Surface(
-        color = CarbonSurface,
-        shape = RoundedCornerShape(11.dp),
+        color = CarbonSurface.copy(alpha = .90f),
+        shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, CarbonCardBorder),
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
