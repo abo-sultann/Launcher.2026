@@ -29,6 +29,7 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
     private val recentSpeeds = ArrayDeque<Float>()
     private var movingConfirmations = 0
     private var stationaryConfirmations = 0
+    private val maintenanceMileageBridge = MaintenanceMileageBridge(context)
 
     fun hasLocationPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
@@ -168,6 +169,13 @@ class GpsTelemetryManager(private val context: Context) : LocationListener {
                 movingConfirmations >= 2 -> median
                 else -> 0f
             }.coerceIn(0f, MAX_PLAUSIBLE_SPEED_KMH)
+
+            // Maintenance odometer tracking is independent from the Trip Computer. We integrate
+            // only trusted GPS speed samples and keep sub-kilometre remainder inside the launcher,
+            // so Darbak Maintenance keeps counting even while its activity is closed.
+            if (previous != null && !fromLastKnown) {
+                maintenanceMileageBridge.recordSpeedSample(confirmedSpeed, dtSec, accuracy)
+            }
 
             previousAcceptedGps = Location(location)
             _telemetry.value = GpsTelemetry(
