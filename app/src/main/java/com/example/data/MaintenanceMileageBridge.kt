@@ -43,7 +43,8 @@ class MaintenanceMileageBridge(context: Context) {
         val delta = wholeKm.coerceAtMost(MAX_KM_PER_SYNC)
         val values = ContentValues().apply { put(COL_DELTA_KM, delta) }
         val applied = try {
-            appContext.contentResolver.update(MILEAGE_URI, values, null, null) == 1
+            val mileageUri = Uri.parse(MILEAGE_URI_STRING)
+            appContext.contentResolver.update(mileageUri, values, null, null) == 1
         } catch (e: Exception) {
             Log.d(TAG, "Maintenance mileage endpoint not ready", e)
             false
@@ -82,7 +83,7 @@ class MaintenanceMileageBridge(context: Context) {
         private const val PERSIST_EVERY_MM = 250_000L
         private const val MAX_KM_PER_SYNC = 10_000L
         private const val RETRY_AFTER_MS = 30_000L
-        private val MILEAGE_URI: Uri = Uri.parse("content://com.abosultan.darbakmaintenance.status/mileage")
+        private const val MILEAGE_URI_STRING = "content://com.abosultan.darbakmaintenance.status/mileage"
 
         internal fun shouldCountSample(speedKmH: Float, dtSec: Float, accuracyMeters: Float): Boolean =
             speedKmH in 2.2f..180f &&
