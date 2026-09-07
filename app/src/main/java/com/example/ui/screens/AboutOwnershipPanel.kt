@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +44,7 @@ import com.example.ui.theme.TextSecondary
  * Official Darbak ownership panel.
  * Identity is fixed by product decision: دربك — تصميم وتطوير — أبوسلطان.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AboutOwnershipPanel(accent: Color, onOpenDiagnostics: (() -> Unit)? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
