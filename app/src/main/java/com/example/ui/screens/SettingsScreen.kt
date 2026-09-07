@@ -18,23 +18,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.BuildConfig
 import com.example.data.RecommendedMapStatus
 import com.example.model.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MainViewModel
 
-/** Task-oriented groups replace the previous fragmented settings pages. */
-enum class SettingsCategory(val arabicTitle: String, val icon: ImageVector) {
-    INTERFACE("الواجهة", Icons.Default.DashboardCustomize),
-    WIDGETS("الودجت", Icons.Default.Widgets),
-    SCREENSAVER("شاشة التوقف", Icons.Default.NightsStay),
-    MEDIA("الوسائط", Icons.Default.MusicNote),
-    DRIVING("القيادة والخريطة", Icons.Default.Navigation),
-    SECURITY("الأمان", Icons.Default.Lock),
-    SYSTEM("النظام والتحديث", Icons.Default.SettingsSuggest),
-    ABOUT("حول", Icons.Default.VerifiedUser)
+/** Darbak Settings UI V1 — large glass cards first, task details second. */
+enum class SettingsCategory(
+    val arabicTitle: String,
+    val subtitle: String,
+    val icon: ImageVector
+) {
+    INTERFACE("الواجهة", "الخلفية • الألوان • أشرطة الشاشة", Icons.Default.DashboardCustomize),
+    WIDGETS("الودجت", "التصميم • الحجم • الترتيب", Icons.Default.Widgets),
+    SCREENSAVER("شاشة التوقف", "السكون • العرض • الودجت", Icons.Default.NightsStay),
+    MEDIA("الوسائط", "الموسيقى • الاستئناف • الملفات", Icons.Default.MusicNote),
+    DRIVING("القيادة والخريطة", "GPS • الرحلة • الخرائط دون إنترنت", Icons.Default.Navigation),
+    SECURITY("الأمان", "قفل الأطفال وحماية اللمس", Icons.Default.Lock),
+    SYSTEM("النظام والتحديث", "التشخيص • الإقلاع • التحديثات", Icons.Default.SettingsSuggest),
+    ABOUT("حول", "دربك • الإصدار • الملكية", Icons.Default.VerifiedUser)
 }
 
 private val LocalSettingsAccent = staticCompositionLocalOf { CyanNeon }
@@ -55,7 +61,8 @@ fun SettingsScreen(
     val gps by viewModel.gpsTelemetry.collectAsState()
     val fileImportStatus by viewModel.fileImportStatus.collectAsState()
     val recommendedMapDownload by viewModel.recommendedMapDownloadState.collectAsState()
-    var selected by remember { mutableStateOf(SettingsCategory.INTERFACE) }
+    var selected by remember { mutableStateOf<SettingsCategory?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
     var interfaceBackgroundOpen by remember { mutableStateOf(true) }
     var interfaceBarsOpen by remember { mutableStateOf(false) }
     var interfaceAppsOpen by remember { mutableStateOf(false) }
@@ -71,124 +78,109 @@ fun SettingsScreen(
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { it?.let(viewModel::importWallpaperUri) }
 
     CompositionLocalProvider(LocalSettingsAccent provides accent) {
-        Row(modifier.fillMaxSize().padding(9.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            Card(
-                Modifier.width(178.dp).fillMaxHeight(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CarbonCard.copy(alpha = .94f)),
-                border = BorderStroke(1.dp, CarbonCardBorder)
-            ) {
-                Column(Modifier.fillMaxSize().padding(7.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 7.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+        Surface(
+            modifier = modifier.fillMaxSize(),
+            color = CarbonDark.copy(alpha = .97f)
+        ) {
+            val activeCategory = selected
+            if (activeCategory == null) {
+                DarbakSettingsLanding(
+                    searchQuery = searchQuery,
+                    onSearchChange = { searchQuery = it },
+                    accent = accent,
+                    statusFor = { category ->
+                        when (category) {
+                            SettingsCategory.INTERFACE -> settings.backgroundType.arabicName
+                            SettingsCategory.WIDGETS -> if (isDesignMode) "وضع التصميم" else "جاهز"
+                            SettingsCategory.SCREENSAVER -> if (settings.screenSaverEnabled) "مفعّلة" else "متوقفة"
+                            SettingsCategory.MEDIA -> "${playback.playlist.size} مقطع"
+                            SettingsCategory.DRIVING -> if (gps.hasGpsFix) "GPS متصل" else "بانتظار GPS"
+                            SettingsCategory.SECURITY -> "حماية اللمس"
+                            SettingsCategory.SYSTEM -> "v${BuildConfig.VERSION_NAME}"
+                            SettingsCategory.ABOUT -> "أبوسلطان"
+                        }
+                    },
+                    positiveFor = { category ->
+                        when (category) {
+                            SettingsCategory.SCREENSAVER -> settings.screenSaverEnabled
+                            SettingsCategory.DRIVING -> gps.hasGpsFix
+                            SettingsCategory.MEDIA -> playback.playlist.isNotEmpty()
+                            else -> true
+                        }
+                    },
+                    onSelect = { selected = it }
+                )
+            } else {
+                DarbakSettingsDetailHeader(
+                    category = activeCategory,
+                    accent = accent,
+                    onBack = { selected = null }
+                ) {
+                    LazyColumn(
+                        Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 12.dp)
                     ) {
-                        Icon(Icons.Default.Tune, null, tint = accent, modifier = Modifier.size(20.dp))
-                        Text("الإعدادات", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Black)
-                    }
-                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        items(SettingsCategory.values().toList()) { category ->
-                            val active = selected == category
-                            Surface(
-                                color = if (active) accent.copy(alpha = .16f) else Color.Transparent,
-                                shape = RoundedCornerShape(11.dp),
-                                border = if (active) BorderStroke(1.dp, accent.copy(alpha = .85f)) else null,
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { selected = category }
-                            ) {
-                                Row(
-                                    Modifier.padding(horizontal = 9.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(category.icon, null, tint = if (active) accent else TextSecondary, modifier = Modifier.size(20.dp))
-                                    Text(category.arabicTitle, color = if (active) accent else TextPrimary, fontSize = 12.sp, fontWeight = if (active) FontWeight.Black else FontWeight.Medium, maxLines = 1)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Card(
-                Modifier.weight(1f).fillMaxHeight(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CarbonCard.copy(alpha = .94f)),
-                border = BorderStroke(1.dp, accent.copy(alpha = .32f))
-            ) {
-                Column(Modifier.fillMaxSize().padding(horizontal = 13.dp, vertical = 11.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Surface(color = accent.copy(alpha = .14f), shape = RoundedCornerShape(10.dp), modifier = Modifier.size(38.dp)) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(selected.icon, null, tint = accent, modifier = Modifier.size(21.dp)) }
-                        }
-                        Column {
-                            Text(selected.arabicTitle, color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.Black)
-                            Text("إعدادات مرتبة حسب المهمة", color = TextSecondary, fontSize = 10.sp)
-                        }
-                    }
-                    HorizontalDivider(color = CarbonCardBorder, modifier = Modifier.padding(vertical = 8.dp))
-
-                    LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 8.dp)) {
-                        when (selected) {
+                        when (activeCategory) {
                             SettingsCategory.INTERFACE -> {
                                 item { ExpandableSectionHeader("الخلفية والألوان", Icons.Default.Palette, interfaceBackgroundOpen) { interfaceBackgroundOpen = !interfaceBackgroundOpen } }
                                 if (interfaceBackgroundOpen) {
-                                item {
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        items(BackgroundType.values().toList()) { bg ->
-                                            FilterChip(selected = settings.backgroundType == bg, onClick = { viewModel.updateSettings(settings.copy(backgroundType = bg)) }, label = { Text(bg.arabicName, fontSize = 9.sp) })
+                                    item {
+                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            items(BackgroundType.values().toList()) { bg ->
+                                                FilterChip(selected = settings.backgroundType == bg, onClick = { viewModel.updateSettings(settings.copy(backgroundType = bg)) }, label = { Text(bg.arabicName, fontSize = 9.sp) })
+                                            }
                                         }
                                     }
-                                }
-                                item { ActionButton("اختيار صورة من الجهاز", Icons.Default.Image) { viewModel.prepareForExternalPicker(); imagePicker.launch("image/*") } }
-                                fileImportStatus?.let { status -> item { StatusMetric("حالة الاستيراد", status, status.startsWith("تم")) } }
-                                item { NumberSlider("تعتيم الخلفية", settings.wallpaperDimPercent, 0, 80, "%") { viewModel.updateSettings(settings.copy(wallpaperDimPercent = it)) } }
-                                item {
-                                    ChoiceCard("لون الواجهة", "يُطبّق على شريطي الحالة والتنقل وعناصر الإعدادات") {
-                                        InterfaceAccent.values().forEach { option ->
-                                            FilterChip(
-                                                selected = settings.interfaceAccent == option,
-                                                onClick = { viewModel.updateSettings(settings.copy(interfaceAccent = option)) },
-                                                label = { Text(option.arabicName, fontSize = 10.sp) },
-                                                leadingIcon = { Surface(color = Color(option.argb), shape = RoundedCornerShape(4.dp), modifier = Modifier.size(13.dp)) {} }
-                                            )
+                                    item { ActionButton("اختيار صورة من الجهاز", Icons.Default.Image) { viewModel.prepareForExternalPicker(); imagePicker.launch("image/*") } }
+                                    fileImportStatus?.let { status -> item { StatusMetric("حالة الاستيراد", status, status.startsWith("تم")) } }
+                                    item { NumberSlider("تعتيم الخلفية", settings.wallpaperDimPercent, 0, 80, "%") { viewModel.updateSettings(settings.copy(wallpaperDimPercent = it)) } }
+                                    item {
+                                        ChoiceCard("لون الواجهة", "يُطبّق على شريطي الحالة والتنقل وعناصر الإعدادات") {
+                                            InterfaceAccent.values().forEach { option ->
+                                                FilterChip(
+                                                    selected = settings.interfaceAccent == option,
+                                                    onClick = { viewModel.updateSettings(settings.copy(interfaceAccent = option)) },
+                                                    label = { Text(option.arabicName, fontSize = 10.sp) },
+                                                    leadingIcon = { Surface(color = Color(option.argb), shape = RoundedCornerShape(4.dp), modifier = Modifier.size(13.dp)) {} }
+                                                )
+                                            }
                                         }
                                     }
-                                }
                                 }
 
                                 item { ExpandableSectionHeader("شريطا الشاشة", Icons.Default.ViewDay, interfaceBarsOpen) { interfaceBarsOpen = !interfaceBarsOpen } }
                                 if (interfaceBarsOpen) {
-                                item { SwitchRow("مؤشر Wi‑Fi العلوي", "عنصر واحد فقط؛ المسه لفتح إعدادات الشبكة", settings.showTopBar) { viewModel.updateSettings(settings.copy(showTopBar = it)) } }
-                                item { SwitchRow("شريط التنقل السفلي", "الرئيسية والتطبيقات والموسيقى والخريطة والرحلة والإعدادات", settings.showBottomBar) { viewModel.updateSettings(settings.copy(showBottomBar = it)) } }
-                                if (settings.showBottomBar) {
-                                    item {
-                                        ChoiceCard("مظهر الشريط السفلي", "اختر شفافية كاملة أو زجاجًا أو خلفية داكنة") {
-                                            DockSurfaceStyle.values().forEach { option ->
-                                                FilterChip(selected = settings.bottomDockStyle == option, onClick = { viewModel.updateSettings(settings.copy(bottomDockStyle = option)) }, label = { Text(option.arabicName, fontSize = 10.sp) })
+                                    item { SwitchRow("مؤشر Wi‑Fi العلوي", "عنصر واحد فقط؛ المسه لفتح إعدادات الشبكة", settings.showTopBar) { viewModel.updateSettings(settings.copy(showTopBar = it)) } }
+                                    item { SwitchRow("شريط التنقل السفلي", "الرئيسية والتطبيقات والموسيقى والخريطة والرحلة والإعدادات", settings.showBottomBar) { viewModel.updateSettings(settings.copy(showBottomBar = it)) } }
+                                    if (settings.showBottomBar) {
+                                        item {
+                                            ChoiceCard("مظهر الشريط السفلي", "اختر شفافية كاملة أو زجاجًا أو خلفية داكنة") {
+                                                DockSurfaceStyle.values().forEach { option ->
+                                                    FilterChip(selected = settings.bottomDockStyle == option, onClick = { viewModel.updateSettings(settings.copy(bottomDockStyle = option)) }, label = { Text(option.arabicName, fontSize = 10.sp) })
+                                                }
                                             }
                                         }
+                                        item { NumberSlider("شفافية الشريط السفلي", settings.bottomDockOpacityPercent, 35, 100, "%") { viewModel.updateSettings(settings.copy(bottomDockOpacityPercent = it)) } }
                                     }
-                                    item { NumberSlider("شفافية الشريط السفلي", settings.bottomDockOpacityPercent, 35, 100, "%") { viewModel.updateSettings(settings.copy(bottomDockOpacityPercent = it)) } }
-                                }
                                 }
 
                                 item { ExpandableSectionHeader("التطبيقات", Icons.Default.Apps, interfaceAppsOpen) { interfaceAppsOpen = !interfaceAppsOpen } }
                                 if (interfaceAppsOpen) {
-                                item { NumberSlider("حجم أيقونات التطبيقات", settings.iconSizeDp, 40, 110, "dp") { viewModel.updateSettings(settings.copy(iconSizeDp = it)) } }
-                                item { NumberSlider("أعمدة درج التطبيقات", settings.appDrawerColumns, 2, 8, "أعمدة") { viewModel.updateSettings(settings.copy(appDrawerColumns = it)) } }
-                                item { SwitchRow("أسماء التطبيقات", "إظهار الاسم أسفل الأيقونة", settings.showAppLabels) { viewModel.updateSettings(settings.copy(showAppLabels = it)) } }
+                                    item { NumberSlider("حجم أيقونات التطبيقات", settings.iconSizeDp, 40, 110, "dp") { viewModel.updateSettings(settings.copy(iconSizeDp = it)) } }
+                                    item { NumberSlider("أعمدة درج التطبيقات", settings.appDrawerColumns, 2, 8, "أعمدة") { viewModel.updateSettings(settings.copy(appDrawerColumns = it)) } }
+                                    item { SwitchRow("أسماء التطبيقات", "إظهار الاسم أسفل الأيقونة", settings.showAppLabels) { viewModel.updateSettings(settings.copy(showAppLabels = it)) } }
                                 }
 
                                 item { ExpandableSectionHeader("المساحة الآمنة", Icons.Default.AspectRatio, interfaceSafeAreaOpen) { interfaceSafeAreaOpen = !interfaceSafeAreaOpen } }
                                 if (interfaceSafeAreaOpen) {
-                                item { InfoCard("الهوامش الحالية: أعلى ${safeArea.topDp} • أسفل ${safeArea.bottomDp} • يمين ${safeArea.rightDp} • يسار ${safeArea.leftDp} dp") }
-                                item {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        ActionButton("ضبط الهوامش", Icons.Default.AspectRatio, onOpenSafeAreaPreview)
-                                        ActionButton("تصفير", Icons.Default.Refresh) { viewModel.resetSafeArea() }
+                                    item { InfoCard("الهوامش الحالية: أعلى ${safeArea.topDp} • أسفل ${safeArea.bottomDp} • يمين ${safeArea.rightDp} • يسار ${safeArea.leftDp} dp") }
+                                    item {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            ActionButton("ضبط الهوامش", Icons.Default.AspectRatio, onOpenSafeAreaPreview)
+                                            ActionButton("تصفير", Icons.Default.Refresh) { viewModel.resetSafeArea() }
+                                        }
                                     }
-                                }
                                 }
                             }
 
@@ -229,8 +221,8 @@ fun SettingsScreen(
 
                             SettingsCategory.DRIVING -> {
                                 item {
-                                    Surface(color = accent.copy(alpha = .08f), shape = RoundedCornerShape(13.dp), border = BorderStroke(1.dp, accent.copy(alpha = .25f)), modifier = Modifier.fillMaxWidth()) {
-                                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Surface(color = accent.copy(alpha = .08f), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, accent.copy(alpha = .28f)), modifier = Modifier.fillMaxWidth()) {
+                                        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                             Text(if (gps.hasGpsFix && gps.isSpeedReliable) gps.speedKmH.toInt().toString() else "--", color = accent, fontSize = 32.sp, fontWeight = FontWeight.Black)
                                             Column { Text("كم/س", color = TextPrimary, fontWeight = FontWeight.Bold); Text(if (gps.hasGpsFix) "GPS ±${gps.accuracyMeters.toInt()}م" else gps.statusArabic, color = TextSecondary, fontSize = 11.sp) }
                                         }
@@ -271,8 +263,8 @@ fun SettingsScreen(
                                 fileImportStatus?.let { status -> item { StatusMetric("حالة الاستيراد", status, status.startsWith("تم")) } }
                                 if (maps.isEmpty()) item { StatusMetric("الخرائط", "لا توجد خريطة مضافة", false) }
                                 items(maps, key = { it.id }) { map ->
-                                    Surface(color = if (map.isActive) accent.copy(alpha = .12f) else CarbonSurface, shape = RoundedCornerShape(11.dp), border = BorderStroke(1.dp, if (map.isActive) accent else CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
-                                        Row(Modifier.padding(9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Surface(color = if (map.isActive) accent.copy(alpha = .12f) else CarbonSurface, shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, if (map.isActive) accent else CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
+                                        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Icon(Icons.Default.Map, null, tint = if (map.isActive) accent else TextSecondary)
                                             Column(Modifier.weight(1f)) {
                                                 Text(map.name, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -300,8 +292,9 @@ fun SettingsScreen(
                                 item { ActionButton("فحص النظام", Icons.Default.HealthAndSafety) { viewModel.runDiagnostics(); onOpenDiagnostics() } }
                                 item { ActionButton("تصفير سجل الوضع الآمن", Icons.Default.Security) { viewModel.resetSafeMode() } }
                             }
+
                             SettingsCategory.ABOUT -> {
-                                item { AboutOwnershipPanel(accent) }
+                                item { AboutOwnershipPanel(accent, onOpenDiagnostics) }
                             }
                         }
                     }
@@ -324,6 +317,7 @@ fun SettingsScreen(
             dismissButton = { TextButton(onClick = { mapPendingDelete = null }) { Text("إلغاء") } }
         )
     }
+
     if (confirmRecommendedMapDownload) {
         AlertDialog(
             onDismissRequest = { confirmRecommendedMapDownload = false },
@@ -343,6 +337,195 @@ fun SettingsScreen(
 }
 
 @Composable
+private fun DarbakSettingsLanding(
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    accent: Color,
+    statusFor: (SettingsCategory) -> String,
+    positiveFor: (SettingsCategory) -> Boolean,
+    onSelect: (SettingsCategory) -> Unit
+) {
+    val categories = remember(searchQuery) {
+        val q = searchQuery.trim()
+        SettingsCategory.values().filter {
+            q.isBlank() || it.arabicTitle.contains(q, ignoreCase = true) || it.subtitle.contains(q, ignoreCase = true)
+        }
+    }
+
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("الإعدادات", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Black)
+                Text("كل ما تحتاجه في مكان واحد", color = TextSecondary, fontSize = 13.sp)
+            }
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchChange,
+                singleLine = true,
+                placeholder = { Text("بحث في الإعدادات...", fontSize = 12.sp) },
+                leadingIcon = { Icon(Icons.Default.Search, null, tint = accent) },
+                shape = RoundedCornerShape(18.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = accent.copy(alpha = .75f),
+                    unfocusedBorderColor = CarbonCardBorder,
+                    focusedContainerColor = CarbonCard.copy(alpha = .78f),
+                    unfocusedContainerColor = CarbonCard.copy(alpha = .72f),
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary,
+                    focusedPlaceholderColor = TextSecondary,
+                    unfocusedPlaceholderColor = TextSecondary
+                ),
+                modifier = Modifier.width(365.dp).heightIn(min = 58.dp)
+            )
+        }
+
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            categories.chunked(4).forEach { rowCategories ->
+                Row(
+                    Modifier.fillMaxWidth().weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    rowCategories.forEach { category ->
+                        DarbakSettingsCategoryCard(
+                            category = category,
+                            status = statusFor(category),
+                            positive = positiveFor(category),
+                            accent = accent,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            onClick = { onSelect(category) }
+                        )
+                    }
+                    repeat(4 - rowCategories.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            if (categories.isEmpty()) {
+                Surface(
+                    color = CarbonCard.copy(alpha = .72f),
+                    border = BorderStroke(1.dp, CarbonCardBorder),
+                    shape = RoundedCornerShape(22.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.SearchOff, null, tint = TextSecondary, modifier = Modifier.size(42.dp))
+                            Spacer(Modifier.height(8.dp))
+                            Text("لا توجد إعدادات مطابقة", color = TextPrimary, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DarbakSettingsCategoryCard(
+    category: SettingsCategory,
+    status: String,
+    positive: Boolean,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = CarbonCard.copy(alpha = .88f)),
+        border = BorderStroke(1.dp, accent.copy(alpha = .38f))
+    ) {
+        Column(
+            Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = accent.copy(alpha = .14f),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, accent.copy(alpha = .24f)),
+                    modifier = Modifier.size(52.dp)
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(category.icon, null, tint = accent, modifier = Modifier.size(28.dp))
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                DarbakStatusPill(status, positive, accent)
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(category.arabicTitle, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(category.subtitle, color = TextSecondary, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DarbakStatusPill(text: String, positive: Boolean, accent: Color) {
+    val tint = if (positive) EmeraldSafe else AmberRacing
+    Surface(
+        color = tint.copy(alpha = .12f),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, tint.copy(alpha = .52f))
+    ) {
+        Text(
+            text,
+            color = tint,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+        )
+    }
+}
+
+@Composable
+private fun DarbakSettingsDetailHeader(
+    category: SettingsCategory,
+    accent: Color,
+    onBack: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = CarbonCard.copy(alpha = .88f)),
+            border = BorderStroke(1.dp, accent.copy(alpha = .38f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
+                    Icon(Icons.Default.ArrowForward, "رجوع", tint = TextPrimary, modifier = Modifier.size(24.dp))
+                }
+                Surface(color = accent.copy(alpha = .14f), shape = RoundedCornerShape(12.dp), modifier = Modifier.size(44.dp)) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(category.icon, null, tint = accent, modifier = Modifier.size(24.dp))
+                    }
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(category.arabicTitle, color = TextPrimary, fontSize = 21.sp, fontWeight = FontWeight.Black)
+                    Text(category.subtitle, color = TextSecondary, fontSize = 10.sp)
+                }
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxWidth()) { content() }
+    }
+}
+
+@Composable
 private fun SectionTitle(title: String, icon: ImageVector) {
     val accent = LocalSettingsAccent.current
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
@@ -356,12 +539,12 @@ private fun ExpandableSectionHeader(title: String, icon: ImageVector, expanded: 
     val accent = LocalSettingsAccent.current
     Surface(
         onClick = onToggle,
-        color = if (expanded) accent.copy(alpha = .10f) else CarbonSurface,
-        shape = RoundedCornerShape(11.dp),
+        color = if (expanded) accent.copy(alpha = .10f) else CarbonSurface.copy(alpha = .92f),
+        shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, if (expanded) accent.copy(alpha = .45f) else CarbonCardBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(Modifier.padding(horizontal = 11.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = accent, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(7.dp))
             Text(title, color = TextPrimary, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
@@ -372,8 +555,8 @@ private fun ExpandableSectionHeader(title: String, icon: ImageVector, expanded: 
 
 @Composable
 private fun ChoiceCard(title: String, subtitle: String, content: @Composable RowScope.() -> Unit) {
-    Surface(color = CarbonSurface, shape = RoundedCornerShape(11.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Surface(color = CarbonSurface.copy(alpha = .92f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(title, color = TextPrimary, fontWeight = FontWeight.Bold)
             Text(subtitle, color = TextSecondary, fontSize = 10.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), content = content)
@@ -383,8 +566,8 @@ private fun ChoiceCard(title: String, subtitle: String, content: @Composable Row
 
 @Composable
 private fun ClockFormatRow(is24: Boolean, onChange: (Boolean) -> Unit) {
-    Surface(color = CarbonSurface, shape = RoundedCornerShape(11.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Surface(color = CarbonSurface.copy(alpha = .92f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("نظام الساعة", color = TextPrimary, fontWeight = FontWeight.Bold)
                 Text(if (is24) "مثال: 18:30" else "مثال: 06:30 م", color = TextSecondary, fontSize = 11.sp)
@@ -398,8 +581,8 @@ private fun ClockFormatRow(is24: Boolean, onChange: (Boolean) -> Unit) {
 
 @Composable
 private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Surface(color = CarbonSurface, shape = RoundedCornerShape(11.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+    Surface(color = CarbonSurface.copy(alpha = .92f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f).padding(end = 10.dp)) {
                 Text(title, color = TextPrimary, fontWeight = FontWeight.Bold)
                 Text(subtitle, color = TextSecondary, fontSize = 11.sp)
@@ -412,8 +595,8 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
 @Composable
 private fun NumberSlider(label: String, value: Int, min: Int, max: Int, unit: String, onChange: (Int) -> Unit) {
     val accent = LocalSettingsAccent.current
-    Surface(color = CarbonSurface, shape = RoundedCornerShape(11.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(10.dp)) {
+    Surface(color = CarbonSurface.copy(alpha = .92f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(11.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(label, color = TextPrimary, fontWeight = FontWeight.Bold)
                 Text("$value $unit", color = accent, fontWeight = FontWeight.Bold)
@@ -431,7 +614,7 @@ private fun ActionButton(title: String, icon: ImageVector, onClick: () -> Unit) 
 @Composable
 private fun ActionButton(title: String, icon: ImageVector, enabled: Boolean, onClick: () -> Unit) {
     val accent = LocalSettingsAccent.current
-    Button(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.buttonColors(containerColor = CarbonSurface), border = BorderStroke(1.dp, CarbonCardBorder)) {
+    Button(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = CarbonSurface), border = BorderStroke(1.dp, CarbonCardBorder)) {
         Icon(icon, null, tint = accent, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(7.dp))
         Text(title, color = TextPrimary, fontWeight = FontWeight.Bold)
@@ -441,15 +624,15 @@ private fun ActionButton(title: String, icon: ImageVector, enabled: Boolean, onC
 @Composable
 private fun InfoCard(text: String) {
     val accent = LocalSettingsAccent.current
-    Surface(color = accent.copy(alpha = .07f), shape = RoundedCornerShape(11.dp), border = BorderStroke(1.dp, accent.copy(alpha = .23f)), modifier = Modifier.fillMaxWidth()) {
-        Text(text, color = TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(10.dp))
+    Surface(color = accent.copy(alpha = .07f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, accent.copy(alpha = .23f)), modifier = Modifier.fillMaxWidth()) {
+        Text(text, color = TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(11.dp))
     }
 }
 
 @Composable
 private fun StatusMetric(label: String, value: String, positive: Boolean) {
-    Surface(color = CarbonSurface, shape = RoundedCornerShape(11.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    Surface(color = CarbonSurface.copy(alpha = .92f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(11.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(label, color = TextSecondary, fontSize = 11.sp)
             Text(value, color = if (positive) EmeraldSafe else TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
         }
