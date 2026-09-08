@@ -14,6 +14,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +38,15 @@ fun MusicPlayerScreen(
     val playbackState by viewModel.playbackState.collectAsState()
     val track = playbackState.currentTrack
     val isPlaying = playbackState.isPlaying
+    var query by rememberSaveable { mutableStateOf("") }
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var pendingSeek by remember { mutableStateOf<Float?>(null) }
+    BackHandler(expanded) { expanded = false }
+    LaunchedEffect(track?.dataPath) { pendingSeek = null }
+    val visibleTracks = remember(playbackState.playlist, query) {
+        val text = query.trim()
+        playbackState.playlist.filter { text.isEmpty() || it.title.contains(text, true) || it.artist.contains(text, true) }
+    }
     val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let(viewModel::importMusicUri)
     }
@@ -56,12 +68,12 @@ fun MusicPlayerScreen(
     } else 0f
 
     Row(
-        modifier = modifier.fillMaxSize().padding(12.dp),
+        modifier = modifier.fillMaxSize().background(CarbonDark).padding(16.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Card(
+        if (!expanded) Card(
             modifier = Modifier.weight(1f).fillMaxHeight(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(containerColor = CarbonCard),
             border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder)
         ) {
@@ -77,14 +89,21 @@ fun MusicPlayerScreen(
                         color = CyanNeon
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = addMusic, modifier = Modifier.size(34.dp)) {
+                        IconButton(onClick = addMusic, modifier = Modifier.size(52.dp)) {
                             Icon(Icons.Default.Add, contentDescription = "إضافة ملف صوتي", tint = AmberRacing)
                         }
                         Icon(Icons.Default.QueueMusic, contentDescription = null, tint = CyanNeon)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = query, onValueChange = { query = it }, singleLine = true,
+                    placeholder = { Text("بحث عن مقطع", fontSize = 14.sp) },
+                    leadingIcon = { Icon(Icons.Default.Search, null, tint = CyanNeon) },
+                    trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, "مسح البحث") } },
+                    shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(10.dp))
 
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -106,18 +125,21 @@ fun MusicPlayerScreen(
                             }
                         }
                     }
-                    items(playbackState.playlist, key = { it.id }) { item ->
+                    if (visibleTracks.isEmpty() && playbackState.playlist.isNotEmpty()) item {
+                        Text("لا توجد نتائج", color = TextSecondary, modifier = Modifier.padding(16.dp))
+                    }
+                    items(visibleTracks, key = { it.id }) { item ->
                         val isCurrent = item.dataPath == track?.dataPath
                         Surface(
                             color = if (isCurrent) CyanNeon.copy(alpha = 0.18f) else CarbonSurface,
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(16.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, if (isCurrent) CyanNeon else CarbonCardBorder),
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
                                 .clickable { viewModel.playTrack(item) }
                                 .testTag("playlist_item_${item.id}")
                         ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -135,9 +157,9 @@ fun MusicPlayerScreen(
                                     Column {
                                         Text(
                                             text = item.title,
-                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal),
+                                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 16.sp, fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal),
                                             color = if (isCurrent) CyanNeon else TextPrimary,
-                                            maxLines = 1
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis
                                         )
                                         Text(text = item.artist, style = MaterialTheme.typography.labelSmall, color = TextSecondary, maxLines = 1)
                                     }
@@ -151,7 +173,7 @@ fun MusicPlayerScreen(
 
         Card(
             modifier = Modifier.weight(1.3f).fillMaxHeight(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(containerColor = CarbonCard),
             border = androidx.compose.foundation.BorderStroke(1.dp, CyanNeon.copy(alpha = 0.4f))
         ) {
@@ -165,17 +187,11 @@ fun MusicPlayerScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(color = CarbonSurface, shape = RoundedCornerShape(6.dp), border = androidx.compose.foundation.BorderStroke(1.dp, EmeraldSafe)) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(Icons.Default.BookmarkAdded, contentDescription = null, tint = EmeraldSafe, modifier = Modifier.size(14.dp))
-                            Text(text = "استئناف التشغيل الذكي محفوظ", style = MaterialTheme.typography.labelSmall, color = EmeraldSafe)
-                        }
+                    Text(text = "الموسيقى", color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(52.dp)) {
+                        Icon(if (expanded) Icons.Default.CloseFullscreen else Icons.Default.OpenInFull,
+                            if (expanded) "إظهار القائمة" else "توسيع المشغل", tint = CyanNeon)
                     }
-                    Text(text = "مشغل الصوت المحلي", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                 }
 
                 Box(
@@ -205,8 +221,13 @@ fun MusicPlayerScreen(
 
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Slider(
-                        value = progressFraction,
-                        onValueChange = { frac -> viewModel.seekTo((frac * playbackState.durationMs).toLong()) },
+                        value = pendingSeek ?: progressFraction,
+                        onValueChange = { pendingSeek = it },
+                        onValueChangeFinished = {
+                            pendingSeek?.let { viewModel.seekTo((it * playbackState.durationMs).toLong()) }
+                            pendingSeek = null
+                        },
+                        enabled = track != null && playbackState.durationMs > 0,
                         modifier = Modifier.fillMaxWidth(),
                         colors = SliderDefaults.colors(thumbColor = CyanNeon, activeTrackColor = CyanNeon, inactiveTrackColor = CarbonCardBorder)
                     )
