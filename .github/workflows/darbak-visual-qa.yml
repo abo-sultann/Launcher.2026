@@ -18,6 +18,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Restore existing stable key for debug signing
+        run: base64 --decode ci/launcher-stable.jks.b64 > app/launcher-stable.jks
       - uses: android-actions/setup-android@v3
       - run: chmod +x gradlew
       - run: ./gradlew :app:assembleDebug --no-daemon
