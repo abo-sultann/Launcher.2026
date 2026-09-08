@@ -173,8 +173,11 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
         awaitPointerEventScope {
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
-                mapPointerDown = event.changes.any { it.pressed }
-                lastMapInteraction = android.os.SystemClock.uptimeMillis()
+                val pressed = event.changes.any { it.pressed }
+                if (mapPointerDown != pressed) {
+                    mapPointerDown = pressed
+                    lastMapInteraction = android.os.SystemClock.uptimeMillis()
+                }
                 // Observe without consuming: map pan, zoom and long press retain their behavior.
             }
         }
