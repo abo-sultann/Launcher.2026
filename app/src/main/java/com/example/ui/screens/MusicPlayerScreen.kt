@@ -194,19 +194,7 @@ fun MusicPlayerScreen(
                     }
                 }
 
-                Box(
-                    modifier = Modifier.size(100.dp).clip(CircleShape)
-                        .background(Brush.radialGradient(listOf(Color(0xFF2A3445), Color(0xFF0F1520))))
-                        .border(3.dp, if (isPlaying) CyanNeon else CarbonCardBorder, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier.size(36.dp).clip(CircleShape).background(AmberRacing),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(CarbonDark))
-                    }
-                }
+                DarbakMusicArtwork(track?.dataPath, Modifier.size(124.dp))
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
