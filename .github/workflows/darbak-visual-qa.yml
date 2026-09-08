@@ -1,0 +1,55 @@
+name: Darbak visual QA
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: visual-qa-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: chmod +x gradlew
+      - run: ./gradlew :app:assembleDebug --no-daemon
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Android 7.1 visual check
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 25
+          target: default
+          arch: x86
+          ram-size: 1024M
+          disk-size: 2048M
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -skin 1024x600
+          disable-animations: true
+          script: |
+            adb shell wm size 1024x600
+            adb shell wm density 160
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            python3 tools/darbak_visual_qa.py com.aistudio.carlauncher.lzrk26
+      - name: Collect signing verifier
+        if: always()
+        run: |
+          mkdir -p qa-visual
+          cp "$(find "$ANDROID_HOME/build-tools" -name apksigner.jar | sort -V | tail -1)" qa-visual/apksigner.jar
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Darbak-visual-QA
+          path: qa-visual/
+          retention-days: 1
+          if-no-files-found: error
