@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,6 +96,9 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
     val interfaceAccent = Color(launcherSettings.interfaceAccent.argb)
 
     var showTools by remember { mutableStateOf(false) }
+    var controlsVisible by remember { mutableStateOf(true) }
+    var mapPointerDown by remember { mutableStateOf(false) }
+    var lastMapInteraction by remember { mutableLongStateOf(0L) }
     var showPlaces by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showMaps by remember { mutableStateOf(false) }
@@ -112,6 +117,16 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
     var orientationMode by remember { mutableStateOf(storedMapState.orientationMode) }
     var measureA by remember { mutableStateOf<LatLong?>(null) }
     var measureB by remember { mutableStateOf<LatLong?>(null) }
+
+    val mapDialogOpen = showTools || showPlaces || showSearch || showMaps || showSaveCurrent || showLongPressActions
+    LaunchedEffect(lastMapInteraction, mapPointerDown, mapDialogOpen, activeMap) {
+        if (mapPointerDown) return@LaunchedEffect
+        controlsVisible = true
+        if (activeMap != null && !mapPointerDown && !mapDialogOpen) {
+            delay(6500L)
+            controlsVisible = false
+        }
+    }
 
     var smoothBearing by remember { mutableFloatStateOf(gps.bearingDegrees) }
     LaunchedEffect(gps.bearingDegrees) {
@@ -154,7 +169,16 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
         if (!gps.hasGpsFix || renderedTrack.isEmpty()) null else nearestTrackPoint(renderedTrack, gps.latitude, gps.longitude)
     }
 
-    BoxWithConstraints(modifier.fillMaxSize().background(Color(0xFF10151C))) {
+    BoxWithConstraints(modifier.fillMaxSize().background(Color(0xFF0A1633)).pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                mapPointerDown = event.changes.any { it.pressed }
+                lastMapInteraction = android.os.SystemClock.uptimeMillis()
+                // Observe without consuming: map pan, zoom and long press retain their behavior.
+            }
+        }
+    }) {
         when {
             activeMap == null -> EnhancedEmptyMapState(launchMapPicker)
             activeMap!!.filePath.isSupportedOfflineMap() -> {
@@ -212,7 +236,7 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             }
         }
 
-        if (mapUi.showPrimaryActions) {
+        if (mapUi.showPrimaryActions && controlsVisible) {
             Surface(
                 modifier = mapOverlayModifier(mapUi.primaryActionsSlot),
                 color = CarbonDark.copy(alpha = .78f),
@@ -248,6 +272,12 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
             shadowElevation = 5.dp
         ) {
             Column(Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                if (!controlsVisible) {
+                    MapDockButton(Icons.Default.Tune, "إظهار أدوات الخريطة", interfaceAccent) {
+                        lastMapInteraction = android.os.SystemClock.uptimeMillis()
+                        controlsVisible = true
+                    }
+                } else {
                 MapDockButton(
                     if (followGps) Icons.Default.GpsFixed else Icons.Default.MyLocation,
                     if (followGps) "تتبع موقعي" else "العودة لموقعي",
@@ -268,10 +298,11 @@ fun EnhancedOfflineMapScreen(viewModel: MainViewModel, modifier: Modifier = Modi
                     viewModel.updateOffroadMapState(storedMapState.copy(followGps = followGps, orientationMode = orientationMode))
                 }
                 MapDockButton(Icons.Default.Tune, "إعدادات الخريطة", interfaceAccent) { showTools = true }
+                }
             }
         }
 
-        if (mapUi.showTelemetry) {
+        if (mapUi.showTelemetry && controlsVisible) {
             EnhancedTelemetryCard(
                 gps = gps,
                 modifier = mapOverlayModifier(mapUi.telemetrySlot)
@@ -616,7 +647,7 @@ private fun MapDockButton(
         color = if (selected) accentColor.copy(alpha = .18f) else Color.Transparent,
         shape = RoundedCornerShape(11.dp),
         border = if (selected) BorderStroke(1.dp, accentColor.copy(alpha = .55f)) else null,
-        modifier = Modifier.size(44.dp)
+        modifier = Modifier.size(54.dp)
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(icon, description, tint = if (selected) accentColor else TextPrimary, modifier = Modifier.size(21.dp))
@@ -635,7 +666,7 @@ private fun MapPrimaryActionButton(
         onClick = onClick,
         color = Color.Transparent,
         shape = RoundedCornerShape(11.dp),
-        modifier = Modifier.height(44.dp)
+        modifier = Modifier.height(54.dp)
     ) {
         Row(
             Modifier.padding(horizontal = 9.dp),
@@ -643,7 +674,7 @@ private fun MapPrimaryActionButton(
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Icon(icon, label, tint = accentColor, modifier = Modifier.size(19.dp))
-            Text(label, color = TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(label, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
 }
