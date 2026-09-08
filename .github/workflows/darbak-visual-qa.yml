@@ -41,7 +41,7 @@ jobs:
           script: |
             adb shell wm size 1024x600
             adb shell wm density 160
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb install -r -g app/build/outputs/apk/debug/app-debug.apk
             python3 tools/darbak_visual_qa.py com.aistudio.carlauncher.lzrk26
       - name: Collect signing verifier
         if: always()
