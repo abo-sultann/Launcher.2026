@@ -2,14 +2,14 @@ name: Build Launcher 2026 APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, darbak-platform-v1 ]
   pull_request:
     branches: [ main ]
     types: [ opened, synchronize, reopened ]
   workflow_dispatch:
 
 concurrency:
-  group: launcher-2026-apk-main
+  group: launcher-2026-apk-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -60,8 +60,7 @@ jobs:
       - name: Upload Stable APK
         uses: actions/upload-artifact@v4
         with:
-          name: Launcher-2026-Stable
+          name: Launcher-2026-Stable-${{ github.ref_name }}
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
-          retention-days: 3
-
+          retention-days: 1
