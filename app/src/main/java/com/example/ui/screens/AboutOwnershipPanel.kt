@@ -60,7 +60,7 @@ fun AboutOwnershipPanel(accent: Color, onOpenDiagnostics: (() -> Unit)? = null) 
                 verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 Image(
-                    painter = painterResource(R.drawable.owner_signature_darbak),
+                    painter = painterResource(R.drawable.darbak_owner_signature),
                     contentDescription = "هوية دربك — أبوسلطان",
                     modifier = Modifier.fillMaxWidth().heightIn(max = 150.dp),
                     contentScale = ContentScale.Fit
