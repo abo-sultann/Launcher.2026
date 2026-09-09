@@ -9,6 +9,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
@@ -122,11 +123,7 @@ class MainActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (mainViewModel.isChildLockActive.value) return
-        if (mainViewModel.currentScreen.value != CarScreen.HOME) mainViewModel.navigateTo(CarScreen.HOME)
-    }
+
 }
 
 private enum class SubOverlayScreen { NONE, SAFE_AREA_PREVIEW, DIAGNOSTICS, SCREEN_SAVER_EDITOR }
@@ -155,6 +152,15 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
     var mapChromeVisible by remember { mutableStateOf(true) }
     var mapChromeToken by remember { mutableStateOf(0L) }
     val rootView = LocalView.current
+
+    // Register the root first so detail pages can handle Back before home navigation.
+    BackHandler {
+        when {
+            screenSaverVisible -> screenSaverVisible = false
+            activeSubOverlay != SubOverlayScreen.NONE -> activeSubOverlay = SubOverlayScreen.NONE
+            currentScreen != CarScreen.HOME -> viewModel.navigateTo(CarScreen.HOME)
+        }
+    }
 
     SideEffect { rootView.keepScreenOn = settings.keepScreenOn }
 
@@ -291,6 +297,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
             }
         }
 
+        BackHandler(isChildLockActive) { /* Child lock also protects hardware Back. */ }
         if (isChildLockActive) {
             ChildLockOverlay(
                 holdSeconds = settings.childUnlockHoldSeconds,

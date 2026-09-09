@@ -41,8 +41,11 @@ jobs:
           script: |
             adb shell wm size 1024x600
             adb shell wm density 160
-            adb install -r -g app/build/outputs/apk/debug/app-debug.apk
+            curl --fail --location --retry 2 --connect-timeout 20 --max-time 90 'https://drive.usercontent.google.com/download?id=1SfhLZdmlBDv0fIwjVunh2GX3np2mgdZC&export=download&confirm=t' -o /tmp/launcher-previous.apk
+            adb install -r -g /tmp/launcher-previous.apk
             adb install -r -g app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell am instrument -w -e mode seed com.aistudio.carlauncher.lzrk26.test/com.example.LauncherReviewRunner
+            adb install -r -g app/build/outputs/apk/debug/app-debug.apk
             python3 tools/run_launcher_review.py
       - name: Collect signing verifier
         if: always()

@@ -19,11 +19,21 @@ import android.util.Xml;
 public final class LauncherReviewRunner extends Instrumentation {
     private File output;
     private String selectedTag;
-    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments); start(); }
+    private boolean seed;
+    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments); seed = arguments != null && "seed".equals(arguments.getString("mode")); start(); }
     @Override public void onStart() {
         output = new File(getTargetContext().getExternalFilesDir(null), "launcher-review");
         output.mkdirs();
         try {
+            android.content.SharedPreferences prefs = getTargetContext().getSharedPreferences("car_launcher_preferences_2026", 0);
+            if (seed) {
+                require(prefs.edit().putInt("wallpaper_dim", 27).putInt("icon_size", 72).putInt("app_columns", 5)
+                    .putBoolean("resume_music", true).putBoolean("auto_log_trips", false)
+                    .putString("launcher_review_sentinel", "existing-install").commit(), "Could not seed old install");
+                Bundle seeded = new Bundle(); seeded.putString("stream", "PASS: existing installation seeded\n"); finish(-1, seeded); return;
+            }
+            require("existing-install".equals(prefs.getString("launcher_review_sentinel", "")), "Upgrade erased existing data");
+            require(prefs.getInt("wallpaper_dim", 0) == 27 && prefs.getInt("icon_size", 0) == 72, "Upgrade reset appearance preferences");
             android.accessibilityservice.AccessibilityServiceInfo service = getUiAutomation().getServiceInfo();
             service.flags |= android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
             getUiAutomation().setServiceInfo(service);
@@ -100,7 +110,8 @@ public final class LauncherReviewRunner extends Instrumentation {
             tapTag("music_expand");
             require(find("music_queue", true) == null, "Expanded player still shows queue");
             snapshot("14-music-expanded");
-            tapTag("music_expand");
+            sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK);
+            waitTag("music_queue");
             setText("music_search", "NoSuchDarbakSong");
             waitText("لا توجد نتائج"); snapshot("15-music-search-empty");
             setText("music_search", "");
@@ -113,7 +124,11 @@ public final class LauncherReviewRunner extends Instrumentation {
             tapTag("settings_back");
             waitTag("settings_category_INTERFACE");
             snapshot("18-settings-return");
-            write("result.txt", "PASS: settings categories, interface tabs, approved identity, app search, favorite/hide/restore, music playback, seek, volume, expanded player, trip and return navigation\n");
+            tapTag("settings_category_INTERFACE");
+            sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK);
+            waitTag("settings_category_INTERFACE");
+            require(prefs.getInt("wallpaper_dim", 0) == 27 && prefs.getInt("icon_size", 0) == 72, "Navigation reset saved preferences");
+            write("result.txt", "PASS: upgrade preserves data, settings categories, interface tabs, approved identity, app search, favorite/hide/restore, music playback, seek, volume, expanded player, trip, hardware Back and return navigation\n");
             Bundle result = new Bundle(); result.putString("stream", "PASS: Launcher review completed\n");
             finish(-1, result);
         } catch (Throwable failure) {
