@@ -22,7 +22,7 @@ jobs:
         run: base64 --decode ci/launcher-stable.jks.b64 > app/launcher-stable.jks
       - uses: android-actions/setup-android@v3
       - run: chmod +x gradlew
-      - run: ./gradlew :app:assembleDebug --no-daemon
+      - run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -42,7 +42,8 @@ jobs:
             adb shell wm size 1024x600
             adb shell wm density 160
             adb install -r -g app/build/outputs/apk/debug/app-debug.apk
-            python3 tools/darbak_visual_qa.py com.aistudio.carlauncher.lzrk26
+            adb install -r -g app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            python3 tools/run_launcher_review.py
       - name: Collect signing verifier
         if: always()
         run: |

@@ -48,7 +48,7 @@ fun SafeAreaPreviewScreen(
             modifier = Modifier
                 .weight(1.1f)
                 .fillMaxHeight(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = CarbonCard),
             border = androidx.compose.foundation.BorderStroke(1.dp, CyanNeon.copy(alpha = 0.4f))
         ) {
@@ -68,10 +68,10 @@ fun SafeAreaPreviewScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "رجوع", tint = CyanNeon)
+                            Icon(Icons.Default.ArrowForward, contentDescription = "رجوع", tint = CyanNeon)
                         }
                         Text(
-                            text = "تعديل هوامش الشاشة (Safe Area)",
+                            text = "هوامش الشاشة",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = TextPrimary
                         )
@@ -93,7 +93,7 @@ fun SafeAreaPreviewScreen(
                 // 4 Margin Sliders
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     MarginSliderRow(
-                        label = "الهامش العلوي (Top)",
+                        label = "أعلى",
                         value = topMargin,
                         onValueChange = {
                             topMargin = it
@@ -102,7 +102,7 @@ fun SafeAreaPreviewScreen(
                     )
 
                     MarginSliderRow(
-                        label = "الهامش السفلي (Bottom)",
+                        label = "أسفل",
                         value = bottomMargin,
                         onValueChange = {
                             bottomMargin = it
@@ -111,7 +111,7 @@ fun SafeAreaPreviewScreen(
                     )
 
                     MarginSliderRow(
-                        label = "الهامش الأيمن (Right)",
+                        label = "يمين",
                         value = rightMargin,
                         onValueChange = {
                             rightMargin = it
@@ -120,7 +120,7 @@ fun SafeAreaPreviewScreen(
                     )
 
                     MarginSliderRow(
-                        label = "الهامش الأيسر (Left)",
+                        label = "يسار",
                         value = leftMargin,
                         onValueChange = {
                             leftMargin = it
@@ -149,7 +149,7 @@ fun SafeAreaPreviewScreen(
             modifier = Modifier
                 .weight(1.2f)
                 .fillMaxHeight(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = CarbonDark),
             border = androidx.compose.foundation.BorderStroke(1.dp, CarbonCardBorder)
         ) {
@@ -188,7 +188,7 @@ fun SafeAreaPreviewScreen(
                             )
                             Text(
                                 text = "أعلى: ${topMargin.toInt()}dp | أسفل: ${bottomMargin.toInt()}dp | يمين: ${rightMargin.toInt()}dp | يسار: ${leftMargin.toInt()}dp",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.bodyLarge,
                                 color = TextPrimary
                             )
                         }
@@ -211,8 +211,8 @@ private fun MarginSliderRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = label, style = MaterialTheme.typography.labelSmall, color = TextPrimary)
-            Text(text = "${value.toInt()} dp", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = CyanNeon)
+            Text(text = label, style = MaterialTheme.typography.bodyLarge, color = TextPrimary)
+            Text(text = "${value.toInt()} dp", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = CyanNeon)
         }
         Slider(
             value = value,
@@ -223,7 +223,7 @@ private fun MarginSliderRow(
                 activeTrackColor = CyanNeon,
                 inactiveTrackColor = CarbonCardBorder
             ),
-            modifier = Modifier.height(26.dp)
+            modifier = Modifier.height(48.dp)
         )
     }
 }
