@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.testTag
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -43,7 +46,7 @@ enum class SettingsCategory(
     ABOUT("حول", "دربك • الإصدار • الملكية", Icons.Default.VerifiedUser)
 }
 
-private val LocalSettingsAccent = staticCompositionLocalOf { CyanNeon }
+
 
 @Composable
 fun SettingsScreen(
@@ -61,15 +64,13 @@ fun SettingsScreen(
     val gps by viewModel.gpsTelemetry.collectAsState()
     val fileImportStatus by viewModel.fileImportStatus.collectAsState()
     val recommendedMapDownload by viewModel.recommendedMapDownloadState.collectAsState()
-    var selected by remember { mutableStateOf<SettingsCategory?>(null) }
-    var searchQuery by remember { mutableStateOf("") }
-    var interfaceBackgroundOpen by remember { mutableStateOf(true) }
-    var interfaceBarsOpen by remember { mutableStateOf(false) }
-    var interfaceAppsOpen by remember { mutableStateOf(false) }
-    var interfaceSafeAreaOpen by remember { mutableStateOf(false) }
+    var selected by rememberSaveable { mutableStateOf<SettingsCategory?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var interfaceSection by rememberSaveable { mutableStateOf(0) }
     var mapPendingDelete by remember { mutableStateOf<MapItem?>(null) }
     var confirmRecommendedMapDownload by remember { mutableStateOf(false) }
     val accent = Color(settings.interfaceAccent.argb)
+    BackHandler(selected != null) { selected = null }
 
     val musicPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { it?.let(viewModel::importMusicUri) }
     // ACTION_GET_CONTENT works more consistently with the old Android 7 file manager.
@@ -80,7 +81,7 @@ fun SettingsScreen(
     CompositionLocalProvider(LocalSettingsAccent provides accent) {
         Surface(
             modifier = modifier.fillMaxSize(),
-            color = CarbonDark.copy(alpha = .97f)
+            color = CarbonDark
         ) {
             val activeCategory = selected
             if (activeCategory == null) {
@@ -114,21 +115,26 @@ fun SettingsScreen(
                 DarbakSettingsDetailHeader(
                     category = activeCategory,
                     accent = accent,
-                    onBack = { selected = null }
+                    onBack = { selected = null },
+                    onSelect = { selected = it }
                 ) {
-                    LazyColumn(
-                        Modifier.fillMaxSize(),
+                    key(activeCategory) { LazyColumn(
+                        Modifier.fillMaxSize().testTag("settings_detail_content"),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(bottom = 12.dp)
                     ) {
                         when (activeCategory) {
                             SettingsCategory.INTERFACE -> {
-                                item { ExpandableSectionHeader("الخلفية والألوان", Icons.Default.Palette, interfaceBackgroundOpen) { interfaceBackgroundOpen = !interfaceBackgroundOpen } }
-                                if (interfaceBackgroundOpen) {
+                                item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    items(listOf("الخلفية", "الأشرطة", "التطبيقات", "الهوامش").withIndex().toList()) { (index, label) ->
+                                        SettingsChoice(selected = interfaceSection == index, onClick = { interfaceSection = index }, label = { Text(label, fontSize = 16.sp) })
+                                    }
+                                } }
+                                if (interfaceSection == 0) {
                                     item {
                                         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             items(BackgroundType.values().toList()) { bg ->
-                                                FilterChip(selected = settings.backgroundType == bg, onClick = { viewModel.updateSettings(settings.copy(backgroundType = bg)) }, label = { Text(bg.arabicName, fontSize = 9.sp) })
+                                                SettingsChoice(selected = settings.backgroundType == bg, onClick = { viewModel.updateSettings(settings.copy(backgroundType = bg)) }, label = { Text(bg.arabicName, fontSize = 14.sp) })
                                             }
                                         }
                                     }
@@ -138,10 +144,10 @@ fun SettingsScreen(
                                     item {
                                         ChoiceCard("لون الواجهة", "يُطبّق على شريطي الحالة والتنقل وعناصر الإعدادات") {
                                             InterfaceAccent.values().forEach { option ->
-                                                FilterChip(
+                                                SettingsChoice(
                                                     selected = settings.interfaceAccent == option,
                                                     onClick = { viewModel.updateSettings(settings.copy(interfaceAccent = option)) },
-                                                    label = { Text(option.arabicName, fontSize = 10.sp) },
+                                                    label = { Text(option.arabicName, fontSize = 14.sp) },
                                                     leadingIcon = { Surface(color = Color(option.argb), shape = RoundedCornerShape(4.dp), modifier = Modifier.size(13.dp)) {} }
                                                 )
                                             }
@@ -149,15 +155,15 @@ fun SettingsScreen(
                                     }
                                 }
 
-                                item { ExpandableSectionHeader("شريطا الشاشة", Icons.Default.ViewDay, interfaceBarsOpen) { interfaceBarsOpen = !interfaceBarsOpen } }
-                                if (interfaceBarsOpen) {
+
+                                if (interfaceSection == 1) {
                                     item { SwitchRow("مؤشر Wi‑Fi العلوي", "عنصر واحد فقط؛ المسه لفتح إعدادات الشبكة", settings.showTopBar) { viewModel.updateSettings(settings.copy(showTopBar = it)) } }
                                     item { SwitchRow("شريط التنقل السفلي", "الرئيسية والتطبيقات والموسيقى والخريطة والرحلة والإعدادات", settings.showBottomBar) { viewModel.updateSettings(settings.copy(showBottomBar = it)) } }
                                     if (settings.showBottomBar) {
                                         item {
                                             ChoiceCard("مظهر الشريط السفلي", "اختر شفافية كاملة أو زجاجًا أو خلفية داكنة") {
                                                 DockSurfaceStyle.values().forEach { option ->
-                                                    FilterChip(selected = settings.bottomDockStyle == option, onClick = { viewModel.updateSettings(settings.copy(bottomDockStyle = option)) }, label = { Text(option.arabicName, fontSize = 10.sp) })
+                                                    SettingsChoice(selected = settings.bottomDockStyle == option, onClick = { viewModel.updateSettings(settings.copy(bottomDockStyle = option)) }, label = { Text(option.arabicName, fontSize = 14.sp) })
                                                 }
                                             }
                                         }
@@ -165,15 +171,15 @@ fun SettingsScreen(
                                     }
                                 }
 
-                                item { ExpandableSectionHeader("التطبيقات", Icons.Default.Apps, interfaceAppsOpen) { interfaceAppsOpen = !interfaceAppsOpen } }
-                                if (interfaceAppsOpen) {
+
+                                if (interfaceSection == 2) {
                                     item { NumberSlider("حجم أيقونات التطبيقات", settings.iconSizeDp, 40, 110, "dp") { viewModel.updateSettings(settings.copy(iconSizeDp = it)) } }
                                     item { NumberSlider("أعمدة درج التطبيقات", settings.appDrawerColumns, 2, 8, "أعمدة") { viewModel.updateSettings(settings.copy(appDrawerColumns = it)) } }
                                     item { SwitchRow("أسماء التطبيقات", "إظهار الاسم أسفل الأيقونة", settings.showAppLabels) { viewModel.updateSettings(settings.copy(showAppLabels = it)) } }
                                 }
 
-                                item { ExpandableSectionHeader("المساحة الآمنة", Icons.Default.AspectRatio, interfaceSafeAreaOpen) { interfaceSafeAreaOpen = !interfaceSafeAreaOpen } }
-                                if (interfaceSafeAreaOpen) {
+
+                                if (interfaceSection == 3) {
                                     item { InfoCard("الهوامش الحالية: أعلى ${safeArea.topDp} • أسفل ${safeArea.bottomDp} • يمين ${safeArea.rightDp} • يسار ${safeArea.leftDp} dp") }
                                     item {
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -186,8 +192,8 @@ fun SettingsScreen(
 
                             SettingsCategory.WIDGETS -> {
                                 item { SwitchRow("وضع تصميم الشاشة", "اختر أي ودجت ثم حرّكه أو غيّر حجمه ومظهره", isDesignMode) { viewModel.toggleDesignMode() } }
-                                item { InfoCard("اللون أصبح واضحًا ومختصرًا: أبيض أو أسود فقط. ويمكن اختيار سطح شفاف أو زجاجي أو بطاقة بما يناسب الخلفية.") }
-                                item { InfoCard("لكل نوع ثلاثة أشكال مختلفة فعليًا: بسيط، معلوماتي، وشكل لوحة قيادة؛ تم إخفاء الأشكال المتشابهة القديمة مع بقاء توافق الترتيبات المحفوظة.") }
+                                item { InfoCard("اضغط مطولًا على الودجت في الرئيسية لتعديل مظهره وحجمه.") }
+
                                 item { ActionButton("إعادة فحص التطبيقات", Icons.Default.Refresh) { viewModel.loadApps() } }
                                 item { ActionButton("إرجاع ودجت الرئيسية للوضع الافتراضي", Icons.Default.RestartAlt) { viewModel.resetWidgetsToDefault() } }
                             }
@@ -202,14 +208,14 @@ fun SettingsScreen(
                                         SCREEN_SAVER_DISPLAY_WIDGET_TYPES.toList().chunked(3).forEach { row ->
                                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 row.forEach { type ->
-                                                    FilterChip(selected = type in settings.screenSaverWidgetTypes, onClick = { viewModel.toggleScreenSaverWidget(type) }, label = { Text(type.arabicTitle, fontSize = 9.sp) })
+                                                    SettingsChoice(selected = type in settings.screenSaverWidgetTypes, onClick = { viewModel.toggleScreenSaverWidget(type) }, label = { Text(type.arabicTitle, fontSize = 14.sp) })
                                                 }
                                             }
                                         }
                                     }
                                 }
                                 item { ActionButton("فتح محرر شاشة التوقف", Icons.Default.Edit, onOpenScreenSaverEditor) }
-                                item { InfoCard("شاشة التوقف للعرض فقط ولا تحتوي أزرار تطبيقات أو تحكم. الترتيب الوحيد موجود هنا داخل الإعدادات، مع الأبيض والأسود والأسطح الثلاثة.") }
+
                             }
 
                             SettingsCategory.MEDIA -> {
@@ -224,21 +230,21 @@ fun SettingsScreen(
                                     Surface(color = accent.copy(alpha = .08f), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, accent.copy(alpha = .28f)), modifier = Modifier.fillMaxWidth()) {
                                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                             Text(if (gps.hasGpsFix && gps.isSpeedReliable) gps.speedKmH.toInt().toString() else "--", color = accent, fontSize = 32.sp, fontWeight = FontWeight.Black)
-                                            Column { Text("كم/س", color = TextPrimary, fontWeight = FontWeight.Bold); Text(if (gps.hasGpsFix) "GPS ±${gps.accuracyMeters.toInt()}م" else gps.statusArabic, color = TextSecondary, fontSize = 11.sp) }
+                                            Column { Text("كم/س", color = TextPrimary, fontWeight = FontWeight.Bold); Text(if (gps.hasGpsFix) "GPS ±${gps.accuracyMeters.toInt()}م" else gps.statusArabic, color = TextSecondary, fontSize = 14.sp) }
                                         }
                                     }
                                 }
                                 item {
                                     ChoiceCard("وحدة السرعة", "تُطبّق على ودجت السرعة") {
-                                        FilterChip(selected = settings.speedUnit == "كم/س", onClick = { viewModel.updateSettings(settings.copy(speedUnit = "كم/س")) }, label = { Text("كم/س") })
-                                        FilterChip(selected = settings.speedUnit == "MPH", onClick = { viewModel.updateSettings(settings.copy(speedUnit = "MPH")) }, label = { Text("MPH") })
+                                        SettingsChoice(selected = settings.speedUnit == "كم/س", onClick = { viewModel.updateSettings(settings.copy(speedUnit = "كم/س")) }, label = { Text("كم/س") })
+                                        SettingsChoice(selected = settings.speedUnit == "MPH", onClick = { viewModel.updateSettings(settings.copy(speedUnit = "MPH")) }, label = { Text("MPH") })
                                     }
                                 }
                                 item { SwitchRow("بدء الرحلة تلقائيًا", "يتأكد Launcher من حركة فعلية قبل بدء التسجيل", settings.autoLogTrips) { viewModel.updateSettings(settings.copy(autoLogTrips = it)) } }
                                 item { ActionButton("تصفير الرحلة الحالية", Icons.Default.Refresh) { viewModel.resetTrip() } }
 
                                 item { SectionTitle("الخريطة دون إنترنت", Icons.Default.Map) }
-                                item { InfoCard("Mapsforge (.map) هو الخيار المفضل: أسماء طرق ومواقع قابلة للبحث مع حفظ المواقع والتوجيه المباشر. وتدعم الخريطة أيضًا MBTiles الصورية إذا كانت الأسماء مرسومة داخلها.") }
+                                item { InfoCard("اختر خريطة محفوظة على الجهاز بصيغة .map أو .mbtiles.") }
                                 item {
                                     ActionButton(
                                         title = if (recommendedMapDownload.status == RecommendedMapStatus.DOWNLOADING) {
@@ -267,11 +273,11 @@ fun SettingsScreen(
                                         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Icon(Icons.Default.Map, null, tint = if (map.isActive) accent else TextSecondary)
                                             Column(Modifier.weight(1f)) {
-                                                Text(map.name, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
-                                                Text("${map.fileSizeFormatted}${if (map.isActive) " • نشطة" else ""}", color = TextSecondary, fontSize = 10.sp)
+                                                Text(map.name, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                Text("${map.fileSizeFormatted}${if (map.isActive) " • نشطة" else ""}", color = TextSecondary, fontSize = 14.sp)
                                             }
-                                            if (!map.isActive) FilledTonalButton(onClick = { viewModel.setActiveMap(map.id) }, contentPadding = PaddingValues(horizontal = 8.dp), modifier = Modifier.height(34.dp)) { Text("تفعيل", fontSize = 10.sp) }
-                                            IconButton(onClick = { mapPendingDelete = map }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Delete, "حذف", tint = HighContrastRed, modifier = Modifier.size(19.dp)) }
+                                            if (!map.isActive) FilledTonalButton(onClick = { viewModel.setActiveMap(map.id) }, contentPadding = PaddingValues(horizontal = 8.dp), modifier = Modifier.height(52.dp)) { Text("تفعيل", fontSize = 14.sp) }
+                                            IconButton(onClick = { mapPendingDelete = map }, modifier = Modifier.size(52.dp)) { Icon(Icons.Default.Delete, "حذف", tint = HighContrastRed, modifier = Modifier.size(19.dp)) }
                                         }
                                     }
                                 }
@@ -284,11 +290,11 @@ fun SettingsScreen(
                             }
 
                             SettingsCategory.SYSTEM -> {
+                                item { StableSystemPanel() }
                                 item { SwitchRow("التشغيل التلقائي", "فتح Launcher بعد تشغيل الشاشة", settings.autoStartOnBoot) { viewModel.updateSettings(settings.copy(autoStartOnBoot = it)) } }
                                 item { SwitchRow("إبقاء الشاشة مضاءة", "منع إطفاء الشاشة أثناء استخدام Launcher", settings.keepScreenOn) { viewModel.updateSettings(settings.copy(keepScreenOn = it)) } }
                                 item { SwitchRow("الوضع عالي التباين", "رفع وضوح النصوص والعناصر", settings.highContrastMode) { viewModel.updateSettings(settings.copy(highContrastMode = it)) } }
                                 item { ClockFormatRow(settings.is24HourFormat) { is24 -> viewModel.updateSettings(settings.copy(is24HourFormat = is24)) } }
-                                item { StableSystemPanel() }
                                 item { ActionButton("فحص النظام", Icons.Default.HealthAndSafety) { viewModel.runDiagnostics(); onOpenDiagnostics() } }
                                 item { ActionButton("تصفير سجل الوضع الآمن", Icons.Default.Security) { viewModel.resetSafeMode() } }
                             }
@@ -297,7 +303,7 @@ fun SettingsScreen(
                                 item { AboutOwnershipPanel(accent, onOpenDiagnostics) }
                             }
                         }
-                    }
+                    } }
                 }
             }
         }
@@ -435,7 +441,7 @@ private fun DarbakSettingsCategoryCard(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier.clickable(onClick = onClick).testTag("settings_category_"+category.name),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = CarbonCard.copy(alpha = .88f)),
         border = BorderStroke(1.dp, accent.copy(alpha = .38f))
@@ -482,159 +488,5 @@ private fun DarbakStatusPill(text: String, positive: Boolean, accent: Color) {
             maxLines = 1,
             modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
         )
-    }
-}
-
-@Composable
-private fun DarbakSettingsDetailHeader(
-    category: SettingsCategory,
-    accent: Color,
-    onBack: () -> Unit,
-    content: @Composable () -> Unit
-) {
-    Column(
-        Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = CarbonCard.copy(alpha = .88f)),
-            border = BorderStroke(1.dp, accent.copy(alpha = .38f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
-                    Icon(Icons.Default.ArrowForward, "رجوع", tint = TextPrimary, modifier = Modifier.size(24.dp))
-                }
-                Surface(color = accent.copy(alpha = .14f), shape = RoundedCornerShape(12.dp), modifier = Modifier.size(44.dp)) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(category.icon, null, tint = accent, modifier = Modifier.size(24.dp))
-                    }
-                }
-                Column(Modifier.weight(1f)) {
-                    Text(category.arabicTitle, color = TextPrimary, fontSize = 21.sp, fontWeight = FontWeight.Black)
-                    Text(category.subtitle, color = TextSecondary, fontSize = 10.sp)
-                }
-            }
-        }
-        Box(Modifier.weight(1f).fillMaxWidth()) { content() }
-    }
-}
-
-@Composable
-private fun SectionTitle(title: String, icon: ImageVector) {
-    val accent = LocalSettingsAccent.current
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-        Icon(icon, null, tint = accent, modifier = Modifier.size(18.dp))
-        Text(title, color = accent, fontWeight = FontWeight.Black, fontSize = 13.sp)
-    }
-}
-
-@Composable
-private fun ExpandableSectionHeader(title: String, icon: ImageVector, expanded: Boolean, onToggle: () -> Unit) {
-    val accent = LocalSettingsAccent.current
-    Surface(
-        onClick = onToggle,
-        color = if (expanded) accent.copy(alpha = .10f) else CarbonSurface.copy(alpha = .92f),
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, if (expanded) accent.copy(alpha = .45f) else CarbonCardBorder),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = accent, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(7.dp))
-            Text(title, color = TextPrimary, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
-            Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = TextSecondary)
-        }
-    }
-}
-
-@Composable
-private fun ChoiceCard(title: String, subtitle: String, content: @Composable RowScope.() -> Unit) {
-    Surface(color = CarbonSurface.copy(alpha = .92f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, color = TextPrimary, fontWeight = FontWeight.Bold)
-            Text(subtitle, color = TextSecondary, fontSize = 10.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), content = content)
-        }
-    }
-}
-
-@Composable
-private fun ClockFormatRow(is24: Boolean, onChange: (Boolean) -> Unit) {
-    Surface(color = CarbonSurface.copy(alpha = .92f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("نظام الساعة", color = TextPrimary, fontWeight = FontWeight.Bold)
-                Text(if (is24) "مثال: 18:30" else "مثال: 06:30 م", color = TextSecondary, fontSize = 11.sp)
-            }
-            FilterChip(selected = !is24, onClick = { onChange(false) }, label = { Text("12 ساعة") })
-            Spacer(Modifier.width(6.dp))
-            FilterChip(selected = is24, onClick = { onChange(true) }, label = { Text("24 ساعة") })
-        }
-    }
-}
-
-@Composable
-private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Surface(color = CarbonSurface.copy(alpha = .92f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Column(Modifier.weight(1f).padding(end = 10.dp)) {
-                Text(title, color = TextPrimary, fontWeight = FontWeight.Bold)
-                Text(subtitle, color = TextSecondary, fontSize = 11.sp)
-            }
-            Switch(checked = checked, onCheckedChange = onChange)
-        }
-    }
-}
-
-@Composable
-private fun NumberSlider(label: String, value: Int, min: Int, max: Int, unit: String, onChange: (Int) -> Unit) {
-    val accent = LocalSettingsAccent.current
-    Surface(color = CarbonSurface.copy(alpha = .92f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(11.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(label, color = TextPrimary, fontWeight = FontWeight.Bold)
-                Text("$value $unit", color = accent, fontWeight = FontWeight.Bold)
-            }
-            Slider(value = value.toFloat(), onValueChange = { onChange(it.toInt()) }, valueRange = min.toFloat()..max.toFloat())
-        }
-    }
-}
-
-@Composable
-private fun ActionButton(title: String, icon: ImageVector, onClick: () -> Unit) {
-    ActionButton(title, icon, true, onClick)
-}
-
-@Composable
-private fun ActionButton(title: String, icon: ImageVector, enabled: Boolean, onClick: () -> Unit) {
-    val accent = LocalSettingsAccent.current
-    Button(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = CarbonSurface), border = BorderStroke(1.dp, CarbonCardBorder)) {
-        Icon(icon, null, tint = accent, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(7.dp))
-        Text(title, color = TextPrimary, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-private fun InfoCard(text: String) {
-    val accent = LocalSettingsAccent.current
-    Surface(color = accent.copy(alpha = .07f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, accent.copy(alpha = .23f)), modifier = Modifier.fillMaxWidth()) {
-        Text(text, color = TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(11.dp))
-    }
-}
-
-@Composable
-private fun StatusMetric(label: String, value: String, positive: Boolean) {
-    Surface(color = CarbonSurface.copy(alpha = .92f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(11.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = TextSecondary, fontSize = 11.sp)
-            Text(value, color = if (positive) EmeraldSafe else TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
-        }
     }
 }

@@ -9,9 +9,14 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
+import com.example.ui.theme.CarbonDark
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -118,15 +123,12 @@ class MainActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (mainViewModel.isChildLockActive.value) return
-        if (mainViewModel.currentScreen.value != CarScreen.HOME) mainViewModel.navigateTo(CarScreen.HOME)
-    }
+
 }
 
 private enum class SubOverlayScreen { NONE, SAFE_AREA_PREVIEW, DIAGNOSTICS, SCREEN_SAVER_EDITOR }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun CarLauncherMainApp(viewModel: MainViewModel) {
     val currentScreen by viewModel.currentScreen.collectAsState()
@@ -151,6 +153,15 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
     var mapChromeToken by remember { mutableStateOf(0L) }
     val rootView = LocalView.current
 
+    // Register the root first so detail pages can handle Back before home navigation.
+    BackHandler {
+        when {
+            screenSaverVisible -> screenSaverVisible = false
+            activeSubOverlay != SubOverlayScreen.NONE -> activeSubOverlay = SubOverlayScreen.NONE
+            currentScreen != CarScreen.HOME -> viewModel.navigateTo(CarScreen.HOME)
+        }
+    }
+
     SideEffect { rootView.keepScreenOn = settings.keepScreenOn }
 
     LaunchedEffect(settings.screenSaverEnabled, settings.screenSaverTimeoutSeconds, interactionToken, isDesignMode, isChildLockActive, currentScreen) {
@@ -170,7 +181,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
     }
 
     Box(
-        Modifier.fillMaxSize().pointerInput(screenSaverVisible, currentScreen) {
+        Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }.pointerInput(screenSaverVisible, currentScreen) {
             awaitPointerEventScope {
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -234,7 +245,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
         } else {
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
-                containerColor = Color.Transparent,
+                containerColor = CarbonDark,
                 topBar = {
                     if (settings.showTopBar) {
                         Box(Modifier.padding(top = safeArea.topDp.dp)) {
@@ -286,6 +297,7 @@ fun CarLauncherMainApp(viewModel: MainViewModel) {
             }
         }
 
+        BackHandler(isChildLockActive) { /* Child lock also protects hardware Back. */ }
         if (isChildLockActive) {
             ChildLockOverlay(
                 holdSeconds = settings.childUnlockHoldSeconds,

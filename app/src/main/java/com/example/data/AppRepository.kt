@@ -40,7 +40,7 @@ class AppRepository(
                 // Decode/scale icons here. MainViewModel calls this method on Dispatchers.IO,
                 // so opening the Apps page never performs Drawable -> Bitmap conversion.
                 val iconBitmap = try {
-                    resolveInfo.loadIcon(packageManager)?.toBitmap(width = 48, height = 48)
+                    resolveInfo.loadIcon(packageManager)?.toBitmap(width = 96, height = 96)
                 } catch (_: Exception) {
                     null
                 }

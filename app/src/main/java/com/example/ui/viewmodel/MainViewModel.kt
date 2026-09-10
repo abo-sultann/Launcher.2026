@@ -805,7 +805,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return cropped
     }
 
-    fun loadApps() { _installedApps.value = appRepository.getInstalledApps() }
+    fun loadApps() { viewModelScope.launch(Dispatchers.IO) { _installedApps.value = appRepository.getInstalledApps() } }
     fun toggleAppFavorite(packageName: String) { viewModelScope.launch(Dispatchers.IO) { appRepository.toggleFavorite(packageName); loadApps() } }
     fun toggleAppHidden(packageName: String) { viewModelScope.launch(Dispatchers.IO) { appRepository.toggleHidden(packageName); loadApps() } }
     fun launchApp(packageName: String) {

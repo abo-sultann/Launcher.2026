@@ -44,6 +44,7 @@ fun BottomCarNavBar(
     highContrast: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val internalPage = currentScreen != CarScreen.HOME && currentScreen != CarScreen.MAP
     val opacity = opacityPercent.coerceIn(30, 100) / 100f
     val dockColor = when (surfaceStyle) {
         DockSurfaceStyle.CLEAR -> Color.Transparent
@@ -57,7 +58,7 @@ fun BottomCarNavBar(
     }
 
     Box(
-        modifier = modifier.fillMaxWidth().height(52.dp),
+        modifier = modifier.fillMaxWidth().height(if (internalPage) 64.dp else 52.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
@@ -65,7 +66,7 @@ fun BottomCarNavBar(
             shape = RoundedCornerShape(19.dp),
             border = BorderStroke(1.dp, dockBorder),
             shadowElevation = if (surfaceStyle == DockSurfaceStyle.CLEAR) 0.dp else 4.dp,
-            modifier = Modifier.fillMaxWidth(.90f).height(45.dp)
+            modifier = Modifier.fillMaxWidth(.90f).height(if (internalPage) 56.dp else 45.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 7.dp, vertical = 4.dp),

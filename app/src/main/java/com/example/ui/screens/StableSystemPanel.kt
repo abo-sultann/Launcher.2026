@@ -41,7 +41,7 @@ fun StableSystemPanel(modifier: Modifier = Modifier) {
             val ok = withContext(Dispatchers.IO) {
                 runCatching {
                     val raw = backupManager.exportBackup()
-                    context.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { it.write(raw) }
+                    (context.contentResolver.openOutputStream(uri, "wt") ?: error("No output stream")).bufferedWriter().use { it.write(raw) }
                     true
                 }.getOrDefault(false)
             }
@@ -68,7 +68,7 @@ fun StableSystemPanel(modifier: Modifier = Modifier) {
         scope.launch {
             val ok = withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { it.write(backupManager.exportDiagnostics()) }
+                    (context.contentResolver.openOutputStream(uri, "wt") ?: error("No output stream")).bufferedWriter().use { it.write(backupManager.exportDiagnostics()) }
                     true
                 }.getOrDefault(false)
             }
@@ -79,23 +79,23 @@ fun StableSystemPanel(modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Surface(
             color = CarbonSurface,
-            shape = RoundedCornerShape(10.dp),
-            border = BorderStroke(1.dp, CyanNeon.copy(alpha = .55f)),
+            shape = RoundedCornerShape(22.dp),
+
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Default.SystemUpdateAlt, null, tint = CyanNeon)
                     Column(Modifier.weight(1f)) {
-                        Text("تحديث Launcher من Google Drive", color = TextPrimary, fontWeight = FontWeight.Black)
-                        Text("الإصدار الحالي ${BuildConfig.VERSION_NAME} • Build ${BuildConfig.VERSION_CODE}", color = TextSecondary, fontSize = 10.sp)
+                        Text("تحديث التطبيق", color = TextPrimary, fontWeight = FontWeight.Black)
+                        Text("الإصدار الحالي ${BuildConfig.VERSION_NAME}", color = TextSecondary, fontSize = 14.sp)
                     }
                 }
 
                 Text(
                     when (updateState.status) {
                         UpdateStatus.IDLE -> "يتم فحص التحديث تلقائيًا بعد تشغيل Launcher"
-                        UpdateStatus.CHECKING -> "جارٍ فحص Google Drive..."
+                        UpdateStatus.CHECKING -> "جارٍ البحث عن تحديث..."
                         UpdateStatus.AVAILABLE -> updateState.message
                         UpdateStatus.UP_TO_DATE -> "لديك أحدث إصدار"
                         UpdateStatus.DOWNLOADING -> "${updateState.message}"
@@ -103,7 +103,7 @@ fun StableSystemPanel(modifier: Modifier = Modifier) {
                         UpdateStatus.ERROR -> updateState.message
                     },
                     color = if (updateState.status == UpdateStatus.ERROR) HighContrastRed else if (updateState.status == UpdateStatus.READY_TO_INSTALL) EmeraldSafe else TextSecondary,
-                    fontSize = 11.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
 
@@ -114,15 +114,16 @@ fun StableSystemPanel(modifier: Modifier = Modifier) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = { scope.launch { app.updateManager.checkAndAutoDownload() } },
+                        modifier = Modifier.heightIn(min = 56.dp),
                         enabled = updateState.status != UpdateStatus.CHECKING && updateState.status != UpdateStatus.DOWNLOADING,
                         colors = ButtonDefaults.buttonColors(containerColor = CarbonCard)
                     ) {
                         Icon(Icons.Default.Refresh, null, tint = CyanNeon)
                         Spacer(Modifier.width(5.dp))
-                        Text("فحص وتنزيل", color = TextPrimary)
+                        Text("البحث عن تحديث", color = TextPrimary, fontSize = 16.sp)
                     }
                     if (updateState.status == UpdateStatus.READY_TO_INSTALL) {
-                        Button(onClick = { app.updateManager.installDownloadedUpdate() }) {
+                        Button(onClick = { app.updateManager.installDownloadedUpdate() }, modifier = Modifier.heightIn(min = 56.dp)) {
                             Icon(Icons.Default.InstallMobile, null)
                             Spacer(Modifier.width(5.dp))
                             Text("تثبيت التحديث")
@@ -132,20 +133,20 @@ fun StableSystemPanel(modifier: Modifier = Modifier) {
             }
         }
 
-        Surface(color = CarbonSurface, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Surface(color = CarbonSurface, shape = RoundedCornerShape(22.dp),  modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("النسخ الاحتياطي والصيانة", color = TextPrimary, fontWeight = FontWeight.Black)
-                Text("يحفظ إعدادات Launcher والودجات والمواقع وأثر البر وحالة الخريطة. ملفات الخرائط الكبيرة نفسها لا تدخل في النسخة.", color = TextSecondary, fontSize = 10.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    OutlinedButton(onClick = { backupExport.launch("Launcher-2026-backup.json") }) { Icon(Icons.Default.Backup, null); Spacer(Modifier.width(4.dp)); Text("نسخة احتياطية") }
-                    OutlinedButton(onClick = { backupImport.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Icon(Icons.Default.Restore, null); Spacer(Modifier.width(4.dp)); Text("استعادة") }
-                    OutlinedButton(onClick = { diagnosticsExport.launch("Launcher-2026-diagnostics.txt") }) { Icon(Icons.Default.Description, null); Spacer(Modifier.width(4.dp)); Text("تقرير") }
+                Text("يحفظ إعدادات Launcher والودجات والمواقع وأثر البر وحالة الخريطة. ملفات الخرائط الكبيرة نفسها لا تدخل في النسخة.", color = TextSecondary, fontSize = 14.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(onClick = { backupExport.launch("Launcher-2026-backup.json") }, modifier = Modifier.heightIn(min = 56.dp)) { Icon(Icons.Default.Backup, null); Spacer(Modifier.width(4.dp)); Text("نسخة احتياطية") }
+                    OutlinedButton(onClick = { backupImport.launch(arrayOf("application/json", "text/plain", "*/*")) }, modifier = Modifier.heightIn(min = 56.dp)) { Icon(Icons.Default.Restore, null); Spacer(Modifier.width(4.dp)); Text("استعادة") }
+                    OutlinedButton(onClick = { diagnosticsExport.launch("Launcher-2026-diagnostics.txt") }, modifier = Modifier.heightIn(min = 56.dp)) { Icon(Icons.Default.Description, null); Spacer(Modifier.width(4.dp)); Text("تقرير") }
                 }
             }
         }
 
         if (localMessage.isNotBlank()) {
-            Text(localMessage, color = if (localMessage.startsWith("تعذر") || localMessage.contains("غير صالح")) HighContrastRed else EmeraldSafe, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(localMessage, color = if (localMessage.startsWith("تعذر") || localMessage.contains("غير صالح")) HighContrastRed else EmeraldSafe, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

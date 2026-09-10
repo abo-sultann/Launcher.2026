@@ -37,10 +37,10 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
     var renameText by remember { mutableStateOf("") }
     var deleteTrip by remember { mutableStateOf<SavedTrip?>(null) }
 
-    Row(modifier.fillMaxSize().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(modifier.fillMaxSize().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         Card(
             modifier = Modifier.width(390.dp).fillMaxHeight(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = CarbonCard),
             border = BorderStroke(1.dp, if (trip.isRunning) EmeraldSafe.copy(alpha = .65f) else CarbonCardBorder)
         ) {
@@ -56,7 +56,7 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
                                 else -> "جاهز للبدء يدويًا"
                             },
                             color = if (trip.isRunning) EmeraldSafe else TextSecondary,
-                            fontSize = 11.sp
+                            fontSize = 14.sp
                         )
                     }
                     Surface(
@@ -66,21 +66,21 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
                     ) {
                         Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             Icon(if (gps.hasGpsFix && gps.isSpeedReliable) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed, null, tint = if (gps.hasGpsFix && gps.isSpeedReliable) EmeraldSafe else AmberRacing, modifier = Modifier.size(16.dp))
-                            Text(if (gps.hasGpsFix) "±${gps.accuracyMeters.toInt()}م" else "GPS", color = TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(if (gps.hasGpsFix) "±${gps.accuracyMeters.toInt()}م" else "GPS", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
-                Surface(color = CarbonSurface, shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth().height(96.dp)) {
+                Surface(color = CarbonSurface, shape = RoundedCornerShape(12.dp),  modifier = Modifier.fillMaxWidth().height(96.dp)) {
                     Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(if (gps.hasGpsFix && gps.isSpeedReliable) gps.speedKmH.toInt().toString() else "--", color = CyanNeon, fontSize = 42.sp, fontWeight = FontWeight.Black)
-                            Text("كم/س", color = TextSecondary, fontSize = 10.sp)
+                            Text("كم/س", color = TextSecondary, fontSize = 14.sp)
                         }
                         VerticalDivider(color = CarbonCardBorder, modifier = Modifier.height(58.dp))
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(String.format(Locale.US, "%.2f", trip.distanceKm), color = TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.Black)
-                            Text("كم", color = TextSecondary, fontSize = 10.sp)
+                            Text("كم", color = TextSecondary, fontSize = 14.sp)
                         }
                     }
                 }
@@ -103,9 +103,9 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
                 if (!trip.isRunning) {
                     Button(
                         onClick = { viewModel.startTrip() },
-                        modifier = Modifier.fillMaxWidth().height(46.dp),
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = CyanNeon),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(18.dp)
                     ) {
                         Icon(Icons.Default.PlayArrow, null, tint = CarbonDark)
                         Spacer(Modifier.width(5.dp))
@@ -115,7 +115,7 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         FilledTonalButton(
                             onClick = { if (trip.isPaused) viewModel.startTrip() else viewModel.pauseTrip() },
-                            modifier = Modifier.weight(1f).height(44.dp)
+                            modifier = Modifier.weight(1f).height(52.dp)
                         ) {
                             Icon(if (trip.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause, null)
                             Spacer(Modifier.width(4.dp))
@@ -123,7 +123,7 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
                         }
                         Button(
                             onClick = { finishName = ""; showFinishDialog = true },
-                            modifier = Modifier.weight(1.15f).height(44.dp),
+                            modifier = Modifier.weight(1.15f).height(52.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = EmeraldSafe)
                         ) {
                             Icon(Icons.Default.Save, null, tint = CarbonDark)
@@ -137,7 +137,7 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
 
         Card(
             modifier = Modifier.weight(1f).fillMaxHeight(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = CarbonCard),
             border = BorderStroke(1.dp, CarbonCardBorder)
         ) {
@@ -180,7 +180,7 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
             title = { Text("حفظ الرحلة") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("يمكنك ترك الاسم فارغًا ليُنشئ Launcher اسمًا بالتاريخ والوقت.", color = TextSecondary, fontSize = 11.sp)
+                    Text("يمكنك ترك الاسم فارغًا ليُنشئ Launcher اسمًا بالتاريخ والوقت.", color = TextSecondary, fontSize = 14.sp)
                     OutlinedTextField(value = finishName, onValueChange = { finishName = it.take(50) }, label = { Text("اسم الرحلة") }, singleLine = true)
                 }
             },
@@ -219,9 +219,9 @@ fun TripComputerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
 
 @Composable
 private fun TripMetric(title: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, modifier: Modifier = Modifier) {
-    Surface(color = CarbonSurface, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = modifier.height(55.dp)) {
+    Surface(color = CarbonSurface, shape = RoundedCornerShape(18.dp),  modifier = modifier.height(55.dp)) {
         Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Column { Text(title, color = TextSecondary, fontSize = 9.sp); Text(value, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+            Column { Text(title, color = TextSecondary, fontSize = 13.sp); Text(value, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
             Icon(icon, null, tint = tint, modifier = Modifier.size(19.dp))
         }
     }
@@ -229,16 +229,16 @@ private fun TripMetric(title: String, value: String, icon: androidx.compose.ui.g
 
 @Composable
 private fun SavedTripCard(trip: SavedTrip, hasRoute: Boolean, onMap: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
-    Surface(color = CarbonSurface, shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, CarbonCardBorder), modifier = Modifier.fillMaxWidth()) {
+    Surface(color = CarbonSurface, shape = RoundedCornerShape(18.dp),  modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             Column(Modifier.weight(1f)) {
                 Text(trip.name, color = TextPrimary, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${formatTripDate(trip.startTimeStamp)} • ${String.format(Locale.US, "%.1f", trip.distanceKm)} كم • حركة ${formatDuration(trip.movingTimeSec)}", color = TextSecondary, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("أعلى ${trip.maxSpeedKmH.toInt()} • متوسط ${trip.averageSpeedKmH.toInt()} • مواقع ${trip.placesSavedCount} • ${if (hasRoute) "مسار محفوظ" else "بلا مسار"}", color = TextMuted, fontSize = 8.sp, maxLines = 1)
+                Text("${formatTripDate(trip.startTimeStamp)} • ${String.format(Locale.US, "%.1f", trip.distanceKm)} كم • حركة ${formatDuration(trip.movingTimeSec)}", color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("أعلى ${trip.maxSpeedKmH.toInt()} • متوسط ${trip.averageSpeedKmH.toInt()} • مواقع ${trip.placesSavedCount} • ${if (hasRoute) "مسار محفوظ" else "بلا مسار"}", color = TextMuted, fontSize = 12.sp, maxLines = 1)
             }
-            FilledTonalIconButton(onClick = onMap, enabled = hasRoute, modifier = Modifier.size(34.dp)) { Icon(Icons.Default.Map, "عرض المسار", tint = if (hasRoute) CyanNeon else TextMuted, modifier = Modifier.size(17.dp)) }
-            IconButton(onClick = onRename, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Edit, "تعديل الاسم", tint = TextSecondary, modifier = Modifier.size(17.dp)) }
-            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Delete, "حذف", tint = HighContrastRed, modifier = Modifier.size(17.dp)) }
+            FilledTonalIconButton(onClick = onMap, enabled = hasRoute, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Map, "عرض المسار", tint = if (hasRoute) CyanNeon else TextMuted, modifier = Modifier.size(17.dp)) }
+            IconButton(onClick = onRename, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Edit, "تعديل الاسم", tint = TextSecondary, modifier = Modifier.size(17.dp)) }
+            IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Delete, "حذف", tint = HighContrastRed, modifier = Modifier.size(17.dp)) }
         }
     }
 }
