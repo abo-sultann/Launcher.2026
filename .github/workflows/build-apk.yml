@@ -40,6 +40,9 @@ jobs:
           base64 --decode ci/launcher-stable.jks.b64 > app/launcher-stable.jks
           keytool -list -keystore app/launcher-stable.jks -storepass android -alias androiddebugkey >/dev/null
 
+      - name: Grant execute permission
+        run: chmod +x ./gradlew
+
       - name: Test Android 7 startup, lifecycle, storage, widgets, maintenance, and Darbak core
         run: >-
           ./gradlew :app:testDebugUnitTest
