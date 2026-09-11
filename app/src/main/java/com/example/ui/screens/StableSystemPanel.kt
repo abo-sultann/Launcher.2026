@@ -11,7 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -95,6 +94,8 @@ fun StableSystemPanel(modifier: Modifier = Modifier) {
                 if (!systemStore.launch(id)) localMessage = "تعذر فتح التطبيق — تحقق من تثبيته"
             }
         )
+
+        DarbakLiveStatusPanel(modules = systemModules)
 
         Surface(
             color = CarbonSurface,
