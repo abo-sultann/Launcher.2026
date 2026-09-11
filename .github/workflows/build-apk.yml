@@ -1,15 +1,15 @@
-name: Build Launcher 2026 APK
+name: Build Darbak Launcher APK
 
 on:
   push:
-    branches: [ main, darbak-platform-v1 ]
+    branches: [ main, darbak-platform-v1, darbak-launcher-system-v1 ]
   pull_request:
     branches: [ main ]
     types: [ opened, synchronize, reopened ]
   workflow_dispatch:
 
 concurrency:
-  group: launcher-2026-apk-${{ github.ref }}
+  group: darbak-launcher-apk-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -40,28 +40,25 @@ jobs:
           base64 --decode ci/launcher-stable.jks.b64 > app/launcher-stable.jks
           keytool -list -keystore app/launcher-stable.jks -storepass android -alias androiddebugkey >/dev/null
 
-      - name: Grant execute permission
-        run: chmod +x ./gradlew
-
-      - name: Test Android 7 startup, lifecycle, storage, widgets, and maintenance mileage
+      - name: Test Android 7 startup, lifecycle, storage, widgets, maintenance, and Darbak core
         run: >-
           ./gradlew :app:testDebugUnitTest
           --tests com.example.LauncherApi25SmokeTest
           --tests com.example.LongUseStabilityTest
           --tests com.example.WidgetModelsTest
           --tests com.example.MaintenanceMileageBridgeTest
+          --tests com.example.core.bridge.DarbakModuleCatalogTest
           --stacktrace --no-daemon
 
-      - name: Build signed Stable APK
+      - name: Build signed Darbak Launcher APK
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/app/launcher-stable.jks
         run: ./gradlew :app:assembleRelease --stacktrace --no-daemon
 
-      - name: Upload Stable APK
+      - name: Upload Darbak Launcher APK
         uses: actions/upload-artifact@v4
         with:
-          name: Launcher-2026-Stable-${{ github.run_id }}
+          name: Darbak-Launcher-${{ github.run_id }}
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 1
-
