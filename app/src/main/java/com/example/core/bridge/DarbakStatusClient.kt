@@ -65,6 +65,7 @@ class DarbakStatusClient(context: Context) {
     }
 
     fun requestAll(modules: List<DarbakModuleState>) {
+        start()
         modules.asSequence()
             .filter { it.spec.id != DarbakModuleId.LAUNCHER && it.installed && it.enabled }
             .forEach(::requestStatus)
@@ -72,6 +73,17 @@ class DarbakStatusClient(context: Context) {
 
     fun requestStatus(module: DarbakModuleState) {
         if (!module.installed || !module.enabled || module.spec.id == DarbakModuleId.LAUNCHER) return
+        start()
+
+        // A refresh represents a new truth request. Never keep the previous card value while a
+        // companion is silent, and discard older request ids for this module so a late response
+        // cannot overwrite the newer request.
+        pendingRequests
+            .filterValues { it == module.spec.id }
+            .keys
+            .forEach { pendingRequests.remove(it) }
+        _snapshots.value = _snapshots.value - module.spec.id
+
         val requestId = UUID.randomUUID().toString()
         pendingRequests[requestId] = module.spec.id
         val request = Intent(DarbakSystemProtocol.ACTION_STATUS_REQUEST).apply {
