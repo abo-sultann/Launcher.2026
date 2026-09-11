@@ -2,6 +2,7 @@ package com.example.core
 
 import android.app.Application
 import com.example.CarLauncherApp
+import com.example.core.bridge.DarbakAppBridge
 import com.example.data.AppRepository
 import com.example.data.DiagnosticManager
 import com.example.data.GpsTelemetryManager
@@ -13,11 +14,10 @@ import com.example.data.PreferencesManager
 import com.example.data.TripComputer
 
 /**
- * Single dependency owner for Launcher 2026.
+ * Single dependency owner for Darbak Launcher.
  *
- * The old implementation constructed every manager inside MainViewModel. That made the UI
- * responsible for hardware, storage and service lifetimes. Keeping those dependencies here
- * lets each feature be split out without recreating GPS, audio or map engines.
+ * Hardware, storage and service lifetimes stay outside the UI. The Darbak app bridge is also owned
+ * here so every screen reads the same module state instead of probing installed apps independently.
  */
 class LauncherRuntime(application: Application) {
     val preferences = PreferencesManager(application)
@@ -30,4 +30,5 @@ class LauncherRuntime(application: Application) {
     val diagnostics = DiagnosticManager(application, preferences)
     val offroad = (application as CarLauncherApp).offroadTrackManager
     val mapSearch = OfflineMapSearchEngine()
+    val darbakBridge = DarbakAppBridge(application)
 }
