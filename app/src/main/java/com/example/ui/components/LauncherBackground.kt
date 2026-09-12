@@ -15,6 +15,7 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.size.Precision
 import coil.size.Scale
+import com.example.data.DisplayAutomationController
 import com.example.model.BackgroundType
 import com.example.model.LauncherSettings
 import com.example.ui.theme.CarbonDark
@@ -25,9 +26,13 @@ fun LauncherBackground(
     settings: LauncherSettings,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val displayAutomation = DisplayAutomationController(context)
+    val displayConfig = displayAutomation.readConfig()
+    val nightExtraDim = if (displayAutomation.isNightActive(displayConfig)) displayConfig.extraDimPercent.coerceIn(0, 45) / 100f else 0f
+
     Box(modifier.fillMaxSize().background(backgroundBrush(settings.backgroundType))) {
         if (settings.backgroundType == BackgroundType.CUSTOM_IMAGE && !settings.customWallpaperPath.isNullOrBlank()) {
-            val context = LocalContext.current
             val path = settings.customWallpaperPath
             val model: Any = if (path.startsWith("content://") || path.startsWith("file://")) path else File(path)
 
@@ -41,7 +46,6 @@ fun LauncherBackground(
                 .bitmapConfig(Bitmap.Config.RGB_565)
                 .allowHardware(false)
                 .crossfade(false)
-                // Wallpaper imports reuse a local filename. Avoid stale cached images.
                 .memoryCachePolicy(CachePolicy.DISABLED)
                 .diskCachePolicy(CachePolicy.DISABLED)
                 .build()
@@ -54,6 +58,11 @@ fun LauncherBackground(
             )
             val dim = settings.wallpaperDimPercent.coerceIn(0, 80) / 100f
             if (dim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
+        }
+
+        // Night dimming is intentionally a cheap overlay: no blur, animation, or large bitmap.
+        if (nightExtraDim > 0f) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = nightExtraDim)))
         }
     }
 }
