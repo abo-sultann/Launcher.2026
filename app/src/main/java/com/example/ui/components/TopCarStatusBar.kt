@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
@@ -31,17 +32,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.DisplayAutomationController
 import com.example.ui.theme.*
 
 private enum class WifiVisualState { CONNECTED, ENABLED, OFF }
 
-/**
- * Minimal status chrome for the launcher.
- *
- * The old bar duplicated the clock, speed, media and settings widgets. The permanent layer now
- * keeps only Wi-Fi, while exceptional system state is shown contextually. Tap Wi-Fi to open the
- * device Wi-Fi panel; long-press it to activate the invisible child lock.
- */
+/** Minimal Darbak status chrome: Wi‑Fi + quick night brightness only. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TopCarStatusBar(
@@ -53,19 +49,31 @@ fun TopCarStatusBar(
 ) {
     val context = LocalContext.current
     val wifiState by rememberWifiVisualState(context)
+    val displayController = remember(context) { DisplayAutomationController(context) }
+    var nightOverride by remember { mutableStateOf(displayController.manualOverride()) }
 
     Box(
         modifier = modifier.fillMaxWidth().height(40.dp),
         contentAlignment = Alignment.Center
     ) {
-        WifiStatusButton(
-            state = wifiState,
-            accentColor = accentColor,
-            onClick = { openWifiSettings(context) },
-            onLongClick = onActivateChildLock,
-            // Layout is RTL, therefore End maps to the physical left/driver side.
-            modifier = Modifier.align(Alignment.CenterEnd).padding(horizontal = 12.dp, vertical = 4.dp)
-        )
+        Row(
+            modifier = Modifier.align(Alignment.CenterEnd).padding(horizontal = 12.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            NightBrightnessQuickButton(
+                forcedNight = nightOverride == DisplayAutomationController.ManualOverride.FORCE_NIGHT,
+                accentColor = accentColor,
+                onClick = { nightOverride = displayController.toggleQuickNight() },
+                onLongClick = { openDisplaySettings(context) }
+            )
+            WifiStatusButton(
+                state = wifiState,
+                accentColor = accentColor,
+                onClick = { openWifiSettings(context) },
+                onLongClick = onActivateChildLock
+            )
+        }
 
         if (isSafeModeActive) {
             Surface(
@@ -82,6 +90,33 @@ fun TopCarStatusBar(
                     Icon(Icons.Default.Warning, "تنبيه النظام", tint = HighContrastRed, modifier = Modifier.size(16.dp))
                     Text("الوضع الآمن", color = HighContrastRed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NightBrightnessQuickButton(
+    forcedNight: Boolean,
+    accentColor: Color,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val tint = if (forcedNight) DarbakGold else accentColor
+    Surface(
+        color = if (forcedNight) DarbakGold.copy(alpha = .10f) else Color.Transparent,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, tint.copy(alpha = if (forcedNight) .86f else .44f)),
+        modifier = Modifier
+            .size(40.dp, 34.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.DarkMode, "الوضع الليلي", tint = tint, modifier = Modifier.size(20.dp))
+            if (!forcedNight) {
+                Text("A", color = TextMuted, fontSize = 7.sp, fontWeight = FontWeight.Black, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 2.dp))
             }
         }
     }
@@ -192,6 +227,14 @@ private fun openWifiSettings(context: Context) {
     val intent = Intent(Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     try {
         context.startActivity(intent)
+    } catch (_: Exception) {
+        try { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) { }
+    }
+}
+
+private fun openDisplaySettings(context: Context) {
+    try {
+        context.startActivity(Intent(Settings.ACTION_DISPLAY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (_: Exception) {
         try { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) { }
     }
