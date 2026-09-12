@@ -1,6 +1,6 @@
 package com.example.core.bridge
 
-/** Stable registry for private Darbak applications that belong to this head-unit system. */
+/** Stable registry for the active private Darbak applications managed by this head-unit system. */
 object DarbakModuleCatalog {
     fun systemModules(launcherPackage: String): List<DarbakModuleSpec> = listOf(
         DarbakModuleSpec(
@@ -26,24 +26,6 @@ object DarbakModuleCatalog {
             displayName = "Darbak Media",
             packageName = "com.abosultan.darbakmedia",
             priority = 30,
-        ),
-        DarbakModuleSpec(
-            id = DarbakModuleId.KIDS_TV,
-            displayName = "Darbak Kids TV",
-            packageName = "com.abosultan.darbakkidstv",
-            priority = 40,
-        ),
-        DarbakModuleSpec(
-            id = DarbakModuleId.LAQQINNI,
-            displayName = "لقّني",
-            packageName = "com.abosultan.laqqinni",
-            priority = 50,
-        ),
-        DarbakModuleSpec(
-            id = DarbakModuleId.ADHKAR,
-            displayName = "Darbak Adhkar",
-            packageName = "com.abosultan.darbakadhkar",
-            priority = 60,
         ),
     )
 }
