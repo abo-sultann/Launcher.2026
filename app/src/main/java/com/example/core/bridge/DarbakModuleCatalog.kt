@@ -26,6 +26,8 @@ object DarbakModuleCatalog {
             displayName = "Darbak Media",
             packageName = "com.abosultan.darbakmedia",
             priority = 30,
+            showOnHome = false,
+            requiredForSystemHealth = false,
         ),
     )
 }
