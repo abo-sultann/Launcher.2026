@@ -28,42 +28,45 @@ import com.example.ui.theme.*
 @Composable
 fun AboutOwnershipPanel(accent: Color, onOpenDiagnostics: (() -> Unit)? = null) {
     Surface(
-        color = CarbonSurface.copy(alpha = .38f),
+        color = Color.Black.copy(alpha = .18f),
         shape = RoundedCornerShape(24.dp),
-        border = BorderStroke(1.dp, DarbakGold.copy(alpha = .34f)),
+        border = BorderStroke(1.dp, DarbakGold.copy(alpha = .52f)),
         modifier = Modifier.fillMaxWidth().testTag("about_identity"),
     ) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 280.dp).padding(20.dp),
+            Modifier.fillMaxWidth().heightIn(min = 265.dp).padding(18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(22.dp),
         ) {
             Surface(
-                color = CarbonDark.copy(alpha = .28f),
+                color = Color(0xFF070A0D),
                 shape = RoundedCornerShape(22.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = .07f)),
-                modifier = Modifier.weight(1.15f).height(245.dp),
+                border = BorderStroke(1.dp, DarbakGold.copy(alpha = .28f)),
+                modifier = Modifier.weight(1.08f).height(225.dp),
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    // The approved transparent mark is a small source asset. Keep it near its native
+                    // aspect and composite it twice so semi-transparent gold/white pixels remain
+                    // strong on the 1024x600 head unit instead of looking washed out.
+                    val mark = Modifier.width(252.dp).height(168.dp)
                     Image(
                         painter = painterResource(R.drawable.owner_signature_darbak),
                         contentDescription = "دربك — تصميم وتطوير — أبوسلطان",
-                        modifier = Modifier.fillMaxSize().padding(22.dp),
+                        modifier = mark,
+                        contentScale = ContentScale.Fit,
+                    )
+                    Image(
+                        painter = painterResource(R.drawable.owner_signature_darbak),
+                        contentDescription = null,
+                        modifier = mark,
                         contentScale = ContentScale.Fit,
                     )
                 }
             }
 
-            Column(
-                Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-            ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Surface(
-                        color = DarbakGold.copy(alpha = .13f),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.size(44.dp),
-                    ) {
+                    Surface(color = DarbakGold.copy(alpha = .14f), shape = RoundedCornerShape(14.dp), modifier = Modifier.size(44.dp)) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(Icons.Default.Verified, null, tint = DarbakGold, modifier = Modifier.size(25.dp))
                         }
@@ -76,17 +79,17 @@ fun AboutOwnershipPanel(accent: Color, onOpenDiagnostics: (() -> Unit)? = null) 
 
                 Column(
                     Modifier.combinedClickable(onClick = {}, onLongClick = { onOpenDiagnostics?.invoke() }).testTag("about_version"),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
-                    Text("الإصدار", color = TextMuted, fontSize = 12.sp)
-                    Text(BuildConfig.VERSION_NAME, color = accent, fontSize = 27.sp, fontWeight = FontWeight.Black)
+                    Text("الإصدار", color = TextMuted, fontSize = 11.sp)
+                    Text(BuildConfig.VERSION_NAME, color = accent, fontSize = 29.sp, fontWeight = FontWeight.Black)
                 }
 
-                HorizontalDivider(color = Color.White.copy(alpha = .07f))
+                HorizontalDivider(color = DarbakGold.copy(alpha = .22f))
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Default.Copyright, null, tint = DarbakGold, modifier = Modifier.size(17.dp))
-                    Text("تصميم وتطوير أبوسلطان — جميع الحقوق محفوظة", color = TextSecondary, fontSize = 12.sp)
+                    Text("تصميم وتطوير أبوسلطان — جميع الحقوق محفوظة", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
