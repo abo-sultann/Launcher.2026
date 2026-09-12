@@ -27,6 +27,11 @@ class OfflineMapEngine(
     private val _mapError = MutableStateFlow<String?>(null)
     val mapError: StateFlow<String?> = _mapError.asStateFlow()
 
+    /**
+     * Startup path stays intentionally light on the 1 GB Android 7 unit. We only restore metadata
+     * and confirm that files exist. SQLite/Mapsforge parsing is deferred until the user activates
+     * or renders a map, preventing a large map file from slowing Launcher startup.
+     */
     fun initialize() {
         try {
             val saved = preferencesManager.getSavedMaps()
@@ -34,7 +39,7 @@ class OfflineMapEngine(
                 .filter { File(it.filePath).exists() }
                 .toMutableList()
 
-            var normalized = if (saved.count { it.isActive } > 1) {
+            val normalized = if (saved.count { it.isActive } > 1) {
                 var activeFound = false
                 saved.map { item ->
                     if (item.isActive && !activeFound) {
@@ -44,14 +49,10 @@ class OfflineMapEngine(
                 }
             } else saved
 
-            val activeCandidate = normalized.find { it.isActive }
-            val activeError = activeCandidate?.let { validateMapFile(File(it.filePath)) }
-            if (activeError != null) normalized = normalized.map { it.copy(isActive = false) }
-
             _mapsList.value = normalized
             _activeMap.value = normalized.find { it.isActive }
             preferencesManager.saveMaps(normalized)
-            _mapError.value = activeError
+            _mapError.value = null
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing MapEngine", e)
             _mapError.value = "تعذر تحميل قائمة الخرائط"
