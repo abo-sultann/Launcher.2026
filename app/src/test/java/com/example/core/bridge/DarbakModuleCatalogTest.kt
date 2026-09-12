@@ -32,6 +32,20 @@ class DarbakModuleCatalogTest {
     }
 
     @Test
+    fun media_isOptionalAndNotAHomeCriticalModule() {
+        val modules = DarbakModuleCatalog.systemModules("com.aistudio.carlauncher.lzrk26")
+        val media = modules.single { it.id == DarbakModuleId.MEDIA }
+        val requiredIds = modules.filter { it.requiredForSystemHealth }.map { it.id }.toSet()
+
+        assertFalse(media.requiredForSystemHealth)
+        assertFalse(media.showOnHome)
+        assertEquals(
+            setOf(DarbakModuleId.LAUNCHER, DarbakModuleId.VEHICLE_HUB, DarbakModuleId.MAINTENANCE),
+            requiredIds,
+        )
+    }
+
+    @Test
     fun mapsKidsQuranAndAdhkar_areOutsideLauncherSystem() {
         val modules = DarbakModuleCatalog.systemModules("com.aistudio.carlauncher.lzrk26")
         val packages = modules.map { it.packageName.lowercase() }
