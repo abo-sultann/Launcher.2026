@@ -11,6 +11,7 @@ class StableBackupManager(private val context: Context) {
 
     fun exportBackup(): String {
         val root = JSONObject()
+        // Keep the legacy format id for backward compatibility with existing user backups.
         root.put("format", "Launcher2026-StableBackup")
         root.put("version", 1)
         root.put("appVersion", BuildConfig.VERSION_NAME)
@@ -34,6 +35,23 @@ class StableBackupManager(private val context: Context) {
         root.put("mapFiles", JSONArray(mapsDir.listFiles()?.map { it.name } ?: emptyList<String>()))
         return root.toString(2)
     }
+
+    /**
+     * Creates one small internal recovery point before a newer APK is installed.
+     * The file is private to Darbak Launcher and does not include large map files.
+     */
+    fun writeAutomaticPreUpdateBackup(): File? = runCatching {
+        val directory = File(context.filesDir, "recovery").apply { mkdirs() }
+        val target = File(directory, "pre-update-backup.json")
+        val temp = File(directory, "pre-update-backup.tmp")
+        temp.writeText(exportBackup())
+        if (target.exists()) target.delete()
+        if (!temp.renameTo(target)) {
+            temp.copyTo(target, overwrite = true)
+            temp.delete()
+        }
+        target
+    }.getOrNull()
 
     fun importBackup(raw: String): Int {
         val root = JSONObject(raw)
@@ -77,7 +95,7 @@ class StableBackupManager(private val context: Context) {
             report.storageStatus
         )
         return buildString {
-            appendLine("Launcher 2026 — تقرير التشخيص")
+            appendLine("Darbak Launcher — تقرير التشخيص")
             appendLine("الإصدار: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
             appendLine("Android: ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}")
             appendLine("الجهاز: ${Build.MANUFACTURER} ${Build.MODEL}")
