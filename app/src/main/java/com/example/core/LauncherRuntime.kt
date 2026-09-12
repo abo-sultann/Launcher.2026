@@ -5,6 +5,7 @@ import com.example.CarLauncherApp
 import com.example.core.bridge.DarbakAppBridge
 import com.example.core.bridge.DarbakSystemStateStore
 import com.example.data.AppRepository
+import com.example.data.DarbakAudioSyncManager
 import com.example.data.DiagnosticManager
 import com.example.data.GpsTelemetryManager
 import com.example.data.MusicPlayerService
@@ -24,13 +25,18 @@ class LauncherRuntime(application: Application) {
     val preferences = PreferencesManager(application)
     val apps = AppRepository(application, preferences)
     val music = MusicPlayerService(application, preferences)
+    val audioSync = DarbakAudioSyncManager(application)
     val gps = GpsTelemetryManager(application)
     val trip = TripComputer(preferences)
+
+    // Legacy/offline map stays available as fallback until standalone Darbak Maps is accepted on
+    // the real head unit. Do not expand it with major new features during this transition.
     val maps = OfflineMapEngine(application, preferences)
     val recommendedMap = RecommendedMapInstaller(application, maps)
     val diagnostics = DiagnosticManager(application, preferences)
     val offroad = (application as CarLauncherApp).offroadTrackManager
     val mapSearch = OfflineMapSearchEngine()
+
     val darbakBridge = DarbakAppBridge(application)
     val darbakSystem = DarbakSystemStateStore(darbakBridge)
 }
