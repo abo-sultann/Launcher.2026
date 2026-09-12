@@ -3,7 +3,7 @@ package com.example.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,215 +17,187 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.DarbakAudioRemoteStatus
-import com.example.data.DarbakAudioSyncManager
-import com.example.data.DarbakAudioTelegramTransport
-import com.example.ui.components.*
+import com.example.ui.components.DarbakEmptyState
+import com.example.ui.components.DarbakSearch
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MainViewModel
-import kotlinx.coroutines.launch
 import java.util.Locale
+
+private const val DARB_AL_SOUT_2_PACKAGE = "com.abosultan.darbalsoot.gdrive"
 
 @Composable
 fun MusicPlayerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
     val state by viewModel.playbackState.collectAsState()
     val track = state.currentTrack
     var query by rememberSaveable { mutableStateOf("") }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var volumeOpen by rememberSaveable { mutableStateOf(false) }
-    var audioSettingsOpen by rememberSaveable { mutableStateOf(false) }
     var pendingSeek by remember { mutableStateOf<Float?>(null) }
-    val scope = rememberCoroutineScope()
 
-    // Darb Al-Sout is an internal Launcher feature. Network sync is created only while the music
-    // screen exists and only runs after an explicit tap; playback remains independent of it.
-    val audioImporter = remember { DarbakAudioSyncManager(context.applicationContext) }
-    val audioTransport = remember { DarbakAudioTelegramTransport(context.applicationContext, audioImporter) }
-    val audioSyncState by audioTransport.state.collectAsState()
-    val audioBusy = audioSyncState.status == DarbakAudioRemoteStatus.CHECKING ||
-        audioSyncState.status == DarbakAudioRemoteStatus.DOWNLOADING
-
-    BackHandler(expanded || volumeOpen || audioSettingsOpen) {
+    BackHandler(expanded || volumeOpen) {
         expanded = false
         volumeOpen = false
-        audioSettingsOpen = false
     }
     LaunchedEffect(track?.dataPath) { pendingSeek = null }
+
     val filtered = remember(state.playlist, query) {
-        state.playlist.filter { query.isBlank() || it.title.contains(query.trim(), true) || it.artist.contains(query.trim(), true) }
+        state.playlist.filter {
+            query.isBlank() || it.title.contains(query.trim(), true) || it.artist.contains(query.trim(), true)
+        }
     }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { it?.let(viewModel::importMusicUri) }
-    val addMusic = { viewModel.prepareForExternalPicker(); picker.launch("audio/*") }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let(viewModel::importMusicUri)
+    }
     val duration = state.durationMs.coerceAtLeast(0L)
-    val fraction = if (duration > 0) (state.currentPositionMs.toFloat() / duration).coerceIn(0f, 1f) else 0f
+    val fraction = if (duration > 0L) (state.currentPositionMs.toFloat() / duration).coerceIn(0f, 1f) else 0f
 
     Column(
-        modifier.fillMaxSize().background(CarbonDark).padding(horizontal = 24.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {
-        DarbakPageHeading("الموسيقى", "${state.playlist.size} مقطع") {
-            TextButton(onClick = addMusic, modifier = Modifier.heightIn(min = 52.dp)) {
-                Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("إضافة", fontSize = 15.sp)
-            }
-            TextButton(
-                onClick = {
-                    if (!audioTransport.isConfigured()) {
-                        audioSettingsOpen = true
-                    } else if (!audioBusy) {
-                        scope.launch {
-                            audioTransport.syncNow()
-                            viewModel.refreshMusicLibrary()
-                        }
-                    }
-                },
-                enabled = !audioBusy,
-                modifier = Modifier.heightIn(min = 52.dp).testTag("darbak_audio_sync")
+        Surface(
+            color = CarbonSurface.copy(alpha = .30f),
+            shape = RoundedCornerShape(22.dp),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = .07f)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
             ) {
-                if (audioBusy) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = CyanNeon)
-                } else {
-                    Icon(Icons.Default.Sync, null)
+                Column(Modifier.weight(1f)) {
+                    Text("الموسيقى", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                    Text("${state.playlist.size} مقطع • مشغل دربك", color = TextSecondary, fontSize = 11.sp)
                 }
-                Spacer(Modifier.width(6.dp))
-                Text(if (audioBusy) "مزامنة..." else "درب الصوت", fontSize = 15.sp)
-            }
-            IconButton(
-                onClick = { audioSettingsOpen = true },
-                modifier = Modifier.size(52.dp).testTag("darbak_audio_settings")
-            ) {
-                Icon(Icons.Default.Settings, "إعداد درب الصوت", tint = TextPrimary)
-            }
-            IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(52.dp).testTag("music_expand")) {
-                Icon(
-                    if (expanded) Icons.Default.CloseFullscreen else Icons.Default.OpenInFull,
-                    if (expanded) "إظهار القائمة" else "توسيع المشغل",
-                    tint = TextPrimary
-                )
-            }
-        }
-
-        if (audioSyncState.message.isNotBlank()) {
-            val error = audioSyncState.status == DarbakAudioRemoteStatus.ERROR
-            Surface(
-                color = if (error) HighContrastRed.copy(alpha = .10f) else CyanNeon.copy(alpha = .08f),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                FilledTonalButton(
+                    onClick = {
+                        viewModel.prepareForExternalPicker()
+                        picker.launch("audio/*")
+                    },
+                    modifier = Modifier.height(42.dp),
+                    shape = RoundedCornerShape(13.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color.Black.copy(alpha = .16f)),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = .06f)),
                 ) {
-                    Icon(
-                        if (error) Icons.Default.ErrorOutline else Icons.Default.CloudDone,
-                        null,
-                        tint = if (error) HighContrastRed else CyanNeon,
-                        modifier = Modifier.size(19.dp)
-                    )
-                    Text(
-                        audioSyncState.message,
-                        color = if (error) HighContrastRed else TextSecondary,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(onClick = audioTransport::clearResult, modifier = Modifier.heightIn(min = 38.dp)) {
-                        Text("إخفاء", fontSize = 11.sp)
-                    }
+                    Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("إضافة", fontSize = 12.sp)
                 }
+                FilledTonalButton(
+                    onClick = { viewModel.launchApp(DARB_AL_SOUT_2_PACKAGE) },
+                    modifier = Modifier.height(42.dp).testTag("darbak_audio_sync"),
+                    shape = RoundedCornerShape(13.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = CyanNeon.copy(alpha = .14f), contentColor = TextPrimary),
+                    border = BorderStroke(1.dp, CyanNeon.copy(alpha = .35f)),
+                ) {
+                    Icon(Icons.Default.CloudSync, null, tint = CyanNeon, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("درب الصوت 2", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(42.dp).testTag("music_expand")) {
+                    Icon(if (expanded) Icons.Default.CloseFullscreen else Icons.Default.OpenInFull, null, tint = TextPrimary)
+                }
+                Surface(color = DarbakGold, shape = RoundedCornerShape(2.dp), modifier = Modifier.width(30.dp).height(3.dp)) {}
             }
         }
 
-        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            if (!expanded) Column(Modifier.width(306.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                DarbakSearch(query, { query = it }, "بحث في المقاطع", "music_search", Modifier.fillMaxWidth())
-                if (filtered.isEmpty()) DarbakEmptyState(
-                    Icons.Default.LibraryMusic,
-                    if (state.playlist.isEmpty()) "أضف أول مقطع" else "لا توجد نتائج",
-                    Modifier.fillMaxSize()
-                )
-                else LazyColumn(Modifier.fillMaxSize().testTag("music_queue"), contentPadding = PaddingValues(bottom = 8.dp)) {
-                    itemsIndexed(filtered, key = { _, item -> item.id }) { index, item ->
-                        val active = item.dataPath == track?.dataPath
-                        Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                                .background(if (active) CarbonCard else Color.Transparent)
-                                .clickable { viewModel.playTrack(item) }.testTag("playlist_item_${item.id}")
-                                .heightIn(min = 76.dp).padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-                                if (active) Icon(
-                                    if (state.isPlaying) Icons.Default.GraphicEq else Icons.Default.MusicNote,
-                                    null,
-                                    tint = CyanNeon
-                                ) else Text(String.format(Locale.US, "%02d", index + 1), color = TextMuted, fontSize = 14.sp)
-                            }
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(
-                                    displayTrackTitle(item.title),
-                                    color = if (active) CyanNeon else TextPrimary,
-                                    fontSize = 16.sp,
-                                    fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    displayArtist(item.artist) ?: musicTime(item.durationMs),
-                                    color = TextSecondary,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (!expanded) {
+                Surface(
+                    color = CarbonSurface.copy(alpha = .24f),
+                    shape = RoundedCornerShape(21.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = .055f)),
+                    modifier = Modifier.width(285.dp).fillMaxHeight(),
+                ) {
+                    Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DarbakSearch(query, { query = it }, "بحث في المقاطع", "music_search", Modifier.fillMaxWidth())
+                        if (filtered.isEmpty()) {
+                            DarbakEmptyState(
+                                Icons.Default.LibraryMusic,
+                                if (state.playlist.isEmpty()) "أضف أول مقطع" else "لا توجد نتائج",
+                                Modifier.fillMaxSize(),
+                            )
+                        } else {
+                            LazyColumn(Modifier.fillMaxSize().testTag("music_queue"), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                itemsIndexed(filtered, key = { _, item -> item.id }) { index, item ->
+                                    val active = item.dataPath == track?.dataPath
+                                    Surface(
+                                        color = if (active) CyanNeon.copy(alpha = .11f) else Color.Black.copy(alpha = .10f),
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(1.dp, if (active) CyanNeon.copy(alpha = .30f) else Color.White.copy(alpha = .04f)),
+                                        modifier = Modifier.fillMaxWidth().height(59.dp).clickable { viewModel.playTrack(item) }.testTag("playlist_item_${item.id}"),
+                                    ) {
+                                        Row(
+                                            Modifier.fillMaxSize().padding(horizontal = 9.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) {
+                                                if (active) Icon(if (state.isPlaying) Icons.Default.GraphicEq else Icons.Default.MusicNote, null, tint = CyanNeon, modifier = Modifier.size(18.dp))
+                                                else Text(String.format(Locale.US, "%02d", index + 1), color = TextMuted, fontSize = 11.sp)
+                                            }
+                                            Column(Modifier.weight(1f)) {
+                                                Text(displayTrackTitle(item.title), color = if (active) CyanNeon else TextPrimary, fontSize = 13.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                Text(displayArtist(item.artist) ?: musicTime(item.durationMs), color = TextSecondary, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
-            Surface(Modifier.weight(1f).fillMaxHeight(), color = CarbonSurface, shape = RoundedCornerShape(26.dp)) {
-                Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.SpaceBetween) {
+
+            Surface(
+                color = CarbonSurface.copy(alpha = .28f),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = .06f)),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            ) {
+                Column(Modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.SpaceBetween) {
                     Row(
                         Modifier.fillMaxWidth().weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(24.dp)
+                        horizontalArrangement = Arrangement.spacedBy(18.dp),
                     ) {
-                        DarbakMusicArtwork(track?.dataPath, Modifier.size(if (expanded) 240.dp else 184.dp))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(if (state.isPlaying) "يُشغّل الآن" else "المقطع الحالي", color = CyanNeon, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        DarbakMusicArtwork(track?.dataPath, Modifier.size(if (expanded) 230.dp else 170.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Text(if (state.isPlaying) "يُشغّل الآن" else "المقطع الحالي", color = CyanNeon, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                             Text(
                                 track?.let { displayTrackTitle(it.title) } ?: "مكتبتك الصوتية",
                                 color = TextPrimary,
-                                fontSize = if (expanded) 30.sp else 24.sp,
-                                lineHeight = 34.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = if (expanded) 29.sp else 23.sp,
+                                lineHeight = 31.sp,
+                                fontWeight = FontWeight.Black,
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.testTag("music_title")
+                                modifier = Modifier.testTag("music_title"),
                             )
-                            displayArtist(track?.artist)?.let {
-                                Text(it, color = TextSecondary, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            displayArtist(track?.artist)?.let { artist ->
+                                Text(artist, color = TextSecondary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Surface(color = DarbakGold, shape = RoundedCornerShape(2.dp), modifier = Modifier.width(42.dp).height(3.dp)) {}
+                                Text("DARBAK MEDIA", color = TextMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
+
                     state.errorMessage?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, color = HighContrastRed, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(it, color = HighContrastRed, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
-                    // Media timelines are left-to-right independently of the surrounding Arabic UI.
+
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                         Column {
                             Slider(
@@ -237,25 +209,17 @@ fun MusicPlayerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                 },
                                 enabled = track != null && duration > 0,
                                 modifier = Modifier.fillMaxWidth().testTag("music_seek"),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = CyanNeon,
-                                    activeTrackColor = CyanNeon,
-                                    inactiveTrackColor = CarbonCardBorder
-                                )
+                                colors = SliderDefaults.colors(thumbColor = CyanNeon, activeTrackColor = CyanNeon, inactiveTrackColor = CarbonCardBorder),
                             )
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(
-                                    musicTime(pendingSeek?.let { (it * duration).toLong() } ?: state.currentPositionMs),
-                                    color = TextPrimary,
-                                    fontSize = 14.sp
-                                )
-                                Text(musicTime(duration), color = TextSecondary, fontSize = 14.sp)
+                                Text(musicTime(pendingSeek?.let { (it * duration).toLong() } ?: state.currentPositionMs), color = TextPrimary, fontSize = 11.sp)
+                                Text(musicTime(duration), color = TextSecondary, fontSize = 11.sp)
                             }
                         }
                         Row(
-                            Modifier.fillMaxWidth().padding(top = 10.dp),
+                            Modifier.fillMaxWidth().padding(top = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceEvenly
+                            horizontalArrangement = Arrangement.SpaceEvenly,
                         ) {
                             MusicControl(Icons.Default.Replay10, "تراجع 10 ثوانٍ", track != null, viewModel::skipBackward10Sec)
                             MusicControl(Icons.Default.SkipPrevious, "المقطع السابق", state.playlist.isNotEmpty(), viewModel::playPrevious)
@@ -263,18 +227,14 @@ fun MusicPlayerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                 onClick = { viewModel.togglePlayPause() },
                                 enabled = state.playlist.isNotEmpty(),
                                 shape = CircleShape,
-                                modifier = Modifier.size(68.dp).testTag("btn_full_player_play"),
-                                colors = IconButtonDefaults.filledIconButtonColors(containerColor = CyanNeon, contentColor = CarbonDark)
+                                modifier = Modifier.size(62.dp).testTag("btn_full_player_play"),
+                                colors = IconButtonDefaults.filledIconButtonColors(containerColor = CyanNeon, contentColor = CarbonDark),
                             ) {
-                                Icon(
-                                    if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    if (state.isPlaying) "إيقاف مؤقت" else "تشغيل",
-                                    Modifier.size(38.dp)
-                                )
+                                Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, Modifier.size(34.dp))
                             }
                             MusicControl(Icons.Default.SkipNext, "المقطع التالي", state.playlist.isNotEmpty(), viewModel::playNext)
                             MusicControl(Icons.Default.Forward10, "تقديم 10 ثوانٍ", track != null, viewModel::skipForward10Sec)
-                            MusicControl(Icons.Default.VolumeUp, "مستوى الصوت", true, { volumeOpen = true })
+                            MusicControl(Icons.Default.VolumeUp, "مستوى الصوت", true) { volumeOpen = true }
                         }
                     }
                 }
@@ -286,91 +246,37 @@ fun MusicPlayerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         onDismissRequest = { volumeOpen = false },
         title = { Text("مستوى الصوت") },
         text = {
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                FilledTonalButton(onClick = { viewModel.adjustVolume(-1f) }, modifier = Modifier.weight(1f).height(56.dp)) {
-                    Icon(Icons.Default.VolumeDown, null); Spacer(Modifier.width(8.dp)); Text("خفض")
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                FilledTonalButton(onClick = { viewModel.adjustVolume(-1f) }, modifier = Modifier.weight(1f).height(52.dp)) {
+                    Icon(Icons.Default.VolumeDown, null); Spacer(Modifier.width(7.dp)); Text("خفض")
                 }
-                FilledTonalButton(onClick = { viewModel.adjustVolume(1f) }, modifier = Modifier.weight(1f).height(56.dp)) {
-                    Icon(Icons.Default.VolumeUp, null); Spacer(Modifier.width(8.dp)); Text("رفع")
+                FilledTonalButton(onClick = { viewModel.adjustVolume(1f) }, modifier = Modifier.weight(1f).height(52.dp)) {
+                    Icon(Icons.Default.VolumeUp, null); Spacer(Modifier.width(7.dp)); Text("رفع")
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { volumeOpen = false }) { Text("تم") } }
-    )
-
-    if (audioSettingsOpen) {
-        DarbakAudioSettingsDialog(
-            transport = audioTransport,
-            onDismiss = { audioSettingsOpen = false },
-            onSaved = { audioSettingsOpen = false }
-        )
-    }
-}
-
-@Composable
-private fun DarbakAudioSettingsDialog(
-    transport: DarbakAudioTelegramTransport,
-    onDismiss: () -> Unit,
-    onSaved: () -> Unit,
-) {
-    val existing = remember { transport.configuration() }
-    var token by rememberSaveable { mutableStateOf(existing.botToken) }
-    var chatId by rememberSaveable { mutableStateOf(existing.chatId) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("إعداد درب الصوت") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    "ارسل ملفات MP3 إلى بوت درب الصوت، ثم اضغط «درب الصوت» في المشغل لمزامنتها يدويًا.",
-                    fontSize = 13.sp,
-                    color = TextSecondary
-                )
-                OutlinedTextField(
-                    value = token,
-                    onValueChange = { token = it.trim() },
-                    label = { Text("توكن البوت") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth().testTag("darbak_audio_token")
-                )
-                OutlinedTextField(
-                    value = chatId,
-                    onValueChange = { chatId = it.trim() },
-                    label = { Text("Chat ID") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().testTag("darbak_audio_chat_id")
-                )
-                Text("المزامنة لا تعمل تلقائيًا بالخلفية.", fontSize = 11.sp, color = TextMuted)
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    transport.saveConfiguration(token, chatId)
-                    onSaved()
-                },
-                enabled = token.isNotBlank() && chatId.isNotBlank()
-            ) { Text("حفظ") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
+        confirmButton = { TextButton(onClick = { volumeOpen = false }) { Text("تم") } },
     )
 }
 
 @Composable
-private fun MusicControl(icon: ImageVector, label: String, enabled: Boolean, action: () -> Unit) {
-    IconButton(onClick = action, enabled = enabled, modifier = Modifier.size(52.dp)) {
-        Icon(icon, label, Modifier.size(28.dp), tint = if (enabled) TextPrimary else TextMuted)
+private fun MusicControl(icon: ImageVector, description: String, enabled: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(48.dp)) {
+        Icon(icon, description, tint = if (enabled) TextPrimary else TextMuted, modifier = Modifier.size(25.dp))
     }
 }
 
-internal fun displayArtist(value: String?): String? = value?.trim()?.takeUnless {
-    it.isEmpty() || it.equals("<unknown>", true) || it.equals("unknown", true)
-}
-
-internal fun displayTrackTitle(value: String): String = value.trim().replace('_', ' ').ifBlank { "مقطع صوتي" }
 private fun musicTime(ms: Long): String {
-    val seconds = ms.coerceAtLeast(0L) / 1000
-    return String.format(Locale.US, "%02d:%02d", seconds / 60, seconds % 60)
+    val total = (ms.coerceAtLeast(0L) / 1000L).toInt()
+    return String.format(Locale.US, "%d:%02d", total / 60, total % 60)
 }
+
+private fun displayTrackTitle(raw: String): String = raw
+    .substringBeforeLast('.', raw)
+    .replace('_', ' ')
+    .trim()
+    .ifBlank { "مقطع صوتي" }
+
+private fun displayArtist(raw: String?): String? = raw
+    ?.trim()
+    ?.takeIf { it.isNotBlank() && !it.equals("<unknown>", true) && !it.equals("unknown", true) }
