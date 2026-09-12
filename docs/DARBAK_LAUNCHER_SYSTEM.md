@@ -2,9 +2,11 @@
 
 ## Product boundary
 
-Darbak Launcher is the private Android shell for the owner's car head unit. It runs on top of Android and coordinates the private Darbak applications without turning them into one monolithic APK.
+Darbak Launcher is the private Android shell for the owner's car head unit. It runs on top of Android and coordinates the private Darbak applications without turning every feature into one monolithic APK.
 
 Darbak Maps is explicitly outside this system. It is an independent public product that may share Darbak visual identity, but it must not depend on Darbak Launcher, Vehicle Hub, or private head-unit services.
+
+Darbak Kids TV, Laqqinni and Darbak Adhkar are also outside the active Launcher system scope. They may remain as ordinary standalone Android apps, but Launcher must not depend on them, request their status, include them in Update Center, or surface them as Darbak System modules.
 
 ## Target device
 
@@ -14,28 +16,45 @@ Darbak Maps is explicitly outside this system. It is an independent public produ
 - offline-first operation
 - sideloaded signed APKs
 
-## Architecture
+## Active architecture
 
-Android -> Darbak Launcher -> Darbak Core -> Darbak App Bridge -> private Darbak apps
+Android -> Darbak Launcher -> Darbak Core -> Darbak App Bridge -> active private Darbak companion apps
 
-The private system catalog currently contains:
+The active system catalog contains only:
 
 1. Darbak Launcher (`com.aistudio.carlauncher.lzrk26`)
 2. Darbak Vehicle Hub (`com.abosultan.darbakvehiclehub`)
 3. Darbak Maintenance (`com.abosultan.darbakmaintenance`)
 4. Darbak Media (`com.abosultan.darbakmedia`)
-5. Darbak Kids TV (`com.abosultan.darbakkidstv`)
-6. Laqqinni (`com.abosultan.laqqinni`)
-7. Darbak Adhkar (`com.abosultan.darbakadhkar`)
+
+## Darbak Audio / Darb Al-Sout decision
+
+Darb Al-Sout is no longer planned as a separate application in the final system.
+
+Its useful function becomes an internal feature of the Darbak Launcher audio experience:
+
+- local audio library and playback live in Launcher
+- incoming/new audio appears directly in the same library
+- manual **Sync now** starts the Darb Al-Sout acquisition/sync component
+- successful downloads are moved into the local audio library with duplicate protection
+- sync/network failure must not affect Launcher startup or playback
+- the sync implementation remains isolated behind a small internal component so it can fail independently
+- Launcher remembers the last audio file and playback position
+
+Darbak Audio is therefore **not** an App Bridge module and has no separate package dependency.
+
+Darbak Media remains a separate companion for non-local/external media experiences. It must not duplicate the local-audio/Darb Al-Sout responsibilities owned by Launcher.
 
 ## Rules
 
-- Launcher remains the Home/default shell and the only system-level entry point.
-- Companion apps remain separate APKs so one app failure does not take down the launcher.
-- Launcher may display compact status/widgets from companion apps, but detailed screens remain owned by the companion app.
+- Launcher remains the Home/default shell and the system-level entry point.
+- Vehicle Hub, Maintenance and Media remain separate APKs so one companion failure does not take down Launcher.
+- Local audio playback and Darb Al-Sout synchronization belong inside Launcher.
+- Launcher may display compact status/widgets from active companion apps, while detailed companion screens remain owned by each companion.
 - Missing companion apps must never crash Launcher.
-- All cross-app integration must go through a small stable contract instead of directly coupling UI code to another app.
+- Cross-app integration goes through a small stable contract instead of directly coupling UI code to another app.
 - Darbak Maps remains independent and is never added to the private system catalog.
+- Kids TV, Laqqinni and Adhkar are excluded from Darbak System integration.
 - Existing stable launcher behavior is preserved while the new system is built on a separate branch.
 
 ## Delivery phases
@@ -48,24 +67,32 @@ The private system catalog currently contains:
 - Darbak Launcher branding
 
 ### Phase 2 - System dashboard
-- Home module cards/widgets
+- active module cards/widgets
 - installed/available state
 - compact Vehicle Hub, Maintenance and Media status
 - graceful unavailable state for missing apps
 
-### Phase 3 - Shared service contracts
+### Phase 3 - Darbak Audio integration
+- local audio library in Launcher
+- playback/resume state
+- Darb Al-Sout internal sync component
+- new-audio inbox state
+- duplicate prevention and safe file move
+- sync failure isolation
+
+### Phase 4 - Shared companion contracts
 - Vehicle Hub telemetry contract
 - Maintenance odometer/service-due contract
-- Media playback contract
+- Media external-media contract
 - common diagnostics and version reporting
 
-### Phase 4 - Unified system settings and updates
+### Phase 5 - Unified system settings and updates
 - one Darbak system settings surface
-- app version inventory
-- update status per private module
+- app version inventory for active companion modules only
+- update status per active private module
 - hidden technical diagnostics
 
-### Phase 5 - Stability release
+### Phase 6 - Stability release
 - Android 7/API 25 regression tests
 - long-use and repeated hand-off tests
 - low-memory recovery
