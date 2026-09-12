@@ -19,12 +19,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.DisplayAutomationController
 import com.example.ui.components.DarbakEmptyState
 import com.example.ui.components.DarbakSearch
 import com.example.ui.theme.*
@@ -34,13 +36,25 @@ private enum class AppDrawerFilter(val title: String) { ALL("الكل"), FAVORIT
 
 @Composable
 fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     val apps by viewModel.installedApps.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val gps by viewModel.gpsTelemetry.collectAsState()
+    val drivingConfig = remember(context) { DisplayAutomationController(context) }.readConfig()
+    val drivingLocked = drivingConfig.safeDrivingEnabled && gps.hasGpsFix && gps.isSpeedReliable && gps.speedKmH >= drivingConfig.safeDrivingThresholdKmH
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(AppDrawerFilter.ALL) }
     var managing by rememberSaveable { mutableStateOf(false) }
     var selectedPackage by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedApp = apps.firstOrNull { it.packageName == selectedPackage }
+
+    LaunchedEffect(drivingLocked) {
+        if (drivingLocked) {
+            managing = false
+            selectedPackage = null
+            if (filter == AppDrawerFilter.HIDDEN) filter = AppDrawerFilter.ALL
+        }
+    }
 
     BackHandler(managing || selectedPackage != null) {
         selectedPackage = null
@@ -78,10 +92,10 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             ) {
                 Column(Modifier.width(135.dp)) {
                     Text("التطبيقات", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                    Text("${filtered.size} تطبيق", color = TextSecondary, fontSize = 11.sp)
+                    Text(if (drivingLocked) "إدارة التطبيقات مقفلة أثناء القيادة" else "${filtered.size} تطبيق", color = if (drivingLocked) AmberRacing else TextSecondary, fontSize = 10.sp, maxLines = 1)
                 }
                 DarbakSearch(query, { query = it }, "بحث", "apps_search", Modifier.weight(1f))
-                AppDrawerFilter.values().filter { managing || it != AppDrawerFilter.HIDDEN }.forEach { option ->
+                AppDrawerFilter.values().filter { (managing && !drivingLocked) || it != AppDrawerFilter.HIDDEN }.forEach { option ->
                     FilterChip(
                         selected = filter == option,
                         onClick = { filter = option },
@@ -98,14 +112,17 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 }
                 TextButton(
                     onClick = {
-                        managing = !managing
-                        if (!managing && filter == AppDrawerFilter.HIDDEN) filter = AppDrawerFilter.ALL
+                        if (!drivingLocked) {
+                            managing = !managing
+                            if (!managing && filter == AppDrawerFilter.HIDDEN) filter = AppDrawerFilter.ALL
+                        }
                     },
+                    enabled = !drivingLocked,
                     modifier = Modifier.height(42.dp).testTag("apps_manage"),
                 ) {
-                    Icon(if (managing) Icons.Default.Check else Icons.Default.Tune, null, modifier = Modifier.size(18.dp))
+                    Icon(if (managing) Icons.Default.Check else if (drivingLocked) Icons.Default.Lock else Icons.Default.Tune, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(5.dp))
-                    Text(if (managing) "تم" else "إدارة", fontSize = 12.sp)
+                    Text(if (managing) "تم" else if (drivingLocked) "مقفل" else "إدارة", fontSize = 12.sp)
                 }
                 Surface(color = DarbakGold, shape = RoundedCornerShape(2.dp), modifier = Modifier.width(30.dp).height(3.dp)) {}
             }
@@ -137,8 +154,8 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         showLabel = settings.showAppLabels,
                         tag = "app_card_${app.packageName}",
                         hidden = app.isHidden,
-                        launch = { if (managing) selectedPackage = app.packageName else viewModel.launchApp(app.packageName) },
-                        onManage = { selectedPackage = app.packageName },
+                        launch = { if (managing && !drivingLocked) selectedPackage = app.packageName else viewModel.launchApp(app.packageName) },
+                        onManage = { if (!drivingLocked) selectedPackage = app.packageName },
                     ) { size ->
                         if (bitmap != null) Image(bitmap, null, modifier = Modifier.size(size))
                         else Icon(Icons.Default.Android, null, tint = CyanNeon, modifier = Modifier.size(size))
@@ -148,7 +165,7 @@ fun AppDrawerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         }
     }
 
-    if (selectedApp != null) AlertDialog(
+    if (selectedApp != null && !drivingLocked) AlertDialog(
         onDismissRequest = { selectedPackage = null },
         title = { Text(selectedApp.label, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
