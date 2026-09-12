@@ -6,7 +6,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,7 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.example.core.bridge.*
 import com.example.ui.theme.*
 
-/** Live, low-cost status strip for the three primary private Darbak services. */
+/** Live, low-cost status strip for the core Darbak car services only. */
 @Composable
 internal fun DarbakLiveStatusPanel(
     modules: List<DarbakModuleState>,
@@ -36,7 +35,7 @@ internal fun DarbakLiveStatusPanel(
     }
 
     LaunchedEffect(modules) {
-        client.requestAll(modules.filter { it.spec.id in PRIMARY_MODULES })
+        client.requestAll(modules.filter { it.spec.id in CORE_MODULES })
     }
 
     Surface(
@@ -49,15 +48,15 @@ internal fun DarbakLiveStatusPanel(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("الحالة المباشرة", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Black)
-                    Text("قراءة خفيفة من تطبيقات دربك الأساسية", color = TextSecondary, fontSize = 11.sp)
+                    Text("قراءة خفيفة من مكونات السيارة الأساسية", color = TextSecondary, fontSize = 11.sp)
                 }
-                TextButton(onClick = { client.requestAll(modules.filter { it.spec.id in PRIMARY_MODULES }) }) {
+                TextButton(onClick = { client.requestAll(modules.filter { it.spec.id in CORE_MODULES }) }) {
                     Text("تحديث", color = CyanNeon)
                 }
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PRIMARY_MODULES.forEach { id ->
+                CORE_MODULES.forEach { id ->
                     val module = modules.firstOrNull { it.spec.id == id }
                     LiveModuleStatusCard(
                         id = id,
@@ -89,13 +88,11 @@ private fun LiveModuleStatusCard(
     val title = when (id) {
         DarbakModuleId.VEHICLE_HUB -> "السيارة"
         DarbakModuleId.MAINTENANCE -> "الصيانة"
-        DarbakModuleId.MEDIA -> "الوسائط"
         else -> id.name
     }
     val icon: ImageVector = when (id) {
         DarbakModuleId.VEHICLE_HUB -> Icons.Default.DirectionsCar
         DarbakModuleId.MAINTENANCE -> Icons.Default.Build
-        DarbakModuleId.MEDIA -> Icons.Default.MusicNote
         else -> Icons.Default.Build
     }
     val primary = when {
@@ -138,8 +135,7 @@ private fun LiveModuleStatusCard(
     }
 }
 
-private val PRIMARY_MODULES = listOf(
+private val CORE_MODULES = listOf(
     DarbakModuleId.VEHICLE_HUB,
     DarbakModuleId.MAINTENANCE,
-    DarbakModuleId.MEDIA,
 )
