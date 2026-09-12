@@ -12,7 +12,9 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.example.data.DisplayAutomationController
 import com.example.data.OffroadTrackManager
+import com.example.data.StableBackupManager
 import com.example.data.UpdateManager
 import com.example.data.UpdateStatus
 import com.example.service.OffroadTrackingService
@@ -26,6 +28,8 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
 
     val offroadTrackManager: OffroadTrackManager by lazy { OffroadTrackManager(this) }
     val updateManager: UpdateManager by lazy { UpdateManager(this) }
+    private val displayAutomation: DisplayAutomationController by lazy { DisplayAutomationController(this) }
+    private val backupManager: StableBackupManager by lazy { StableBackupManager(this) }
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var startedActivities = 0
     private var changingConfiguration = false
@@ -51,9 +55,20 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
             clearCrashStreakAfterStableSession()
         }
 
+        // Brightness automation is deliberately tiny and wakes once per minute. It changes the
+        // system setting only when the schedule/override requires a transition.
+        appScope.launch {
+            while (true) {
+                displayAutomation.applyNow()
+                createPreUpdateBackupIfNeeded()
+                delay(60_000L)
+            }
+        }
+
         appScope.launch {
             delay(20_000L)
             updateManager.checkAndAutoDownload()
+            createPreUpdateBackupIfNeeded()
             // Some old Android 7 head-unit ROMs are unstable when posting an install-ready
             // notification immediately after a large APK download. On API 25 and below the
             // update simply remains READY inside Launcher settings; no process hand-off happens.
@@ -72,10 +87,6 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
         changingConfiguration = activity.isChangingConfigurations
         startedActivities = (startedActivities - 1).coerceAtLeast(0)
 
-        // Do not start a foreground GPS service merely because Launcher hands the screen to
-        // another app. Several Android 7 head-unit ROMs terminate the process while creating
-        // that service/notification. The in-app map continues to record from its own GPS flow;
-        // background off-road recording must be started only by an explicit user action.
         if (startedActivities == 0 && !changingConfiguration) {
             OffroadTrackingService.stop(this)
         }
@@ -93,19 +104,32 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
     override fun onActivityResumed(activity: Activity) {
         expectedExternalHandoffUntil = 0L
+        appScope.launch { displayAutomation.applyNow() }
     }
     override fun onActivityPaused(activity: Activity) {}
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
     override fun onActivityDestroyed(activity: Activity) {}
 
+    private fun createPreUpdateBackupIfNeeded() {
+        try {
+            val state = updateManager.state.value
+            val versionCode = state.info?.versionCode ?: return
+            if (state.status != UpdateStatus.READY_TO_INSTALL) return
+            if (!displayAutomation.automaticBackupNeededMarker(versionCode)) return
+            if (backupManager.writeAutomaticPreUpdateBackup() != null) {
+                displayAutomation.markAutomaticBackup(versionCode)
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Pre-update backup was skipped", t)
+        }
+    }
+
     private fun showUpdateReadyNotification() {
         try {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                manager.createNotificationChannel(NotificationChannel(UPDATE_CHANNEL, "تحديث Launcher 2026", NotificationManager.IMPORTANCE_HIGH))
+                manager.createNotificationChannel(NotificationChannel(UPDATE_CHANNEL, "تحديث Darbak Launcher", NotificationManager.IMPORTANCE_HIGH))
             }
-            // Notification opens Launcher only. The package installer is started explicitly from
-            // the update panel so OEM Android builds cannot unexpectedly kill the launcher.
             val intent = Intent(this, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
@@ -120,8 +144,8 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
                 UPDATE_NOTIFICATION_ID,
                 NotificationCompat.Builder(this, UPDATE_CHANNEL)
                     .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                    .setContentTitle("تحديث Launcher 2026 جاهز")
-                    .setContentText("الإصدار ${info?.versionName ?: "الجديد"} تم تنزيله — افتح Launcher للتثبيت")
+                    .setContentTitle("تحديث Darbak Launcher جاهز")
+                    .setContentText("الإصدار ${info?.versionName ?: "الجديد"} تم تنزيله — افتح Darbak Launcher للتثبيت")
                     .setContentIntent(pending)
                     .setAutoCancel(true)
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -137,7 +161,6 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
     private fun normalizeCrashWindow() {
         try {
             val prefs = safeModePrefs()
-            // A new build must not inherit a stale crash streak from the previous version.
             val installedVersion = BuildConfig.VERSION_CODE
             if (prefs.getInt("last_version_code", -1) != installedVersion) {
                 prefs.edit()
@@ -175,8 +198,6 @@ class CarLauncherApp : Application(), Application.ActivityLifecycleCallbacks {
             val elapsed = SystemClock.elapsedRealtime()
             val message = throwable.localizedMessage ?: throwable.javaClass.simpleName
 
-            // Safe mode is for a repeated crash while Launcher itself is starting. A runtime
-            // failure during an intentional app/file hand-off must remain diagnostic only.
             val isStartupWindow = elapsed - processStartedAtElapsed <= STARTUP_CRASH_WINDOW_MS
             val isExpectedHandoff = elapsed <= expectedExternalHandoffUntil
             if (!isStartupWindow || isExpectedHandoff) {
