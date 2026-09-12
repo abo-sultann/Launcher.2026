@@ -25,24 +25,16 @@ class DarbakModuleCatalogTest {
                 DarbakModuleId.LAUNCHER,
                 DarbakModuleId.VEHICLE_HUB,
                 DarbakModuleId.MAINTENANCE,
-                DarbakModuleId.MEDIA,
             ),
             ids,
         )
     }
 
     @Test
-    fun media_isOptionalAndNotAHomeCriticalModule() {
+    fun optionalMedia_isOutsideCoreSystemCatalog() {
         val modules = DarbakModuleCatalog.systemModules("com.aistudio.carlauncher.lzrk26")
-        val media = modules.single { it.id == DarbakModuleId.MEDIA }
-        val requiredIds = modules.filter { it.requiredForSystemHealth }.map { it.id }.toSet()
-
-        assertFalse(media.requiredForSystemHealth)
-        assertFalse(media.showOnHome)
-        assertEquals(
-            setOf(DarbakModuleId.LAUNCHER, DarbakModuleId.VEHICLE_HUB, DarbakModuleId.MAINTENANCE),
-            requiredIds,
-        )
+        assertFalse(modules.any { it.id == DarbakModuleId.MEDIA })
+        assertFalse(modules.any { it.packageName.contains("darbakmedia", ignoreCase = true) })
     }
 
     @Test
