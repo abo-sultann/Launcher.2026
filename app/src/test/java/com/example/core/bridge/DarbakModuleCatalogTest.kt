@@ -16,10 +16,29 @@ class DarbakModuleCatalogTest {
     }
 
     @Test
-    fun darbakMaps_isNotPartOfPrivateLauncherSystem() {
+    fun activeCatalog_containsOnlyCoreCarModules() {
         val modules = DarbakModuleCatalog.systemModules("com.aistudio.carlauncher.lzrk26")
+        val ids = modules.map { it.id }.toSet()
 
-        assertFalse(modules.any { it.displayName.equals("Darbak Maps", ignoreCase = true) })
-        assertFalse(modules.any { it.packageName.contains("darbakmaps", ignoreCase = true) })
+        assertEquals(
+            setOf(
+                DarbakModuleId.LAUNCHER,
+                DarbakModuleId.VEHICLE_HUB,
+                DarbakModuleId.MAINTENANCE,
+                DarbakModuleId.MEDIA,
+            ),
+            ids,
+        )
+    }
+
+    @Test
+    fun mapsKidsQuranAndAdhkar_areOutsideLauncherSystem() {
+        val modules = DarbakModuleCatalog.systemModules("com.aistudio.carlauncher.lzrk26")
+        val packages = modules.map { it.packageName.lowercase() }
+
+        assertFalse(packages.any { it.contains("darbakmaps") })
+        assertFalse(packages.any { it.contains("darbakkidstv") })
+        assertFalse(packages.any { it.contains("laqqinni") })
+        assertFalse(packages.any { it.contains("darbakadhkar") })
     }
 }
