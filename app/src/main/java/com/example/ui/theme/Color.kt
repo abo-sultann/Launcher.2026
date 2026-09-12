@@ -2,12 +2,14 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Darbak Settings UI V1 — approved dark automotive palette.
-// Existing token names are preserved to avoid destabilising older Launcher components.
-val CarbonDark = Color(0xFF0A1633)
-val CarbonSurface = Color(0xFF102040)
-val CarbonCard = Color(0xFF102B5C)
-val CarbonCardBorder = Color(0xFF2D5573)
+// Darbak Launcher identity — premium automotive dark base.
+// Keep the canvas nearly onyx so cyan/gold are accents, not the whole interface.
+// A small amount of transparency lets the selected launcher wallpaper remain part
+// of internal screens instead of turning Settings into a separate blue app.
+val CarbonDark = Color(0xEE080C12)
+val CarbonSurface = Color(0xE5121922)
+val CarbonCard = Color(0xE5182632)
+val CarbonCardBorder = Color(0xFF314451)
 
 // Darbak primary/status accents.
 val CyanNeon = Color(0xFF19B5FF)
@@ -21,7 +23,7 @@ val DarbakGold = Color(0xFFD7AD55)
 
 // High-contrast Arabic text & indicators.
 val TextPrimary = Color(0xFFFFFFFF)
-val TextSecondary = Color(0xFFD0E2F1)
-val TextMuted = Color(0xFFA1B8D0)
+val TextSecondary = Color(0xFFD7E2EA)
+val TextMuted = Color(0xFFA0B0BC)
 val HighContrastRed = Color(0xFFFF647C)
 val HighContrastGreen = Color(0xFF4CD989)
